@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Media and Generated Data
+audios/
+resumenes/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
