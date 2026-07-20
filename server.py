@@ -5,6 +5,7 @@ import os
 import shutil
 from dotenv import load_dotenv
 from google import genai
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 load_dotenv()
 
@@ -47,10 +48,15 @@ def process_audio_with_gemini(filepath: str, timestamp: str):
         
         prompt = "Eres un asistente de reuniones. Transcribe detalladamente lo que se dice en este audio. Luego, elabora un resumen estructurado con: 1. Tema principal, 2. Puntos clave y decisiones, 3. Tareas o pendientes asignados."
         
-        response = client.models.generate_content(
-            model="gemini-3.5-flash",
-            contents=[file, prompt]
-        )
+        @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=5, max=60))
+        def call_gemini():
+            print("Solicitando generación a Gemini (reintento automático en caso de saturación)...", flush=True)
+            return client.models.generate_content(
+                model="gemini-3.5-flash",
+                contents=[file, prompt]
+            )
+            
+        response = call_gemini()
         
         # Guardar en archivo .md
         md_filename = f"resumen_meet_{timestamp}.md"
@@ -90,3 +96,18 @@ async def upload_audio(background_tasks: BackgroundTasks, audio: UploadFile = Fi
     background_tasks.add_task(process_audio_with_gemini, filepath, timestamp)
         
     return {"message": "Audio subido correctamente y procesamiento en segundo plano iniciado", "filename": filename, "path": filepath}
+
+@app.get("/retry/{filename}")
+async def retry_processing(filename: str, background_tasks: BackgroundTasks):
+    import re
+    filepath = os.path.join(AUDIOS_DIR, filename)
+    
+    if not os.path.exists(filepath):
+        return {"error": f"Archivo {filename} no encontrado en la carpeta de audios."}
+    
+    # Extraer el timestamp original si existe, o generar uno nuevo
+    match = re.search(r'meet_(.*?)\.', filename)
+    timestamp = match.group(1) if match else datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    background_tasks.add_task(process_audio_with_gemini, filepath, timestamp)
+    return {"message": f"Se ha iniciado el procesamiento manual de {filename} en segundo plano."}

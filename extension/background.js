@@ -1,5 +1,5 @@
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.set({ recordingStates: {} });
+  chrome.storage.local.set({ recordingStates: {}, silenceTimeoutMin: 5 });
 });
 
 chrome.runtime.onStartup.addListener(() => {
@@ -15,6 +15,39 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     stopRecording(message.tabId);
   } else if (message.type === 'UPDATE_STATE') {
     updateState(message.tabId, message.state);
+  }
+});
+
+// Detectar silencio en las pestañas
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.audible !== undefined) {
+    chrome.storage.local.get(['recordingStates', 'silenceTimeoutMin'], (result) => {
+      const states = result.recordingStates || {};
+      const timeoutMin = result.silenceTimeoutMin || 5;
+      const alarmName = `silence_${tabId}`;
+
+      // Si la pestaña se está grabando
+      if (states[tabId] === 'recording') {
+        if (changeInfo.audible === false) {
+          // Dejó de sonar: iniciar temporizador
+          chrome.alarms.create(alarmName, { delayInMinutes: timeoutMin });
+          console.log(`Pestaña ${tabId} en silencio. Alarma configurada para ${timeoutMin} min.`);
+        } else if (changeInfo.audible === true) {
+          // Volvió a sonar: cancelar temporizador
+          chrome.alarms.clear(alarmName);
+          console.log(`Pestaña ${tabId} sonando. Alarma cancelada.`);
+        }
+      }
+    });
+  }
+});
+
+// Manejar el auto-apagado por silencio
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name.startsWith('silence_')) {
+    const tabId = parseInt(alarm.name.replace('silence_', ''));
+    console.log(`Silencio prolongado en pestaña ${tabId}. Deteniendo grabación...`);
+    stopRecording(tabId);
   }
 });
 
@@ -55,11 +88,13 @@ async function startRecording(tabId) {
     });
 
     updateState(tabId, 'recording');
+    chrome.alarms.clear(`silence_${tabId}`); // Por seguridad
   });
 }
 
 async function stopRecording(tabId) {
   try {
+    chrome.alarms.clear(`silence_${tabId}`); // Cancelar temporizador de silencio si existe
     await chrome.runtime.sendMessage({
       target: 'offscreen',
       type: 'STOP_RECORDING',
@@ -72,8 +107,6 @@ async function stopRecording(tabId) {
 }
 
 async function setupOffscreenDocument(path) {
-  // Check all windows controlled by the service worker to see if one 
-  // of them is the offscreen document with the given path
   const existingContexts = await chrome.runtime.getContexts({
     contextTypes: ['OFFSCREEN_DOCUMENT'],
     documentUrls: [chrome.runtime.getURL(path)]
@@ -83,7 +116,6 @@ async function setupOffscreenDocument(path) {
     return;
   }
 
-  // create offscreen document
   if (creating) {
     await creating;
   } else {
