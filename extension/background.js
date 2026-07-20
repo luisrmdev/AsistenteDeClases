@@ -1,9 +1,9 @@
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.set({ recordingStates: {}, silenceTimeoutMin: 5 });
+  chrome.storage.local.set({ recordingStates: {}, silenceTimeoutMin: 5, silenceAlarms: {}, recordingTimers: {} });
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  chrome.storage.local.set({ recordingStates: {} });
+  chrome.storage.local.set({ recordingStates: {}, silenceAlarms: {}, recordingTimers: {} });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -13,6 +13,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     startRecording(message.tabId);
   } else if (message.type === 'STOP_RECORDING') {
     stopRecording(message.tabId);
+  } else if (message.type === 'PAUSE_RECORDING') {
+    pauseRecording(message.tabId);
+  } else if (message.type === 'RESUME_RECORDING') {
+    resumeRecording(message.tabId);
   } else if (message.type === 'UPDATE_STATE') {
     updateState(message.tabId, message.state);
   }
@@ -21,20 +25,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Detectar silencio en las pestañas
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.audible !== undefined) {
-    chrome.storage.local.get(['recordingStates', 'silenceTimeoutMin'], (result) => {
+    chrome.storage.local.get(['recordingStates', 'silenceTimeoutMin', 'silenceAlarms'], (result) => {
       const states = result.recordingStates || {};
       const timeoutMin = result.silenceTimeoutMin || 5;
+      const alarms = result.silenceAlarms || {};
       const alarmName = `silence_${tabId}`;
 
-      // Si la pestaña se está grabando
+      // Si la pestaña se está grabando (y no está en pausa)
       if (states[tabId] === 'recording') {
         if (changeInfo.audible === false) {
-          // Dejó de sonar: iniciar temporizador
+          // Dejó de sonar: iniciar temporizador y guardar timestamp
           chrome.alarms.create(alarmName, { delayInMinutes: timeoutMin });
+          const endTimestamp = Date.now() + (timeoutMin * 60000);
+          alarms[tabId] = endTimestamp;
+          chrome.storage.local.set({ silenceAlarms: alarms });
           console.log(`Pestaña ${tabId} en silencio. Alarma configurada para ${timeoutMin} min.`);
         } else if (changeInfo.audible === true) {
           // Volvió a sonar: cancelar temporizador
           chrome.alarms.clear(alarmName);
+          delete alarms[tabId];
+          chrome.storage.local.set({ silenceAlarms: alarms });
           console.log(`Pestaña ${tabId} sonando. Alarma cancelada.`);
         }
       }
@@ -67,19 +77,16 @@ async function updateState(tabId, state) {
 async function startRecording(tabId) {
   const result = await chrome.storage.local.get(['recordingStates']);
   const states = result.recordingStates || {};
-  if (states[tabId] === 'recording') return;
+  if (states[tabId] === 'recording' || states[tabId] === 'paused') return;
 
-  // Get stream ID for the tab
   chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, async (streamId) => {
     if (chrome.runtime.lastError) {
       console.error(chrome.runtime.lastError.message);
       return;
     }
     
-    // Create offscreen document if it doesn't exist
     await setupOffscreenDocument('offscreen.html');
 
-    // Send the streamId to the offscreen document to start recording
     chrome.runtime.sendMessage({
       target: 'offscreen',
       type: 'START_RECORDING',
@@ -88,21 +95,95 @@ async function startRecording(tabId) {
     });
 
     updateState(tabId, 'recording');
-    chrome.alarms.clear(`silence_${tabId}`); // Por seguridad
+    clearSilenceAlarm(tabId);
+    
+    // Iniciar timer
+    const timerRes = await chrome.storage.local.get(['recordingTimers']);
+    const timers = timerRes.recordingTimers || {};
+    timers[tabId] = { startTime: Date.now(), elapsed: 0, paused: false };
+    await chrome.storage.local.set({ recordingTimers: timers });
   });
+}
+
+async function pauseRecording(tabId) {
+  clearSilenceAlarm(tabId);
+  
+  const timerRes = await chrome.storage.local.get(['recordingTimers']);
+  const timers = timerRes.recordingTimers || {};
+  const t = timers[tabId];
+  if (t && !t.paused) {
+    t.elapsed += (Date.now() - t.startTime);
+    t.paused = true;
+    await chrome.storage.local.set({ recordingTimers: timers });
+  }
+
+  try {
+    await chrome.runtime.sendMessage({
+      target: 'offscreen',
+      type: 'PAUSE_RECORDING',
+      tabId: tabId
+    });
+  } catch (err) {
+    console.warn("Error enviando pausa al offscreen", err);
+  }
+}
+
+async function resumeRecording(tabId) {
+  const timerRes = await chrome.storage.local.get(['recordingTimers']);
+  const timers = timerRes.recordingTimers || {};
+  const t = timers[tabId];
+  if (t && t.paused) {
+    t.startTime = Date.now();
+    t.paused = false;
+    await chrome.storage.local.set({ recordingTimers: timers });
+  }
+
+  try {
+    await chrome.runtime.sendMessage({
+      target: 'offscreen',
+      type: 'RESUME_RECORDING',
+      tabId: tabId
+    });
+  } catch (err) {
+    console.warn("Error enviando reanudar al offscreen", err);
+  }
 }
 
 async function stopRecording(tabId) {
   try {
-    chrome.alarms.clear(`silence_${tabId}`); // Cancelar temporizador de silencio si existe
+    clearSilenceAlarm(tabId);
+    
+    // Obtener customName para pasarlo a offscreen
+    const result = await chrome.storage.local.get(['customNames', 'recordingTimers']);
+    const names = result.customNames || {};
+    const customName = names[tabId] || '';
+    
+    // Limpiar timer
+    const timers = result.recordingTimers || {};
+    if (timers[tabId]) {
+      delete timers[tabId];
+      await chrome.storage.local.set({ recordingTimers: timers });
+    }
+
     await chrome.runtime.sendMessage({
       target: 'offscreen',
       type: 'STOP_RECORDING',
-      tabId: tabId
+      tabId: tabId,
+      customName: customName
     });
   } catch (err) {
     console.warn("No se pudo contactar al offscreen (probablemente la extensión se recargó). Reiniciando estado.");
     updateState(tabId, 'idle');
+  }
+}
+
+async function clearSilenceAlarm(tabId) {
+  chrome.alarms.clear(`silence_${tabId}`);
+  const result = await chrome.storage.local.get(['silenceAlarms']);
+  const alarms = result.silenceAlarms || {};
+  if (alarms[tabId]) {
+    delete alarms[tabId];
+    await chrome.storage.local.set({ silenceAlarms: alarms });
   }
 }
 

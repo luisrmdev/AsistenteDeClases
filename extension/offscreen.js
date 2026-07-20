@@ -2,6 +2,7 @@ const mediaRecorders = {};
 const recordedChunks = {};
 const audioContexts = {};
 const streams = {};
+const tempNames = {};
 
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== 'offscreen') return;
@@ -9,9 +10,29 @@ chrome.runtime.onMessage.addListener(async (message) => {
   if (message.type === 'START_RECORDING') {
     startRecording(message.streamId, message.tabId);
   } else if (message.type === 'STOP_RECORDING') {
-    stopRecording(message.tabId);
+    stopRecording(message.tabId, message.customName);
+  } else if (message.type === 'PAUSE_RECORDING') {
+    pauseRecording(message.tabId);
+  } else if (message.type === 'RESUME_RECORDING') {
+    resumeRecording(message.tabId);
   }
 });
+
+function pauseRecording(tabId) {
+  const mediaRecorder = mediaRecorders[tabId];
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.pause();
+    updateState(tabId, 'paused');
+  }
+}
+
+function resumeRecording(tabId) {
+  const mediaRecorder = mediaRecorders[tabId];
+  if (mediaRecorder && mediaRecorder.state === 'paused') {
+    mediaRecorder.resume();
+    updateState(tabId, 'recording');
+  }
+}
 
 function updateState(tabId, state) {
   chrome.runtime.sendMessage({
@@ -64,7 +85,9 @@ async function startRecording(streamId, tabId) {
       delete recordedChunks[tabId];
       delete mediaRecorders[tabId];
 
-      await uploadAudio(blob, tabId);
+      const cName = tempNames[tabId];
+      delete tempNames[tabId];
+      await uploadAudio(blob, tabId, cName);
     };
 
     mediaRecorder.start();
@@ -74,17 +97,26 @@ async function startRecording(streamId, tabId) {
   }
 }
 
-function stopRecording(tabId) {
+function stopRecording(tabId, customName) {
+  if (customName) {
+    tempNames[tabId] = customName;
+  }
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
   }
 }
 
-async function uploadAudio(blob, tabId) {
+async function uploadAudio(audioBlob, tabId, customName) {
+  updateState(tabId, 'uploading');
+  
   try {
     const formData = new FormData();
-    formData.append('audio', blob, 'recording.webm');
+    formData.append('audio', audioBlob, 'grabacion.webm');
+
+    if (customName && customName.trim() !== '') {
+      formData.append('custom_name', customName.trim());
+    }
 
     const response = await fetch('http://localhost:8000/upload', {
       method: 'POST',
