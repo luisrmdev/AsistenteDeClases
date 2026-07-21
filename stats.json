@@ -1,0 +1,23 @@
+{
+    "fecha": "2026-07-20",
+    "gemini-1.5-flash": {
+        "peticiones": 0,
+        "tokens": 0
+    },
+    "gemini-2.0-flash": {
+        "peticiones": 0,
+        "tokens": 0
+    },
+    "gemini-1.5-pro": {
+        "peticiones": 0,
+        "tokens": 0
+    },
+    "gemini-3.5-flash": {
+        "peticiones": 0,
+        "tokens": 0
+    },
+    "gemini-3.1-flash-lite": {
+        "peticiones": 5,
+        "tokens": 1597
+    }
+}

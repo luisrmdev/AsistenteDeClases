@@ -146,10 +146,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       pauseBtn.classList.remove('hidden');
       resumeBtn.classList.add('hidden');
       
-      statusIndicator.textContent = 'Grabando...';
-      statusIndicator.classList.replace('text-gray-300', 'text-red-400');
-      statusIndicator.classList.replace('text-yellow-400', 'text-red-400');
-      statusIndicator.classList.add('animate-pulse');
+      statusIndicator.textContent = 'Grabación Activa';
+      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-recording';
     } else if (state === 'paused') {
       // Permitimos modificar durante la pausa
       silenceTimeoutInput.disabled = false;
@@ -162,31 +160,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       pauseBtn.classList.add('hidden');
       resumeBtn.classList.remove('hidden');
       
-      statusIndicator.textContent = 'Pausado (Receso)';
-      statusIndicator.classList.replace('text-red-400', 'text-yellow-400');
-      statusIndicator.classList.remove('animate-pulse');
+      statusIndicator.textContent = 'En Espera';
+      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-paused';
     } else if (state === 'uploading') {
       silenceTimeoutInput.disabled = true;
       silenceTimeoutInput.classList.add('opacity-50', 'cursor-not-allowed');
       recordBtn.classList.add('hidden');
       controlsGroup.classList.add('hidden');
-      statusIndicator.textContent = 'Enviando...';
-      statusIndicator.classList.replace('text-red-400', 'text-yellow-400');
-      statusIndicator.classList.remove('animate-pulse');
+      statusIndicator.textContent = 'Procesando';
+      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-paused';
     } else if (state === 'completed') {
       recordBtn.classList.remove('hidden');
       controlsGroup.classList.add('hidden');
-      statusIndicator.textContent = 'Completado';
-      statusIndicator.classList.replace('text-yellow-400', 'text-green-400');
+      statusIndicator.textContent = 'Finalizado';
+      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-completed';
       
       setTimeout(() => updateUI('idle', audible), 3000);
     } else {
       // idle or error
       recordBtn.classList.remove('hidden');
       controlsGroup.classList.add('hidden');
-      statusIndicator.textContent = 'Listo para grabar';
-      statusIndicator.classList.remove('text-red-400', 'text-yellow-400', 'text-green-400', 'animate-pulse');
-      statusIndicator.classList.add('text-gray-300');
+      statusIndicator.textContent = 'Listo para Iniciar';
+      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-idle';
 
       if (!audible) {
         recordBtn.disabled = true;

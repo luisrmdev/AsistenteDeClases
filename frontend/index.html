@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente de Clases - Dashboard IA</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Geist', 'sans-serif'],
+                        serif: ['Newsreader', 'serif'],
+                        mono: ['Geist Mono', 'monospace'],
+                    },
+                    colors: {
+                        background: 'var(--color-bg)',
+                        surface: 'var(--color-surface)',
+                        borderGray: 'var(--color-border)',
+                        charcoal: 'var(--color-text-main)',
+                        textMuted: 'var(--color-text-muted)',
+                        paleBlue: 'var(--color-pale-blue)',
+                        paleBlueText: 'var(--color-pale-blue-text)',
+                        paleGreen: 'var(--color-pale-green)',
+                        paleGreenText: 'var(--color-pale-green-text)',
+                        paleRed: 'var(--color-pale-red)',
+                        paleRedText: 'var(--color-pale-red-text)'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        :root {
+            --color-bg: #FFFFFF;
+            --color-surface: #F7F6F3;
+            --color-border: #EAEAEA;
+            --color-text-main: #111111;
+            --color-text-muted: #787774;
+            --color-pale-blue: #E1F3FE;
+            --color-pale-blue-text: #1F6C9F;
+            --color-pale-green: #EDF3EC;
+            --color-pale-green-text: #346538;
+            --color-pale-red: #FDEBEC;
+            --color-pale-red-text: #9F2F2D;
+            
+            --btn-primary-bg: #111111;
+            --btn-primary-text: #FFFFFF;
+            --btn-secondary-bg: #F7F6F3;
+            --btn-secondary-border: #EAEAEA;
+        }
+
+        .dark {
+            --color-bg: #0A0A0A;
+            --color-surface: #141414;
+            --color-border: #2A2A2A;
+            --color-text-main: #EAEAEA;
+            --color-text-muted: #A1A1AA;
+            --color-pale-blue: #1E3A5F;
+            --color-pale-blue-text: #93C5FD;
+            --color-pale-green: #14532D;
+            --color-pale-green-text: #86EFAC;
+            --color-pale-red: #7F1D1D;
+            --color-pale-red-text: #FCA5A5;
+            
+            --btn-primary-bg: #EAEAEA;
+            --btn-primary-text: #0A0A0A;
+            --btn-secondary-bg: #141414;
+            --btn-secondary-border: #2A2A2A;
+        }
+
+        body { font-family: 'Geist', sans-serif; background-color: var(--color-bg); color: var(--color-text-main); line-height: 1.6; }
+        .nav-btn { color: var(--color-text-muted); }
+        .nav-btn:hover { background-color: var(--color-border); color: var(--color-text-main); }
+        .nav-btn.active-nav { background-color: var(--color-border); font-weight: 500; color: var(--color-text-main); }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
+        
+        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .bento-card {
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            background: var(--color-bg);
+        }
+        
+        input, textarea, select {
+            border: 1px solid var(--color-border);
+            background-color: var(--color-surface);
+            color: var(--color-text-main);
+            transition: all 0.2s;
+        }
+        input:focus, textarea:focus, select:focus {
+            border-color: var(--color-text-main);
+            outline: none;
+            box-shadow: none;
+        }
+        
+        button.btn-primary {
+            background-color: var(--btn-primary-bg);
+            color: var(--btn-primary-text);
+            border-radius: 6px;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        button.btn-primary:active { transform: scale(0.98); }
+        
+        button.btn-secondary {
+            border: 1px solid var(--btn-secondary-border);
+            background-color: var(--btn-secondary-bg);
+            color: var(--color-text-main);
+            border-radius: 6px;
+            transition: transform 0.2s;
+        }
+        button.btn-secondary:active { transform: scale(0.98); }
+
+        .chat-user {
+            background-color: var(--color-surface);
+            color: var(--color-text-main);
+            align-self: flex-end;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+        }
+        .chat-ai {
+            background-color: var(--color-bg);
+            color: var(--color-text-main);
+            align-self: flex-start;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+        }
+        .chat-bubble { max-width: 85%; }
+        
+        /* Prosa Customization */
+        .prose h1, .prose h2, .prose h3, .prose h4, .prose strong, .prose { color: var(--color-text-main); }
+        .prose h1, .prose h2, .prose h3 { font-family: 'Newsreader', serif; letter-spacing: -0.02em; }
+        .prose code { font-family: 'Geist Mono', monospace; background-color: var(--color-surface); padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); font-size: 0.85em; color: var(--color-text-main); }
+        
+        /* Modal background overlay */
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
+        .dark .modal-overlay { background-color: rgba(0, 0, 0, 0.8); }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden bg-background">
+
+    <aside class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0">
+        <div class="p-6 border-b border-borderGray flex justify-between items-center">
+            <h1 class="text-lg font-serif tracking-tight flex items-center gap-2 text-charcoal">
+                Asistente IA
+            </h1>
+            <button id="theme-toggle" class="text-textMuted hover:text-charcoal transition text-xs font-medium px-2 py-1 border border-borderGray rounded bg-background">[ TEMA ]</button>
+        </div>
+        
+        <div class="flex-1 py-4 text-sm font-medium">
+            <button onclick="switchTab('resumenes')" id="nav-resumenes" class="w-full text-left px-6 py-2 transition-colors nav-btn active-nav flex items-center gap-3">
+                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Documentos
+            </button>
+            <button onclick="switchTab('audios')" id="nav-audios" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Por Procesar
+            </button>
+            <button onclick="switchTab('chat')" id="nav-chat" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Tutor Virtual
+            </button>
+            
+            <div class="px-6 mt-8 mb-2">
+                <h4 class="text-[10px] font-bold uppercase tracking-wider text-textMuted">Ajustes</h4>
+            </div>
+            
+            <button onclick="switchTab('materias')" id="nav-materias" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3">
+                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Asignaturas
+            </button>
+            <button onclick="switchTab('config')" id="nav-config" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Preferencias
+            </button>
+        </div>
+        
+        <div class="p-6 border-t border-borderGray mt-auto">
+            <h3 class="text-[10px] font-bold text-textMuted uppercase tracking-[0.05em] mb-3">Monitor de Recursos</h3>
+            
+            <div class="flex flex-col gap-2">
+                <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
+                    <span class="text-[10px] font-medium text-textMuted">Red neuronal</span>
+                    <span id="ui-current-model" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Flash 3.5</span>
+                </div>
+                <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
+                    <span class="text-[10px] font-medium text-textMuted">Llamadas (Hoy)</span>
+                    <span id="ui-peticiones" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
+                </div>
+                <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
+                    <span class="text-[10px] font-medium text-textMuted">Tokens Inyectados</span>
+                    <span id="ui-tokens" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <main class="flex-1 h-full overflow-hidden relative bg-background">
+        
+        <!-- =======================
+             TAB: RESUMENES
+        ======================== -->
+        <section id="tab-resumenes" class="tab-content flex h-full fade-in">
+            <div class="w-72 border-r border-borderGray bg-surface flex flex-col h-full">
+                <div class="p-4 text-[10px] font-bold text-textMuted uppercase tracking-wider border-b border-borderGray">Biblioteca de Apuntes</div>
+                <div id="summaries-list" class="flex-1 overflow-y-auto px-3 py-3 space-y-1 text-sm"></div>
+            </div>
+            <div class="flex-1 overflow-y-auto px-16 py-20 flex flex-col">
+                <div id="content-header" class="flex justify-end mb-8 hidden">
+                    <button id="btn-edit-summary" class="text-xs btn-secondary px-4 py-2 font-medium">Editar Texto</button>
+                    <button id="btn-save-summary" class="text-xs btn-primary px-4 py-2 font-medium hidden ml-2">Guardar Cambios</button>
+                </div>
+                <div id="content-area" class="prose max-w-4xl mx-auto flex-1 text-charcoal">
+                    <p class="text-textMuted text-center mt-32 font-serif italic text-lg">Selecciona un documento del panel izquierdo para comenzar a leer.</p>
+                </div>
+                <textarea id="edit-area" class="max-w-4xl mx-auto flex-1 w-full p-6 font-mono text-sm resize-none bg-surface hidden rounded-lg"></textarea>
+            </div>
+        </section>
+
+        <!-- =======================
+             TAB: AUDIOS PENDIENTES
+        ======================== -->
+        <section id="tab-audios" class="tab-content hidden h-full flex-col fade-in">
+            <div class="px-16 py-12 border-b border-borderGray">
+                <h2 class="text-4xl font-serif tracking-tight text-charcoal">Pendientes de Procesar</h2>
+                <p class="text-textMuted mt-3 text-sm">Convierte tus grabaciones locales en documentos estructurados.</p>
+            </div>
+            <div class="flex-1 overflow-y-auto px-16 py-12">
+                <div id="audios-list" class="grid gap-6 max-w-5xl mx-auto"></div>
+            </div>
+        </section>
+
+        <!-- =======================
+             TAB: CHAT DE ESTUDIO
+        ======================== -->
+        <section id="tab-chat" class="tab-content hidden h-full flex-col fade-in">
+            <div class="px-12 py-8 border-b border-borderGray flex justify-between items-end bg-surface">
+                <div>
+                    <h2 class="text-3xl font-serif tracking-tight text-charcoal">Tutor Virtual</h2>
+                    <p class="text-textMuted text-sm mt-2">Interactúa de forma aislada con tus propios apuntes de clase.</p>
+                </div>
+                <div>
+                    <select id="chat-context-select" class="bg-surface text-xs rounded-md px-3 py-1.5 border border-borderGray font-medium">
+                        <option value="todas">Todo el Semestre</option>
+                        <option value="default">Materia General</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="chat-history" class="flex-1 overflow-y-auto px-12 py-8 flex flex-col gap-6 bg-background max-w-4xl mx-auto w-full">
+                <div class="chat-bubble chat-ai p-5 text-sm">
+                    Escribe tu pregunta y analizaré tu base de conocimiento para responderte.
+                </div>
+            </div>
+            
+            <div class="p-6 border-t border-borderGray flex justify-center bg-surface">
+                <form id="chat-form" class="flex gap-3 w-full max-w-4xl">
+                    <input type="text" id="chat-input" class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray" placeholder="Ej. Resume los 3 puntos clave de la biología molecular...">
+                    <button type="submit" class="btn-primary px-8 text-sm font-medium" id="chat-send-btn">Consultar</button>
+                </form>
+            </div>
+        </section>
+
+        <!-- =======================
+             TAB: MATERIAS
+        ======================== -->
+        <section id="tab-materias" class="tab-content hidden h-full flex-col fade-in">
+            <div class="px-16 py-12 border-b border-borderGray">
+                <h2 class="text-4xl font-serif tracking-tight text-charcoal">Asignaturas</h2>
+                <p class="text-textMuted mt-3 text-sm">Define el contexto y comportamiento de transcripción por clase.</p>
+            </div>
+            <div class="flex-1 overflow-y-auto px-16 py-12 flex flex-col lg:flex-row gap-12 max-w-6xl mx-auto w-full">
+                <div class="flex-1 h-fit">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-charcoal mb-6 border-b border-borderGray pb-2">Crear Asignatura</h3>
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Nombre de la Clase</label>
+                            <input type="text" id="mat-nombre" class="w-full rounded-md p-3 text-sm bg-surface" placeholder="Ej. Biología Celular Avanzada">
+                        </div>
+                        
+                        <div class="p-6 bg-surface rounded-lg border border-borderGray relative">
+                            <label class="block text-[11px] font-bold text-charcoal uppercase tracking-wider mb-2">
+                                Ingeniería de Prompt Automática
+                            </label>
+                            <p class="text-xs text-textMuted mb-4">La IA diseñará un prompt técnico avanzado a partir de tu idea.</p>
+                            <textarea id="mat-natural" rows="2" class="w-full rounded-md p-3 text-sm border-borderGray bg-background mb-3" placeholder="Ej. Actúa como un experto y extrae solo las definiciones..."></textarea>
+                            <button onclick="generatePrompt()" id="btn-gen-prompt" class="btn-secondary w-full text-xs font-bold py-2 flex justify-center items-center gap-2 bg-background">
+                                <span>Traducir a Prompt Técnico</span>
+                            </button>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Contexto Técnico Final</label>
+                            <textarea id="mat-prompt" rows="6" class="w-full rounded-md p-3 text-xs font-mono bg-surface" placeholder="Eres un asistente experto..."></textarea>
+                        </div>
+                        <button id="btn-save-materia" onclick="saveMateria()" class="btn-primary w-full py-3 text-sm font-medium mt-2">
+                            Guardar Asignatura
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="flex-1 h-fit">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-charcoal mb-6 border-b border-borderGray pb-2">Asignaturas Registradas</h3>
+                    <div id="materias-list" class="space-y-4"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =======================
+             TAB: CONFIGURACION
+        ======================== -->
+        <section id="tab-config" class="tab-content hidden h-full flex-col fade-in">
+            <div class="px-16 py-12 border-b border-borderGray">
+                <h2 class="text-4xl font-serif tracking-tight text-charcoal">Preferencias</h2>
+                <p class="text-textMuted mt-3 text-sm">Ajustes a nivel de sistema.</p>
+            </div>
+            <div class="flex-1 overflow-y-auto px-16 py-12 max-w-4xl w-full">
+                <div class="bento-card p-8">
+                    <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider">Módulo de Inteligencia</h3>
+                    <div>
+                        <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Red de Inferencia Predeterminada</label>
+                        <select id="model-selector" class="w-full rounded-md p-3 text-sm bg-surface">
+                            <option value="gemini-3.5-flash">Gemini 3.5 Flash (Más Rápido, Limitado)</option>
+                            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Menos Restricciones)</option>
+                        </select>
+                        <p class="text-xs text-textMuted mt-3">Este modelo alimentará el procesamiento del Tutor Virtual, RAG y extracción de resúmenes.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =======================
+             MODAL: REVISIÓN DE IA
+        ======================== -->
+        <div id="review-modal" class="fixed inset-0 modal-overlay backdrop-blur-sm hidden z-50 flex items-center justify-center p-8">
+            <div class="bg-background w-full max-w-5xl h-full max-h-[85vh] rounded-xl border border-borderGray flex flex-col overflow-hidden shadow-2xl">
+                <div class="p-6 border-b border-borderGray flex justify-between items-center bg-surface">
+                    <h3 class="font-serif text-xl tracking-tight text-charcoal">Revisión de Análisis</h3>
+                    <button onclick="closeModal()" class="text-textMuted font-bold hover:text-charcoal text-sm">[ Cerrar ]</button>
+                </div>
+                
+                <div id="review-loading" class="flex-1 flex flex-col items-center justify-center hidden">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-charcoal mb-6"></div>
+                    <p class="text-charcoal text-sm font-medium">Ejecutando inferencia sobre el audio...</p>
+                    <p class="text-xs text-textMuted mt-2 font-mono">El proceso puede tomar algunos segundos.</p>
+                </div>
+                
+                <div id="review-content" class="flex-1 flex flex-col p-8 hidden">
+                    <p class="text-[10px] font-bold text-textMuted uppercase tracking-wider mb-3">Editor de Extracción Final (Markdown)</p>
+                    <textarea id="review-textarea" class="flex-1 w-full p-6 border border-borderGray rounded-lg font-mono text-sm resize-none bg-surface focus:bg-background"></textarea>
+                    
+                    <div class="mt-6 flex justify-between items-center">
+                        <button onclick="retryAI()" class="px-6 py-2.5 btn-secondary text-sm font-medium">
+                            [ Re-procesar Audio ]
+                        </button>
+                        <button onclick="acceptAndSave()" class="px-6 py-2.5 btn-primary text-sm font-medium">
+                            Aceptar y Guardar Documento
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Theme logic
+        const themeBtn = document.getElementById('theme-toggle');
+        
+        function setTheme(isDark) {
+            if (isDark) {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            }
+        }
+        
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'dark') setTheme(true);
+        else if (savedTheme === 'light') setTheme(false);
+        else if (window.matchMedia('(prefers-color-scheme: dark)').matches) setTheme(true);
+        
+        themeBtn.addEventListener('click', () => {
+            const isDark = document.documentElement.classList.contains('dark');
+            setTheme(!isDark);
+        });
+
+        // State
+        let materias = [];
+        let currentAudioFile = "";
+        let currentMateriaId = "";
+        let editingMateriaId = null;
+        
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSummaries();
+            loadMaterias();
+            loadAudios();
+            
+            // Model Selector Init
+            const savedModel = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
+            const modelSelector = document.getElementById('model-selector');
+            modelSelector.value = savedModel;
+            
+            function getUiName(val) {
+                if(val.includes('3.5-flash')) return 'Flash 3.5';
+                if(val.includes('lite')) return 'Flash Lite';
+                return 'Flash 3.5';
+            }
+            
+            document.getElementById('ui-current-model').innerText = getUiName(savedModel);
+            
+            modelSelector.addEventListener('change', (e) => {
+                localStorage.setItem('modelo_elegido', e.target.value);
+                document.getElementById('ui-current-model').innerText = getUiName(e.target.value);
+                loadStats();
+            });
+            
+            loadStats();
+            
+            // Chat form submission
+            document.getElementById('chat-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleChatSubmit();
+            });
+        });
+        
+        function updateStatsUI(stats) {
+            const currentModel = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
+            const modelData = stats[currentModel];
+            if(modelData) {
+                document.getElementById('ui-peticiones').innerText = `${modelData.peticiones}`;
+                document.getElementById('ui-tokens').innerText = `${modelData.tokens.toLocaleString()}`;
+            } else {
+                document.getElementById('ui-peticiones').innerText = `0`;
+                document.getElementById('ui-tokens').innerText = `0`;
+            }
+        }
+        
+        function loadStats() {
+            fetch('/api/stats')
+            .then(r => r.json())
+            .then(data => updateStatsUI(data));
+        }
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active-nav'));
+            
+            const target = document.getElementById(`tab-${tabId}`);
+            target.classList.remove('hidden');
+            if(tabId === 'resumenes') target.classList.add('flex');
+            else target.classList.add('flex'); 
+            
+            document.getElementById(`nav-${tabId}`).classList.add('active-nav');
+            
+            if(tabId === 'audios') loadAudios();
+            if(tabId === 'config') loadMaterias();
+            if(tabId === 'resumenes') loadSummaries();
+        }
+
+        // ====== TAB: RESUMENES ======
+        function loadSummaries() {
+            fetch('/api/summaries')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('summaries-list');
+                    list.innerHTML = '';
+                    if(!data.summaries.length) {
+                        list.innerHTML = '<p class="text-xs text-textMuted p-2 font-mono">/sin_documentos</p>';
+                        return;
+                    }
+                    data.summaries.forEach(s => {
+                        const div = document.createElement('div');
+                        div.className = 'p-2 rounded-md hover:bg-background cursor-pointer text-charcoal flex justify-between items-center group transition-colors border border-transparent hover:border-borderGray';
+                        
+                        const titleSpan = document.createElement('span');
+                        titleSpan.className = 'truncate flex-1 font-medium';
+                        titleSpan.innerHTML = `[ DOC ] ${s.display_name}`;
+                        
+                        const delBtn = document.createElement('button');
+                        delBtn.innerHTML = '✕';
+                        delBtn.className = 'opacity-0 group-hover:opacity-100 text-[10px] bg-paleRed text-paleRedText px-2 py-0.5 rounded transition font-bold';
+                        delBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            if(confirm('¿Eliminar este documento de la base de conocimiento?')) {
+                                fetch(`/api/summaries/${s.filename}`, {method:'DELETE'}).then(()=>loadSummaries());
+                            }
+                        };
+                        
+                        div.appendChild(titleSpan);
+                        div.appendChild(delBtn);
+                        
+                        div.onclick = () => {
+                            document.querySelectorAll('#summaries-list div').forEach(d => {
+                                d.style.backgroundColor = 'transparent';
+                                d.style.borderColor = 'transparent';
+                            });
+                            div.style.backgroundColor = 'var(--color-bg)';
+                            div.style.borderColor = 'var(--color-border)';
+                            fetch(`/api/summaries/${s.filename}`)
+                                .then(r => r.json())
+                                .then(d => {
+                                    document.getElementById('content-area').innerHTML = marked.parse(d.content);
+                                    document.getElementById('content-area').classList.remove('hidden');
+                                    document.getElementById('edit-area').classList.add('hidden');
+                                    document.getElementById('edit-area').value = d.content;
+                                    
+                                    const header = document.getElementById('content-header');
+                                    header.classList.remove('hidden');
+                                    
+                                    const btnEdit = document.getElementById('btn-edit-summary');
+                                    const btnSave = document.getElementById('btn-save-summary');
+                                    btnEdit.classList.remove('hidden');
+                                    btnSave.classList.add('hidden');
+                                    
+                                    btnEdit.onclick = () => {
+                                        document.getElementById('content-area').classList.add('hidden');
+                                        document.getElementById('edit-area').classList.remove('hidden');
+                                        btnEdit.classList.add('hidden');
+                                        btnSave.classList.remove('hidden');
+                                    };
+                                    
+                                    btnSave.onclick = () => {
+                                        const newContent = document.getElementById('edit-area').value;
+                                        fetch(`/api/summaries/${s.filename}`, {
+                                            method: 'PUT',
+                                            headers: {'Content-Type': 'application/json'},
+                                            body: JSON.stringify({content: newContent})
+                                        }).then(() => {
+                                            document.getElementById('content-area').innerHTML = marked.parse(newContent);
+                                            document.getElementById('content-area').classList.remove('hidden');
+                                            document.getElementById('edit-area').classList.add('hidden');
+                                            btnEdit.classList.remove('hidden');
+                                            btnSave.classList.add('hidden');
+                                        });
+                                    };
+                                });
+                        };
+                        list.appendChild(div);
+                    });
+                });
+        }
+
+        // ====== TAB: CONFIGURACION ======
+        function loadMaterias() {
+            fetch('/api/materias')
+                .then(r => r.json())
+                .then(data => {
+                    materias = data;
+                    
+                    // Render List
+                    const list = document.getElementById('materias-list');
+                    list.innerHTML = '';
+                    data.forEach(m => {
+                        list.innerHTML += `
+                            <div class="bento-card p-5 flex justify-between items-start">
+                                <div class="flex-1 pr-4 overflow-hidden">
+                                    <h4 class="font-bold text-sm text-charcoal mb-1">${m.nombre}</h4>
+                                    <p class="text-xs text-textMuted truncate font-mono bg-surface px-2 py-1 rounded inline-block max-w-full">${m.prompt_personalizado}</p>
+                                </div>
+                                <div class="flex flex-col gap-2 items-end shrink-0">
+                                    <button onclick="editMateria('${m.id}')" class="text-xs font-bold text-charcoal hover:underline">Editar</button>
+                                    <button onclick="deleteMateria('${m.id}')" class="text-[10px] font-bold text-paleRedText bg-paleRed px-2 py-1 rounded">Eliminar</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    // Update Chat Select Options
+                    const chatSelect = document.getElementById('chat-context-select');
+                    chatSelect.innerHTML = '<option value="todas">Todo el Semestre</option><option value="default">Materia General</option>';
+                    data.forEach(m => {
+                        chatSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+                    });
+                });
+        }
+        
+        function generatePrompt() {
+            const btn = document.getElementById('btn-gen-prompt');
+            const input = document.getElementById('mat-natural').value;
+            if(!input.trim()) return alert("Escribe qué quieres que haga la IA primero.");
+            
+            btn.innerHTML = '<div class="animate-spin h-3 w-3 border-b-2 border-charcoal rounded-full"></div> <span>Procesando...</span>';
+            btn.disabled = true;
+            
+            const modelStr = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
+            fetch('/api/generate-prompt', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({descripcion: input, modelo_elegido: modelStr})
+            })
+            .then(r => r.json())
+            .then(d => {
+                document.getElementById('mat-prompt').value = d.prompt_generado;
+                if(d.stats) updateStatsUI(d.stats);
+            })
+            .catch(e => alert("Error generando prompt: " + e.message))
+            .finally(() => {
+                btn.innerHTML = '<span>Traducir a Prompt Técnico</span>';
+                btn.disabled = false;
+            });
+        }
+
+        function editMateria(id) {
+            const m = materias.find(x => x.id === id);
+            if (!m) return;
+            editingMateriaId = id;
+            document.getElementById('mat-nombre').value = m.nombre;
+            document.getElementById('mat-prompt').value = m.prompt_personalizado;
+            document.getElementById('btn-save-materia').innerText = 'Actualizar Asignatura';
+        }
+
+        function saveMateria() {
+            const nombre = document.getElementById('mat-nombre').value;
+            const prompt = document.getElementById('mat-prompt').value;
+            if(!nombre || !prompt) return alert('El Nombre y el Prompt Final son obligatorios.');
+            
+            if (editingMateriaId) {
+                fetch(`/api/materias/${editingMateriaId}`, {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({nombre, prompt_personalizado: prompt})
+                }).then(() => {
+                    editingMateriaId = null;
+                    document.getElementById('btn-save-materia').innerText = 'Guardar Asignatura';
+                    resetMateriaForm();
+                });
+            } else {
+                fetch('/api/materias', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({nombre, prompt_personalizado: prompt})
+                }).then(() => {
+                    resetMateriaForm();
+                });
+            }
+        }
+        
+        function resetMateriaForm() {
+            document.getElementById('mat-nombre').value = '';
+            document.getElementById('mat-natural').value = '';
+            document.getElementById('mat-prompt').value = '';
+            loadMaterias();
+        }
+
+        function deleteMateria(id) {
+            if(confirm('¿Eliminar asignatura de forma permanente?')) {
+                fetch(`/api/materias/${id}`, { method: 'DELETE' }).then(() => loadMaterias());
+            }
+        }
+
+        // ====== TAB: AUDIOS PENDIENTES ======
+        function loadAudios() {
+            fetch('/api/audios')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('audios-list');
+                    list.innerHTML = '';
+                    if(!data.audios.length) {
+                        list.innerHTML = '<div class="bento-card p-12 text-center text-textMuted font-serif italic">El directorio de trabajo está vacío. No hay grabaciones locales.</div>';
+                        return;
+                    }
+                    
+                    let options = '<option value="default">Materia General</option>';
+                    materias.forEach(m => options += `<option value="${m.id}">${m.nombre}</option>`);
+
+                    data.audios.forEach(a => {
+                        list.innerHTML += `
+                            <div class="bento-card p-6 flex flex-col md:flex-row items-center gap-6">
+                                <div class="flex-1 w-full md:border-r border-borderGray pr-0 md:pr-6">
+                                    <h4 class="font-bold text-sm text-charcoal mb-3 truncate font-mono">${a.display_name}</h4>
+                                    <audio controls src="/media/${a.filename}" class="h-8 w-full outline-none opacity-80 filter contrast-125 rounded"></audio>
+                                </div>
+                                <div class="w-full md:w-72 flex flex-col gap-3 shrink-0">
+                                    <div>
+                                        <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-1">Contexto</label>
+                                        <select id="sel-${a.filename}" class="w-full rounded-md p-2 text-xs bg-surface font-medium">
+                                            ${options}
+                                        </select>
+                                    </div>
+                                    <div class="flex gap-2">
+                                        <button onclick="processAudio('${a.filename}')" class="flex-1 btn-primary py-2 text-xs font-medium">
+                                            Extraer Apuntes
+                                        </button>
+                                        <button onclick="deleteAudio('${a.filename}')" class="btn-secondary px-3 py-2 text-xs font-medium text-paleRedText bg-paleRed/20 border-transparent">
+                                            Descartar
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                });
+        }
+
+        function deleteAudio(filename) {
+            if(confirm('¿Descartar este archivo permanentemente?')) {
+                fetch(`/api/audios/${filename}`, { method: 'DELETE' }).then(() => loadAudios());
+            }
+        }
+
+        // ====== HUMAN IN THE LOOP ======
+        function processAudio(filename) {
+            const select = document.getElementById(`sel-${filename}`);
+            
+            currentAudioFile = filename;
+            currentMateriaId = select.value;
+            
+            document.getElementById('review-modal').classList.remove('hidden');
+            document.getElementById('review-loading').classList.remove('hidden');
+            document.getElementById('review-content').classList.add('hidden');
+            
+            callGenerateAPI();
+        }
+
+        function callGenerateAPI() {
+            const modelStr = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
+            fetch('/api/generate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({filename: currentAudioFile, materia_id: currentMateriaId, modelo_elegido: modelStr})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.detail) throw new Error(data.detail);
+                document.getElementById('review-loading').classList.add('hidden');
+                document.getElementById('review-content').classList.remove('hidden');
+                document.getElementById('review-textarea').value = data.content;
+                if(data.stats) updateStatsUI(data.stats);
+            })
+            .catch(e => {
+                alert('Fallo de Inferencia: ' + e.message);
+                closeModal();
+            });
+        }
+
+        function retryAI() {
+            if(confirm('¿Descartar esta extracción y ejecutar una nueva pasada de IA?')) {
+                document.getElementById('review-loading').classList.remove('hidden');
+                document.getElementById('review-content').classList.add('hidden');
+                callGenerateAPI();
+            }
+        }
+
+        function acceptAndSave() {
+            const content = document.getElementById('review-textarea').value;
+            fetch('/api/save', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    filename: currentAudioFile, 
+                    content: content, 
+                    materia_id: currentMateriaId
+                })
+            })
+            .then(r => r.json())
+            .then(() => {
+                closeModal();
+                loadAudios(); // Refresh
+                alert('Documento añadido a la base de conocimiento.');
+            });
+        }
+
+        function closeModal() {
+            document.getElementById('review-modal').classList.add('hidden');
+        }
+        
+        // ====== CHAT DE ESTUDIO (RAG) ======
+        function handleChatSubmit() {
+            const input = document.getElementById('chat-input');
+            const msg = input.value.trim();
+            if(!msg) return;
+            
+            const context = document.getElementById('chat-context-select').value;
+            input.value = '';
+            
+            addChatBubble(msg, 'user');
+            
+            // Temporary loading bubble
+            const chatHistory = document.getElementById('chat-history');
+            const loadingBubble = document.createElement('div');
+            loadingBubble.className = 'chat-bubble chat-ai p-5 text-sm italic text-textMuted border border-borderGray rounded-lg font-serif';
+            loadingBubble.innerText = 'Indexando documentos...';
+            chatHistory.appendChild(loadingBubble);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            
+            const modelStr = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
+            fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({mensaje: msg, materia_id: context, modelo_elegido: modelStr})
+            })
+            .then(r => r.json())
+            .then(data => {
+                chatHistory.removeChild(loadingBubble);
+                addChatBubble(data.respuesta, 'ai');
+                if(data.stats) updateStatsUI(data.stats);
+            })
+            .catch(e => {
+                chatHistory.removeChild(loadingBubble);
+                addChatBubble('Error del motor de inferencia: ' + e.message, 'ai');
+            });
+        }
+        
+        function addChatBubble(text, type) {
+            const chatHistory = document.getElementById('chat-history');
+            const bubble = document.createElement('div');
+            bubble.className = `chat-bubble p-5 text-sm prose ${type === 'user' ? 'chat-user' : 'chat-ai'}`;
+            
+            if (type === 'ai') {
+                bubble.innerHTML = marked.parse(text);
+            } else {
+                bubble.innerText = text;
+            }
+            
+            chatHistory.appendChild(bubble);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+    </script>
+</body>
+</html>
