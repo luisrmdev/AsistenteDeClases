@@ -495,6 +495,8 @@ async def save_summary(req: SaveRequest):
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
         
+    fecha_str = datetime.now().strftime("%Y-%m-%d")
+
     md_filename = req.filename.replace(".webm", ".md")
     if md_filename.startswith("meet_"):
         mat_id = req.materia_id if (req.materia_id and req.materia_id != "default") else "default"
