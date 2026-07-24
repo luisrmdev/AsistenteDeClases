@@ -11,6 +11,7 @@
     
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     
     <script>
         tailwind.config = {
@@ -18,22 +19,50 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Geist', 'sans-serif'],
+                        sans: ['Geist', 'system-ui', 'sans-serif'],
                         serif: ['Newsreader', 'serif'],
                         mono: ['Geist Mono', 'monospace'],
                     },
                     colors: {
                         background: 'var(--color-bg)',
                         surface: 'var(--color-surface)',
+                        surfaceHover: 'var(--color-surface-hover)',
                         borderGray: 'var(--color-border)',
                         charcoal: 'var(--color-text-main)',
                         textMuted: 'var(--color-text-muted)',
-                        paleBlue: 'var(--color-pale-blue)',
-                        paleBlueText: 'var(--color-pale-blue-text)',
-                        paleGreen: 'var(--color-pale-green)',
-                        paleGreenText: 'var(--color-pale-green-text)',
-                        paleRed: 'var(--color-pale-red)',
-                        paleRedText: 'var(--color-pale-red-text)'
+                        accent: 'var(--color-accent)',
+                        accentHover: 'var(--color-accent-hover)',
+                        accentText: 'var(--color-accent-text)',
+                        danger: 'var(--color-danger)',
+                        dangerBg: 'var(--color-danger-bg)'
+                    },
+                    boxShadow: {
+                        'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
+                        'glow': '0 0 20px rgba(var(--color-accent-rgb), 0.15)',
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+                        'toast-enter': 'toastEnter 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards',
+                        'toast-leave': 'toastLeave 0.3s ease-in forwards'
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' }
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(16px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' }
+                        },
+                        toastEnter: {
+                            '0%': { opacity: '0', transform: 'translateY(100%) scale(0.9)' },
+                            '100%': { opacity: '1', transform: 'translateY(0) scale(1)' }
+                        },
+                        toastLeave: {
+                            '0%': { opacity: '1', transform: 'translateY(0) scale(1)' },
+                            '100%': { opacity: '0', transform: 'translateY(100%) scale(0.9)' }
+                        }
                     }
                 }
             }
@@ -42,149 +71,244 @@
     
     <style>
         :root {
-            --color-bg: #FFFFFF;
-            --color-surface: #F7F6F3;
-            --color-border: #EAEAEA;
-            --color-text-main: #111111;
-            --color-text-muted: #787774;
-            --color-pale-blue: #E1F3FE;
-            --color-pale-blue-text: #1F6C9F;
-            --color-pale-green: #EDF3EC;
-            --color-pale-green-text: #346538;
-            --color-pale-red: #FDEBEC;
-            --color-pale-red-text: #9F2F2D;
-            
-            --btn-primary-bg: #111111;
-            --btn-primary-text: #FFFFFF;
-            --btn-secondary-bg: #F7F6F3;
-            --btn-secondary-border: #EAEAEA;
+            --color-bg: #FAFAFA;
+            --color-surface: #FFFFFF;
+            --color-surface-hover: #F4F4F5;
+            --color-border: #E4E4E7;
+            --color-text-main: #09090B;
+            --color-text-muted: #71717A;
+            --color-accent: #18181B;
+            --color-accent-hover: #27272A;
+            --color-accent-text: #FAFAFA;
+            --color-accent-rgb: 24, 24, 27;
+            --color-danger: #EF4444;
+            --color-danger-bg: #FEF2F2;
         }
 
         .dark {
-            --color-bg: #0A0A0A;
-            --color-surface: #141414;
-            --color-border: #2A2A2A;
-            --color-text-main: #EAEAEA;
+            --color-bg: #09090B;
+            --color-surface: #121214;
+            --color-surface-hover: #1E1E20;
+            --color-border: #27272A;
+            --color-text-main: #FAFAFA;
             --color-text-muted: #A1A1AA;
-            --color-pale-blue: #1E3A5F;
-            --color-pale-blue-text: #93C5FD;
-            --color-pale-green: #14532D;
-            --color-pale-green-text: #86EFAC;
-            --color-pale-red: #7F1D1D;
-            --color-pale-red-text: #FCA5A5;
-            
-            --btn-primary-bg: #EAEAEA;
-            --btn-primary-text: #0A0A0A;
-            --btn-secondary-bg: #141414;
-            --btn-secondary-border: #2A2A2A;
+            --color-accent: #FAFAFA;
+            --color-accent-hover: #E4E4E7;
+            --color-accent-text: #09090B;
+            --color-accent-rgb: 250, 250, 250;
+            --color-danger: #F87171;
+            --color-danger-bg: #450A0A;
         }
 
-        body { font-family: 'Geist', sans-serif; background-color: var(--color-bg); color: var(--color-text-main); line-height: 1.6; }
-        .nav-btn { color: var(--color-text-muted); }
-        .nav-btn:hover { background-color: var(--color-border); color: var(--color-text-main); }
-        .nav-btn.active-nav { background-color: var(--color-border); font-weight: 500; color: var(--color-text-main); }
+        body { 
+            font-family: 'Geist', sans-serif; 
+            background-color: var(--color-bg); 
+            color: var(--color-text-main); 
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        .nav-btn { 
+            color: var(--color-text-muted); 
+            position: relative;
+            transition: all 0.2s ease;
+        }
+        .nav-btn:hover { 
+            background-color: var(--color-surface-hover); 
+            color: var(--color-text-main); 
+        }
+        .nav-btn.active-nav { 
+            background-color: var(--color-surface-hover); 
+            color: var(--color-text-main); 
+            font-weight: 500;
+        }
+        .nav-btn.active-nav::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 20%;
+            height: 60%;
+            width: 3px;
+            background-color: var(--color-text-main);
+            border-radius: 0 4px 4px 0;
+        }
+        
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
         
-        .fade-in { animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .fade-in { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         
         .bento-card {
             border: 1px solid var(--color-border);
-            border-radius: 8px;
-            background: var(--color-bg);
+            border-radius: 12px;
+            background: var(--color-surface);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .bento-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            border-color: var(--color-text-muted);
         }
         
         input, textarea, select {
             border: 1px solid var(--color-border);
-            background-color: var(--color-surface);
+            background-color: var(--color-bg);
             color: var(--color-text-main);
-            transition: all 0.2s;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.02) inset;
         }
         input:focus, textarea:focus, select:focus {
             border-color: var(--color-text-main);
             outline: none;
-            box-shadow: none;
+            box-shadow: 0 0 0 1px var(--color-text-main);
         }
         
-        button.btn-primary {
-            background-color: var(--btn-primary-bg);
-            color: var(--btn-primary-text);
-            border-radius: 6px;
-            transition: transform 0.2s, background-color 0.2s;
+        .btn-primary {
+            background-color: var(--color-accent);
+            color: var(--color-accent-text);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-weight: 500;
         }
-        button.btn-primary:active { transform: scale(0.98); }
+        .btn-primary:hover {
+            background-color: var(--color-accent-hover);
+            transform: translateY(-1px);
+        }
+        .btn-primary:active { transform: translateY(0) scale(0.98); }
         
-        button.btn-secondary {
-            border: 1px solid var(--btn-secondary-border);
-            background-color: var(--btn-secondary-bg);
+        .btn-secondary {
+            border: 1px solid var(--color-border);
+            background-color: var(--color-surface);
             color: var(--color-text-main);
-            border-radius: 6px;
-            transition: transform 0.2s;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            font-weight: 500;
         }
-        button.btn-secondary:active { transform: scale(0.98); }
+        .btn-secondary:hover {
+            background-color: var(--color-surface-hover);
+            border-color: var(--color-text-muted);
+        }
+        .btn-secondary:active { transform: scale(0.98); }
 
         .chat-user {
             background-color: var(--color-surface);
             color: var(--color-text-main);
             align-self: flex-end;
             border: 1px solid var(--color-border);
-            border-radius: 6px;
+            border-radius: 12px 12px 0 12px;
         }
         .chat-ai {
-            background-color: var(--color-bg);
+            background-color: transparent;
             color: var(--color-text-main);
             align-self: flex-start;
-            border: 1px solid var(--color-border);
-            border-radius: 6px;
+            border-radius: 12px 12px 12px 0;
         }
         .chat-bubble { max-width: 85%; }
         
-        /* Prosa Customization */
         .prose h1, .prose h2, .prose h3, .prose h4, .prose strong, .prose { color: var(--color-text-main); }
-        .prose h1, .prose h2, .prose h3 { font-family: 'Newsreader', serif; letter-spacing: -0.02em; }
-        .prose code { font-family: 'Geist Mono', monospace; background-color: var(--color-surface); padding: 2px 4px; border-radius: 4px; border: 1px solid var(--color-border); font-size: 0.85em; color: var(--color-text-main); }
+        .prose h1, .prose h2, .prose h3 { font-family: 'Geist', sans-serif; letter-spacing: -0.02em; font-weight: 600; }
+        .prose code { 
+            font-family: 'Geist Mono', monospace; 
+            background-color: var(--color-surface); 
+            padding: 3px 6px; 
+            border-radius: 6px; 
+            border: 1px solid var(--color-border); 
+            font-size: 0.85em; 
+            color: var(--color-text-main); 
+        }
+        .prose pre code {
+            background-color: transparent;
+            border: none;
+            padding: 0;
+        }
+        .prose pre {
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: 8px;
+            padding: 16px;
+        }
         
-        /* Modal background overlay */
-        .modal-overlay { background-color: rgba(0, 0, 0, 0.5); }
-        .dark .modal-overlay { background-color: rgba(0, 0, 0, 0.8); }
+        .modal-overlay { 
+            background-color: rgba(0, 0, 0, 0.4); 
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        .dark .modal-overlay { 
+            background-color: rgba(0, 0, 0, 0.7); 
+        }
+        
+        /* Custom Toasts */
+        #toast-container {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 9999;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .toast {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            color: var(--color-text-main);
+            padding: 16px 20px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            min-width: 300px;
+        }
     </style>
+    <script>
+        // Check theme instantly to prevent FOUC
+        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
 </head>
 <body class="flex h-screen overflow-hidden bg-background">
 
     <aside class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0">
         <div class="p-6 border-b border-borderGray flex justify-between items-center">
             <h1 class="text-lg font-serif tracking-tight flex items-center gap-2 text-charcoal">
+                <i data-lucide="layers" class="w-5 h-5"></i>
                 Asistente IA
             </h1>
-            <button id="theme-toggle" class="text-textMuted hover:text-charcoal transition text-xs font-medium px-2 py-1 border border-borderGray rounded bg-background">[ TEMA ]</button>
+            <button id="theme-toggle" class="text-textMuted hover:text-charcoal transition p-1.5 border border-borderGray rounded bg-background" aria-label="Toggle Theme">
+                <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
+                <i data-lucide="sun" class="w-4 h-4 block dark:hidden"></i>
+            </button>
         </div>
         
         <div class="flex-1 py-4 text-sm font-medium">
-            <button onclick="switchTab('resumenes')" id="nav-resumenes" class="w-full text-left px-6 py-2 transition-colors nav-btn active-nav flex items-center gap-3">
-                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Documentos
+            <button onclick="switchTab('resumenes')" id="nav-resumenes" class="w-full text-left px-6 py-2.5 transition-colors nav-btn active-nav flex items-center gap-3">
+                <i data-lucide="file-text" class="w-4 h-4 opacity-70"></i> Documentos
             </button>
-            <button onclick="switchTab('audios')" id="nav-audios" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Por Procesar
+            <button onclick="switchTab('audios')" id="nav-audios" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <i data-lucide="mic" class="w-4 h-4 opacity-70"></i> Por Procesar
             </button>
-            <button onclick="switchTab('chat')" id="nav-chat" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Tutor Virtual
+            <button onclick="switchTab('chat')" id="nav-chat" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <i data-lucide="message-square" class="w-4 h-4 opacity-70"></i> Tutor Virtual
+            </button>
+            <button onclick="switchTab('tareas')" id="nav-tareas" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <i data-lucide="check-square" class="w-4 h-4 opacity-70"></i> Tareas
             </button>
             
             <div class="px-6 mt-8 mb-2">
                 <h4 class="text-[10px] font-bold uppercase tracking-wider text-textMuted">Ajustes</h4>
             </div>
             
-            <button onclick="switchTab('materias')" id="nav-materias" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3">
-                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Asignaturas
+            <button onclick="switchTab('materias')" id="nav-materias" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3">
+                <i data-lucide="book-open" class="w-4 h-4 opacity-70"></i> Asignaturas
             </button>
-            <button onclick="switchTab('config')" id="nav-config" class="w-full text-left px-6 py-2 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <span class="w-4 h-4 inline-flex justify-center items-center font-mono opacity-50">/</span> Preferencias
+            <button onclick="switchTab('config')" id="nav-config" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <i data-lucide="settings" class="w-4 h-4 opacity-70"></i> Preferencias
             </button>
         </div>
         
@@ -239,6 +363,19 @@
                 <p class="text-textMuted mt-3 text-sm">Convierte tus grabaciones locales en documentos estructurados.</p>
             </div>
             <div class="flex-1 overflow-y-auto px-16 py-12">
+                <!-- IMPORTAR DRIVE -->
+                <div class="bento-card p-8 mb-8 max-w-5xl mx-auto bg-surface/50 border border-borderGray">
+                    <h3 class="text-sm font-bold text-charcoal mb-2 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="hard-drive" class="w-4 h-4 text-blue-500"></i> Importar desde Google Drive
+                    </h3>
+                    <p class="text-xs text-textMuted mb-4">Pega el enlace de una grabación en Drive (incluso con descarga deshabilitada) para extraer el audio e importarlo automáticamente a la cola de procesamiento.</p>
+                    
+                    <div class="flex gap-2">
+                        <input type="url" id="drive-url-input" class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray" placeholder="https://drive.google.com/file/d/...">
+                        <button onclick="downloadFromDrive()" id="btn-drive-download" class="btn-primary px-6 text-sm font-medium transition-all">Extraer y Procesar</button>
+                    </div>
+                </div>
+
                 <div id="audios-list" class="grid gap-6 max-w-5xl mx-auto"></div>
             </div>
         </section>
@@ -271,6 +408,34 @@
                     <input type="text" id="chat-input" class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray" placeholder="Ej. Resume los 3 puntos clave de la biología molecular...">
                     <button type="submit" class="btn-primary px-8 text-sm font-medium" id="chat-send-btn">Consultar</button>
                 </form>
+            </div>
+        </section>
+
+        <!-- =======================
+             TAB: TAREAS
+        ======================== -->
+        <section id="tab-tareas" class="tab-content hidden h-full flex-col fade-in">
+            <div class="px-16 py-12 border-b border-borderGray flex justify-between items-end">
+                <div>
+                    <h2 class="text-4xl font-serif tracking-tight text-charcoal">Tareas Pendientes</h2>
+                    <p class="text-textMuted mt-3 text-sm">Eventos y recordatorios detectados automáticamente en tus clases.</p>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto px-16 py-12 max-w-5xl mx-auto w-full">
+                <div class="bento-card overflow-hidden">
+                    <table class="w-full text-sm text-left">
+                        <thead class="text-xs uppercase bg-surface text-textMuted border-b border-borderGray">
+                            <tr>
+                                <th class="px-6 py-4 font-bold">Estado</th>
+                                <th class="px-6 py-4 font-bold">Título</th>
+                                <th class="px-6 py-4 font-bold">Fecha Límite</th>
+                                <th class="px-6 py-4 font-bold">Origen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tareas-list" class="divide-y divide-borderGray bg-background">
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
@@ -339,6 +504,40 @@
                         <p class="text-xs text-textMuted mt-3">Este modelo alimentará el procesamiento del Tutor Virtual, RAG y extracción de resúmenes.</p>
                     </div>
                 </div>
+
+                <div class="bento-card p-8 mt-6">
+                    <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider">Integraciones</h3>
+                    <div>
+                        <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Ruta del Vault de Obsidian</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="config-obsidian-path" class="flex-1 rounded-md p-3 text-sm bg-surface border border-borderGray" placeholder="Ej. C:/Users/Usuario/Documents/MiVault">
+                        </div>
+                        <p class="text-xs text-textMuted mt-3">Los resúmenes generados se guardarán automáticamente en esta carpeta local de tu equipo.</p>
+                        
+                        <label class="flex items-center gap-3 mt-6 cursor-pointer w-fit">
+                            <input type="checkbox" id="config-enable-anki" class="w-4 h-4 rounded border-borderGray text-accent focus:ring-accent accent-accent cursor-pointer">
+                            <span class="text-sm font-bold text-charcoal">Generar Tarjetas de Memoria (Anki)</span>
+                        </label>
+                        <p class="text-xs text-textMuted mt-1 ml-7">Si desactivas esto, la IA no extraerá tarjetas y el resumen tardará menos.</p>
+                        
+                        <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 mt-6">Navegador para extracción de Drive (Cookies)</label>
+                        <div class="flex gap-2">
+                            <select id="config-browser-cookie" class="w-full rounded-md p-3 text-sm bg-surface border border-borderGray cursor-pointer">
+                                <option value="brave">Brave Browser</option>
+                                <option value="chrome">Google Chrome</option>
+                                <option value="firefox">Mozilla Firefox</option>
+                                <option value="chromium">Chromium</option>
+                                <option value="edge">Microsoft Edge</option>
+                                <option value="opera">Opera</option>
+                            </select>
+                        </div>
+                        <p class="text-xs text-textMuted mt-3">Selecciona el navegador principal donde mantienes la sesión activa de Google Drive para permitir el Bypass.</p>
+                        
+                        <div class="mt-6">
+                            <button onclick="saveAppSettings()" id="btn-save-settings" class="btn-primary px-6 py-2.5 text-sm font-medium transition-all">Guardar Preferencias</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -348,12 +547,14 @@
         <div id="review-modal" class="fixed inset-0 modal-overlay backdrop-blur-sm hidden z-50 flex items-center justify-center p-8">
             <div class="bg-background w-full max-w-5xl h-full max-h-[85vh] rounded-xl border border-borderGray flex flex-col overflow-hidden shadow-2xl">
                 <div class="p-6 border-b border-borderGray flex justify-between items-center bg-surface">
-                    <h3 class="font-serif text-xl tracking-tight text-charcoal">Revisión de Análisis</h3>
-                    <button onclick="closeModal()" class="text-textMuted font-bold hover:text-charcoal text-sm">[ Cerrar ]</button>
+                    <h3 class="font-serif text-xl tracking-tight text-charcoal flex items-center gap-2">
+                        <i data-lucide="cpu" class="w-5 h-5"></i> Revisión de Análisis
+                    </h3>
+                    <button onclick="closeModal()" class="text-textMuted hover:text-charcoal p-1 rounded-md transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
                 </div>
                 
                 <div id="review-loading" class="flex-1 flex flex-col items-center justify-center hidden">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-charcoal mb-6"></div>
+                    <i data-lucide="loader-2" class="animate-spin text-charcoal w-8 h-8 mb-6"></i>
                     <p class="text-charcoal text-sm font-medium">Ejecutando inferencia sobre el audio...</p>
                     <p class="text-xs text-textMuted mt-2 font-mono">El proceso puede tomar algunos segundos.</p>
                 </div>
@@ -362,12 +563,24 @@
                     <p class="text-[10px] font-bold text-textMuted uppercase tracking-wider mb-3">Editor de Extracción Final (Markdown)</p>
                     <textarea id="review-textarea" class="flex-1 w-full p-6 border border-borderGray rounded-lg font-mono text-sm resize-none bg-surface focus:bg-background"></textarea>
                     
-                    <div class="mt-6 flex justify-between items-center">
+                    <div id="review-actions" class="mt-6 flex justify-between items-center">
                         <button onclick="retryAI()" class="px-6 py-2.5 btn-secondary text-sm font-medium">
                             [ Re-procesar Audio ]
                         </button>
                         <button onclick="acceptAndSave()" class="px-6 py-2.5 btn-primary text-sm font-medium">
                             Aceptar y Guardar Documento
+                        </button>
+                    </div>
+
+                    <div id="export-buttons" class="mt-6 flex flex-col md:flex-row justify-between items-center gap-4 hidden">
+                        <a id="btn-download-anki" href="#" target="_blank" class="flex-1 px-6 py-2.5 btn-secondary text-sm font-medium text-center !border-[#86EFAC] !text-[#14532D] dark:!text-[#86EFAC] dark:!border-[#14532D] hidden">
+                            Descargar Mazos Anki (.apkg)
+                        </a>
+                        <a id="btn-download-ics" href="#" target="_blank" class="flex-1 px-6 py-2.5 btn-secondary text-sm font-medium text-center !border-[#93C5FD] !text-[#1E3A5F] dark:!text-[#93C5FD] dark:!border-[#1E3A5F] hidden">
+                            Añadir a Calendario (.ics)
+                        </a>
+                        <button onclick="closeModal()" class="px-6 py-2.5 btn-primary text-sm font-medium">
+                            Finalizar
                         </button>
                     </div>
                 </div>
@@ -376,6 +589,7 @@
 
     </main>
 
+    <div id="toast-container"></div>
     <script>
         // Theme logic
         const themeBtn = document.getElementById('theme-toggle');
@@ -390,15 +604,32 @@
             }
         }
         
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'dark') setTheme(true);
-        else if (savedTheme === 'light') setTheme(false);
-        else if (window.matchMedia('(prefers-color-scheme: dark)').matches) setTheme(true);
-        
         themeBtn.addEventListener('click', () => {
             const isDark = document.documentElement.classList.contains('dark');
             setTheme(!isDark);
         });
+
+        // Toast System
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast fade-in';
+            
+            let icon = '<i data-lucide="info" class="w-5 h-5 text-blue-500"></i>';
+            if (type === 'success') icon = '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
+            if (type === 'error') icon = '<i data-lucide="alert-circle" class="w-5 h-5 text-red-500"></i>';
+            
+            toast.innerHTML = `<span class="flex-shrink-0">${icon}</span> <span class="text-sm font-medium flex-1">${message}</span>`;
+            
+            container.appendChild(toast);
+            lucide.createIcons({root: toast});
+            
+            setTimeout(() => {
+                toast.classList.remove('fade-in');
+                toast.style.animation = 'toastLeave 0.3s ease-in forwards';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
 
         // State
         let materias = [];
@@ -411,20 +642,42 @@
             loadSummaries();
             loadMaterias();
             loadAudios();
+            loadAppSettings();
             
             // Model Selector Init
-            const savedModel = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
-            const modelSelector = document.getElementById('model-selector');
-            modelSelector.value = savedModel;
-            
             function getUiName(val) {
                 if(val.includes('3.5-flash')) return 'Flash 3.5';
                 if(val.includes('lite')) return 'Flash Lite';
-                return 'Flash 3.5';
+                if(val.includes('pro')) return 'Pro';
+                return val.split('-')[1] || val; // simple fallback
             }
+
+            fetch('/api/models')
+                .then(r => r.json())
+                .then(data => {
+                    const modelSelector = document.getElementById('model-selector');
+                    modelSelector.innerHTML = ''; 
+                    data.models.forEach(m => {
+                        const option = document.createElement('option');
+                        option.value = m.id;
+                        option.textContent = `${m.name} - ${m.description.substring(0, 50)}${m.description.length > 50 ? '...' : ''}`;
+                        modelSelector.appendChild(option);
+                    });
+                    
+                    let savedModel = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
+                    const exists = data.models.find(x => x.id === savedModel);
+                    if (!exists && data.models.length > 0) {
+                        savedModel = data.models[0].id;
+                    }
+                    
+                    modelSelector.value = savedModel;
+                    localStorage.setItem('modelo_elegido', savedModel);
+                    document.getElementById('ui-current-model').innerText = getUiName(savedModel);
+                    loadStats();
+                })
+                .catch(e => console.error("Error cargando modelos:", e));
             
-            document.getElementById('ui-current-model').innerText = getUiName(savedModel);
-            
+            const modelSelector = document.getElementById('model-selector');
             modelSelector.addEventListener('change', (e) => {
                 localStorage.setItem('modelo_elegido', e.target.value);
                 document.getElementById('ui-current-model').innerText = getUiName(e.target.value);
@@ -438,6 +691,9 @@
                 e.preventDefault();
                 handleChatSubmit();
             });
+            
+            // Render icons
+            lucide.createIcons();
         });
         
         function updateStatsUI(stats) {
@@ -458,6 +714,54 @@
             .then(data => updateStatsUI(data));
         }
 
+        // Settings config logic
+        function loadAppSettings() {
+            fetch('/api/settings')
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('config-obsidian-path').value = data.obsidian_vault_path || '';
+                    document.getElementById('config-enable-anki').checked = data.enable_anki !== false;
+                    
+                    if (data.browser_cookie_source) {
+                        document.getElementById('config-browser-cookie').value = data.browser_cookie_source;
+                    }
+                })
+                .catch(e => console.log('Error cargando configuración', e));
+        }
+        
+        function saveAppSettings() {
+            const path = document.getElementById('config-obsidian-path').value;
+            const anki = document.getElementById('config-enable-anki').checked;
+            const browserSource = document.getElementById('config-browser-cookie').value;
+            const btn = document.getElementById('btn-save-settings');
+            const originalText = btn.innerText;
+            btn.innerText = 'Guardando...';
+            btn.disabled = true;
+            
+            fetch('/api/settings', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    obsidian_vault_path: path, 
+                    enable_anki: anki,
+                    browser_cookie_source: browserSource
+                })
+            })
+            .then(r => r.json())
+            .then(() => {
+                btn.innerText = '¡Guardado!';
+                setTimeout(() => {
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }, 2000);
+            })
+            .catch(e => {
+                showToast('Error al guardar: ' + e.message, 'error');
+                btn.innerText = originalText;
+                btn.disabled = false;
+            });
+        }
+
         // Tab Switching
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
@@ -473,6 +777,7 @@
             if(tabId === 'audios') loadAudios();
             if(tabId === 'config') loadMaterias();
             if(tabId === 'resumenes') loadSummaries();
+            if(tabId === 'tareas') loadTareas();
         }
 
         // ====== TAB: RESUMENES ======
@@ -495,8 +800,8 @@
                         titleSpan.innerHTML = `[ DOC ] ${s.display_name}`;
                         
                         const delBtn = document.createElement('button');
-                        delBtn.innerHTML = '✕';
-                        delBtn.className = 'opacity-0 group-hover:opacity-100 text-[10px] bg-paleRed text-paleRedText px-2 py-0.5 rounded transition font-bold';
+                        delBtn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i>';
+                        delBtn.className = 'opacity-0 group-hover:opacity-100 bg-paleRed text-paleRedText p-1 rounded transition';
                         delBtn.onclick = (e) => {
                             e.stopPropagation();
                             if(confirm('¿Eliminar este documento de la base de conocimiento?')) {
@@ -555,6 +860,7 @@
                         };
                         list.appendChild(div);
                     });
+                    lucide.createIcons({root: list});
                 });
         }
 
@@ -595,9 +901,10 @@
         function generatePrompt() {
             const btn = document.getElementById('btn-gen-prompt');
             const input = document.getElementById('mat-natural').value;
-            if(!input.trim()) return alert("Escribe qué quieres que haga la IA primero.");
+            if(!input.trim()) return showToast("Escribe qué quieres que haga la IA primero.", 'error');
             
-            btn.innerHTML = '<div class="animate-spin h-3 w-3 border-b-2 border-charcoal rounded-full"></div> <span>Procesando...</span>';
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Procesando...</span>';
+            lucide.createIcons({root: btn});
             btn.disabled = true;
             
             const modelStr = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
@@ -611,7 +918,7 @@
                 document.getElementById('mat-prompt').value = d.prompt_generado;
                 if(d.stats) updateStatsUI(d.stats);
             })
-            .catch(e => alert("Error generando prompt: " + e.message))
+            .catch(e => showToast("Error generando prompt: " + e.message, 'error'))
             .finally(() => {
                 btn.innerHTML = '<span>Traducir a Prompt Técnico</span>';
                 btn.disabled = false;
@@ -630,7 +937,7 @@
         function saveMateria() {
             const nombre = document.getElementById('mat-nombre').value;
             const prompt = document.getElementById('mat-prompt').value;
-            if(!nombre || !prompt) return alert('El Nombre y el Prompt Final son obligatorios.');
+            if(!nombre || !prompt) return showToast('El Nombre y el Prompt Final son obligatorios.', 'error');
             
             if (editingMateriaId) {
                 fetch(`/api/materias/${editingMateriaId}`, {
@@ -664,6 +971,52 @@
             if(confirm('¿Eliminar asignatura de forma permanente?')) {
                 fetch(`/api/materias/${id}`, { method: 'DELETE' }).then(() => loadMaterias());
             }
+        }
+
+        // ====== TAB: TAREAS ======
+        function loadTareas() {
+            fetch('/api/tareas')
+                .then(r => r.json())
+                .then(data => {
+                    const list = document.getElementById('tareas-list');
+                    list.innerHTML = '';
+                    if (!data.tareas || data.tareas.length === 0) {
+                        list.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-textMuted font-serif italic">No hay tareas pendientes.</td></tr>';
+                        return;
+                    }
+                    data.tareas.forEach(t => {
+                        const tr = document.createElement('tr');
+                        tr.className = "hover:bg-surfaceHover transition-colors";
+                        const isChecked = t.completada ? 'checked' : '';
+                        tr.innerHTML = `
+                            <td class="px-6 py-4">
+                                <input type="checkbox" class="w-4 h-4 rounded border-borderGray text-accent focus:ring-accent accent-accent cursor-pointer" 
+                                       onchange="toggleTarea('${t.id}', this.checked)" ${isChecked}>
+                            </td>
+                            <td class="px-6 py-4 font-medium text-charcoal">
+                                <div class="${t.completada ? 'line-through opacity-50' : ''}">${t.titulo}</div>
+                                <div class="text-xs text-textMuted font-normal mt-1 ${t.completada ? 'opacity-50' : ''}">${t.descripcion || ''}</div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="bg-surface border border-borderGray px-2 py-1 rounded-md text-xs font-mono font-medium ${t.completada ? 'opacity-50' : ''}">
+                                    ${t.fecha_YYYY_MM_DD || 'Sin fecha'}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-xs text-textMuted">
+                                ${t.origen}
+                            </td>
+                        `;
+                        list.appendChild(tr);
+                    });
+                });
+        }
+        
+        function toggleTarea(id, completada) {
+            fetch(`/api/tareas/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({completada})
+            }).then(() => loadTareas());
         }
 
         // ====== TAB: AUDIOS PENDIENTES ======
@@ -746,7 +1099,7 @@
                 if(data.stats) updateStatsUI(data.stats);
             })
             .catch(e => {
-                alert('Fallo de Inferencia: ' + e.message);
+                showToast('Fallo de Inferencia: ' + e.message, 'error');
                 closeModal();
             });
         }
@@ -771,15 +1124,82 @@
                 })
             })
             .then(r => r.json())
-            .then(() => {
-                closeModal();
-                loadAudios(); // Refresh
-                alert('Documento añadido a la base de conocimiento.');
+            .then(data => {
+                const actionsContainer = document.getElementById('review-actions');
+                const exportContainer = document.getElementById('export-buttons');
+                
+                actionsContainer.classList.add('hidden');
+                exportContainer.classList.remove('hidden');
+                
+                if (data.anki_file) {
+                    const btnAnki = document.getElementById('btn-download-anki');
+                    btnAnki.href = '/api/exportaciones/' + data.anki_file;
+                    btnAnki.classList.remove('hidden');
+                }
+                
+                if (data.ics_file) {
+                    const btnIcs = document.getElementById('btn-download-ics');
+                    btnIcs.href = '/api/exportaciones/' + data.ics_file;
+                    btnIcs.classList.remove('hidden');
+                }
+                
+                loadAudios(); // Refresh list
+                showToast('Documento guardado exitosamente. Descarga tus mazos o eventos si se generaron.', 'success');
             });
         }
 
         function closeModal() {
             document.getElementById('review-modal').classList.add('hidden');
+            
+            // Reset modal state just in case
+            const actionsContainer = document.getElementById('review-actions');
+            const exportContainer = document.getElementById('export-buttons');
+            if(actionsContainer && exportContainer) {
+                actionsContainer.classList.remove('hidden');
+                exportContainer.classList.add('hidden');
+                document.getElementById('btn-download-anki').classList.add('hidden');
+                document.getElementById('btn-download-ics').classList.add('hidden');
+            }
+        }
+        
+        // ====== IMPORTACION DE DRIVE ======
+        function downloadFromDrive() {
+            const urlInput = document.getElementById('drive-url-input');
+            const btn = document.getElementById('btn-drive-download');
+            const url = urlInput.value.trim();
+            
+            if (!url) {
+                showToast("Por favor, ingresa una URL válida.", "error");
+                return;
+            }
+            
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline"></i> <span>Descargando...</span>';
+            lucide.createIcons({root: btn});
+            btn.disabled = true;
+            urlInput.disabled = true;
+            
+            fetch('/api/download-drive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url })
+            })
+            .then(res => res.json().then(data => ({ok: res.ok, data})))
+            .then(({ok, data}) => {
+                if (!ok) {
+                    throw new Error(data.detail || "Error al procesar el enlace");
+                }
+                showToast(data.message || "¡Audio extraído y procesando!", "success");
+                urlInput.value = "";
+                loadAudios(); // Por si queremos ver si aparece o si falla
+            })
+            .catch(err => {
+                showToast(err.message, "error");
+            })
+            .finally(() => {
+                btn.innerHTML = 'Extraer y Procesar';
+                btn.disabled = false;
+                urlInput.disabled = false;
+            });
         }
         
         // ====== CHAT DE ESTUDIO (RAG) ======

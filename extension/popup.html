@@ -3,230 +3,291 @@
 <head>
   <meta charset="UTF-8">
   <title>Meet Audio Recorder</title>
-  
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
   
   <style>
       :root {
-          --color-bg: #FFFFFF;
-          --color-surface: #F7F6F3;
-          --color-border: #EAEAEA;
-          --color-text-main: #111111;
-          --color-text-muted: #787774;
-          --color-pale-blue: #E1F3FE;
-          --color-pale-blue-text: #1F6C9F;
-          --color-pale-green: #EDF3EC;
-          --color-pale-green-text: #346538;
-          --color-pale-red: #FDEBEC;
-          --color-pale-red-text: #9F2F2D;
+          --bg-main: #FFFFFF;
+          --bg-surface: #F9FAFB;
+          --bg-elevated: #FFFFFF;
+          --border-light: #E5E7EB;
+          --text-primary: #111827;
+          --text-secondary: #6B7280;
+          --accent: #000000;
+          --accent-hover: #1F2937;
           
-          --btn-primary-bg: #111111;
-          --btn-primary-text: #FFFFFF;
-          --btn-secondary-bg: #F7F6F3;
-          --btn-secondary-border: #EAEAEA;
+          --status-idle: #F3F4F6;
+          --status-idle-text: #4B5563;
+          --status-recording: #FEF2F2;
+          --status-recording-text: #DC2626;
+          --status-success: #ECFDF5;
+          --status-success-text: #059669;
+          
+          --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+          --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       }
 
       @media (prefers-color-scheme: dark) {
           :root {
-              --color-bg: #0A0A0A;
-              --color-surface: #141414;
-              --color-border: #2A2A2A;
-              --color-text-main: #EAEAEA;
-              --color-text-muted: #A1A1AA;
-              --color-pale-blue: #1E3A5F;
-              --color-pale-blue-text: #93C5FD;
-              --color-pale-green: #14532D;
-              --color-pale-green-text: #86EFAC;
-              --color-pale-red: #7F1D1D;
-              --color-pale-red-text: #FCA5A5;
+              --bg-main: #0B0B0B;
+              --bg-surface: #141414;
+              --bg-elevated: #1F1F1F;
+              --border-light: #262626;
+              --text-primary: #F3F4F6;
+              --text-secondary: #9CA3AF;
+              --accent: #FFFFFF;
+              --accent-hover: #E5E7EB;
               
-              --btn-primary-bg: #EAEAEA;
-              --btn-primary-text: #0A0A0A;
-              --btn-secondary-bg: #141414;
-              --btn-secondary-border: #2A2A2A;
+              --status-idle: #1F1F1F;
+              --status-idle-text: #9CA3AF;
+              --status-recording: #450A0A;
+              --status-recording-text: #FCA5A5;
+              --status-success: #064E3B;
+              --status-success-text: #6EE7B7;
           }
       }
 
-      * { box-sizing: border-box; }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
       
       body { 
           width: 320px; 
-          margin: 0; 
           font-family: 'Geist', sans-serif; 
-          background-color: var(--color-bg); 
-          color: var(--color-text-main); 
+          background-color: var(--bg-main); 
+          color: var(--text-primary); 
+          -webkit-font-smoothing: antialiased;
       }
 
-      .p-6 { padding: 1.5rem; }
-      .flex { display: flex; }
-      .flex-col { flex-direction: column; }
-      .flex-row { flex-direction: row; }
-      .items-center { align-items: center; }
-      .justify-between { justify-content: space-between; }
-      .text-center { text-align: center; }
-      .w-full { width: 100%; }
-      .w-12 { width: 3rem; }
-      .flex-1 { flex: 1 1 0%; }
+      .container { padding: 16px; }
+
+      /* Segmented Control */
+      .segmented-control {
+          display: flex;
+          background-color: var(--bg-surface);
+          padding: 4px;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          border: 1px solid var(--border-light);
+      }
       
-      .mt-2 { margin-top: 0.5rem; }
-      .mt-3 { margin-top: 0.75rem; }
-      .mt-4 { margin-top: 1rem; }
-      .mb-1 { margin-bottom: 0.25rem; }
-      .mb-2 { margin-bottom: 0.5rem; }
-      .mb-3 { margin-bottom: 0.75rem; }
-      .gap-1 { gap: 0.25rem; }
-      .gap-2 { gap: 0.5rem; }
+      .segment-btn {
+          flex: 1;
+          text-align: center;
+          padding: 6px 12px;
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--text-secondary);
+          background: transparent;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+      }
       
-      .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-      .py-1-5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
-      .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-      .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-      .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
-      .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
-      .px-4 { padding-left: 1rem; padding-right: 1rem; }
-      
-      .pt-4 { padding-top: 1rem; }
-      .pb-2 { padding-bottom: 0.5rem; }
-      
-      .rounded { border-radius: 0.25rem; }
-      .rounded-md { border-radius: 0.375rem; }
-      .rounded-full { border-radius: 9999px; }
-      
-      .border { border: 1px solid transparent; }
-      .border-b { border-bottom: 1px solid transparent; }
-      .border-t { border-top: 1px solid transparent; }
-      
-      .border-borderGray { border-color: var(--color-border); }
-      .border-transparent { border-color: transparent; }
-      
-      .text-xs { font-size: 0.75rem; line-height: 1rem; }
-      .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
-      .text-\[10px\] { font-size: 10px; line-height: 1.2; }
-      
-      .font-bold { font-weight: 700; }
+      .segment-btn.active {
+          background-color: var(--bg-elevated);
+          color: var(--text-primary);
+          box-shadow: var(--shadow-sm);
+          border: 1px solid var(--border-light);
+      }
+
+      /* Typography */
+      .text-xs { font-size: 11px; line-height: 16px; }
+      .text-sm { font-size: 13px; line-height: 20px; }
+      .font-medium { font-weight: 500; }
       .font-mono { font-family: 'Geist Mono', monospace; }
+      .text-muted { color: var(--text-secondary); }
+
+      /* Inputs & Buttons */
+      .input-group { margin-bottom: 16px; }
+      .input-label { 
+          display: block; 
+          font-size: 11px; 
+          font-weight: 500; 
+          color: var(--text-secondary); 
+          margin-bottom: 6px; 
+      }
       
-      .uppercase { text-transform: uppercase; }
-      .tracking-wider { letter-spacing: 0.05em; }
-      .tracking-widest { letter-spacing: 0.1em; }
-      
-      .text-charcoal { color: var(--color-text-main); }
-      .text-textMuted { color: var(--color-text-muted); }
-      .text-paleRedText { color: var(--color-pale-red-text); }
-      .text-paleBlueText { color: var(--color-pale-blue-text); }
-      .text-paleGreenText { color: var(--color-pale-green-text); }
-      
-      .bg-surface { background-color: var(--color-surface); }
-      .bg-paleRed { background-color: var(--color-pale-red); }
-      .bg-paleBlue { background-color: var(--color-pale-blue); }
-      .bg-paleGreen { background-color: var(--color-pale-green); }
-      
-      .hidden { display: none !important; }
-      .opacity-50 { opacity: 0.5; }
-      
-      input {
-          border: 1px solid var(--color-border);
-          background-color: var(--color-surface);
-          color: var(--color-text-main);
-          transition: all 0.2s;
+      input[type="text"], input[type="number"] {
+          width: 100%;
+          background-color: var(--bg-surface);
+          border: 1px solid var(--border-light);
+          color: var(--text-primary);
+          border-radius: 8px;
+          padding: 8px 12px;
+          font-size: 13px;
+          transition: border-color 0.2s;
       }
       input:focus {
-          border-color: var(--color-text-main);
           outline: none;
+          border-color: var(--text-secondary);
       }
-      
-      button { border: none; cursor: pointer; font-family: inherit; }
-      button:disabled { cursor: not-allowed; opacity: 0.5; }
-      
-      button.btn-primary {
-          background-color: var(--btn-primary-bg);
-          color: var(--btn-primary-text);
-          border-radius: 6px;
-          transition: transform 0.2s;
-          border: 1px solid transparent;
-      }
-      button.btn-primary:active:not(:disabled) { transform: scale(0.98); }
-      
-      button.btn-secondary {
-          border: 1px solid var(--btn-secondary-border);
-          background-color: var(--btn-secondary-bg);
-          color: var(--color-text-main);
-          border-radius: 6px;
-          transition: transform 0.2s;
-      }
-      button.btn-secondary:active:not(:disabled) { transform: scale(0.98); }
 
-      /* Dynamic text colors */
-      .status-idle { background-color: var(--color-surface); color: var(--color-text-muted); border: 1px solid var(--color-border); }
-      .status-recording { background-color: var(--color-pale-red); color: var(--color-pale-red-text); border: 1px solid transparent; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-      .status-paused { background-color: var(--color-pale-blue); color: var(--color-pale-blue-text); border: 1px solid transparent; }
-      .status-completed { background-color: var(--color-pale-green); color: var(--color-pale-green-text); border: 1px solid transparent; }
+      .btn {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 10px 16px;
+          border-radius: 8px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          border: none;
+      }
       
+      .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+      
+      .btn-primary {
+          background-color: var(--accent);
+          color: var(--bg-main);
+          box-shadow: var(--shadow-sm);
+      }
+      .btn-primary:hover:not(:disabled) { background-color: var(--accent-hover); }
+      
+      .btn-secondary {
+          background-color: var(--bg-surface);
+          color: var(--text-primary);
+          border: 1px solid var(--border-light);
+      }
+      .btn-secondary:hover:not(:disabled) { background-color: var(--border-light); }
+
+      /* Status Badges */
+      .status-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 4px 12px;
+          border-radius: 99px;
+          font-size: 11px;
+          font-weight: 500;
+          width: 100%;
+          margin-bottom: 8px;
+          transition: all 0.3s ease;
+      }
+      .status-idle { background-color: var(--status-idle); color: var(--status-idle-text); }
+      .status-recording { 
+          background-color: var(--status-recording); 
+          color: var(--status-recording-text); 
+          animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+      }
+      .status-success { background-color: var(--status-success); color: var(--status-success-text); }
+
+      /* Layout Utilities */
+      .hidden { display: none !important; }
+      .flex-row { display: flex; align-items: center; gap: 8px; }
+      .justify-between { justify-content: space-between; }
+      .mt-4 { margin-top: 16px; }
+      .mb-4 { margin-bottom: 16px; }
+      
+      .duration {
+          font-size: 24px;
+          font-weight: 400;
+          text-align: center;
+          margin: 12px 0 20px 0;
+          letter-spacing: -0.5px;
+      }
+
+      /* Preview Box */
+      .preview-box {
+          width: 100%;
+          background-color: var(--bg-surface);
+          border: 1px solid var(--border-light);
+          border-radius: 8px;
+          padding: 8px;
+          margin: 12px 0;
+      }
+      .preview-img {
+          width: 100%;
+          border-radius: 4px;
+          max-height: 140px;
+          object-fit: contain;
+      }
+
       @keyframes pulse {
           0%, 100% { opacity: 1; }
-          50% { opacity: 0.5; }
+          50% { opacity: 0.6; }
       }
   </style>
 </head>
-<body class="p-6">
-  <div class="flex flex-col items-center">
+<body>
+  <div class="container">
     
-    <!-- Title -->
-    <h1 class="text-sm font-bold tracking-wider uppercase text-charcoal text-center border-b border-borderGray pb-2 w-full mb-3">
-      Grabadora
-    </h1>
+    <!-- Segmented Control Tabs -->
+    <div class="segmented-control">
+      <button id="tab-btn-audio" class="segment-btn active">Grabar Audio</button>
+      <button id="tab-btn-capture" class="segment-btn">Extraer Tarea</button>
+    </div>
     
-    <!-- Status -->
-    <div class="flex flex-col items-center w-full mb-3">
-      <div id="statusIndicator" class="text-[10px] font-bold uppercase tracking-widest px-4 py-1-5 rounded-full status-idle text-center w-full">
-        Listo para Iniciar
-      </div>
-      <div id="durationTimer" class="font-mono text-charcoal text-xs mt-3 hidden font-bold tracking-widest">00:00:00</div>
+    <!-- ==================
+         TAB AUDIO 
+         ================== -->
+    <div id="tab-audio">
+        
+        <div class="status-badge status-idle" id="statusIndicator">
+            Listo para Iniciar
+        </div>
+        
+        <div id="durationTimer" class="duration font-mono hidden">00:00:00</div>
+
+        <div class="input-group">
+            <label class="input-label">Etiqueta de Apuntes</label>
+            <input type="text" id="customFilename" placeholder="Ej: Clase_Fisica" class="font-mono">
+        </div>
+
+        <button id="recordBtn" class="btn btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
+            Iniciar Grabación
+        </button>
+
+        <div id="controlsGroup" class="flex-row hidden">
+            <button id="pauseBtn" class="btn btn-secondary hidden">Pausar</button>
+            <button id="resumeBtn" class="btn btn-secondary hidden">Reanudar</button>
+            <button id="stopBtn" class="btn btn-primary" style="background: var(--status-recording-text);">Finalizar</button>
+        </div>
+
+        <div id="countdownDisplay" class="status-badge status-recording hidden mt-4">
+            Apagado en: <span id="countdownTimer" class="font-mono" style="margin-left:4px;">00:00</span>
+        </div>
+
+        <div id="audioWarning" class="status-badge status-recording hidden mt-4">
+            Activa el audio en la pestaña.
+        </div>
+
+        <div class="flex-row justify-between mt-4" style="border-top: 1px solid var(--border-light); padding-top: 16px;">
+            <label class="input-label" style="margin:0;">Detención inactiva (min)</label>
+            <input type="number" id="silenceTimeout" value="5" min="1" max="60" class="font-mono" style="width: 60px; padding: 4px 8px;">
+        </div>
     </div>
 
-    <!-- Label Input -->
-    <div class="w-full flex flex-col gap-1 mb-3">
-      <span class="text-[10px] font-bold uppercase tracking-wider text-textMuted">Etiqueta de Apuntes</span>
-      <input type="text" id="customFilename" placeholder="Ej: Matematica_2" class="w-full rounded-md py-2 px-3 text-xs font-mono">
+    <!-- ==================
+         TAB CAPTURE
+         ================== -->
+    <div id="tab-capture" class="hidden">
+        <p class="text-sm text-muted mb-4" style="text-align: center;">
+            Captura la pantalla para extraer la información de la tarea usando visión multimodal.
+        </p>
+        
+        <button id="captureTaskBtn" class="btn btn-secondary">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+           Tomar Captura
+        </button>
+        
+        <div id="previewContainer" class="hidden" style="flex-direction: column;">
+           <div class="preview-box">
+               <img id="capturePreviewImg" class="preview-img" src="" />
+           </div>
+           <button id="sendCaptureBtn" class="btn btn-primary">
+              Procesar y Guardar
+           </button>
+        </div>
+        
+        <div id="captureStatus" class="status-badge status-idle hidden mt-4"></div>
     </div>
 
-    <!-- Record Button -->
-    <button id="recordBtn" class="w-full btn-primary font-bold py-3 px-4 text-xs tracking-wider uppercase disabled:opacity-50">
-      [ Iniciar Captura ]
-    </button>
-
-    <!-- Controls -->
-    <div id="controlsGroup" class="flex flex-row justify-between gap-2 hidden w-full">
-      <button id="pauseBtn" class="flex-1 btn-secondary font-bold py-2 px-2 text-[10px] uppercase tracking-wider hidden">
-        Pausar
-      </button>
-      <button id="resumeBtn" class="flex-1 btn-secondary font-bold py-2 px-2 text-[10px] uppercase tracking-wider hidden">
-        Reanudar
-      </button>
-      <button id="stopBtn" class="flex-1 btn-primary font-bold py-2 px-2 text-[10px] uppercase tracking-wider">
-        Finalizar
-      </button>
-    </div>
-
-    <!-- Warnings -->
-    <p id="countdownDisplay" class="text-[10px] text-paleRedText bg-paleRed w-full py-1-5 rounded text-center hidden font-bold mt-2 uppercase tracking-wider">
-      Apagado Auto: <span id="countdownTimer" class="font-mono">00:00</span>
-    </p>
-
-    <p id="audioWarning" class="text-[10px] text-paleRedText bg-paleRed w-full py-2 px-2 rounded text-center hidden font-bold mt-2">
-      Activa el audio en la pestaña actual para comenzar.
-    </p>
-
-    <!-- Options -->
-    <div class="w-full mt-4 flex flex-row items-center justify-between border-t border-borderGray pt-4">
-      <span class="text-[10px] font-bold uppercase tracking-wider text-textMuted">Detención Inactiva</span>
-      <div class="flex items-center gap-1">
-        <input type="number" id="silenceTimeout" value="5" min="1" max="60" class="w-12 text-center rounded py-1 text-xs font-mono">
-        <span class="text-[10px] text-textMuted font-bold">MIN</span>
-      </div>
-    </div>
   </div>
   
   <script src="popup.js"></script>

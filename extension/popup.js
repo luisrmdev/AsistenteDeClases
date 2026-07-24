@@ -11,6 +11,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const countdownDisplay = document.getElementById('countdownDisplay');
   const countdownTimer = document.getElementById('countdownTimer');
   const durationTimer = document.getElementById('durationTimer');
+  
+  const captureTaskBtn = document.getElementById('captureTaskBtn');
+  const captureStatus = document.getElementById('captureStatus');
+  const previewContainer = document.getElementById('previewContainer');
+  const capturePreviewImg = document.getElementById('capturePreviewImg');
+  const sendCaptureBtn = document.getElementById('sendCaptureBtn');
+  
+  const tabBtnAudio = document.getElementById('tab-btn-audio');
+  const tabBtnCapture = document.getElementById('tab-btn-capture');
+  const tabAudio = document.getElementById('tab-audio');
+  const tabCapture = document.getElementById('tab-capture');
+  
+  let currentCaptureDataUrl = null;
 
   let countdownInterval = null;
 
@@ -147,9 +160,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       resumeBtn.classList.add('hidden');
       
       statusIndicator.textContent = 'Grabación Activa';
-      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-recording';
+      statusIndicator.className = 'status-badge status-recording';
     } else if (state === 'paused') {
-      // Permitimos modificar durante la pausa
       silenceTimeoutInput.disabled = false;
       silenceTimeoutInput.classList.remove('opacity-50', 'cursor-not-allowed');
       customFilenameInput.disabled = false;
@@ -157,31 +169,34 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       recordBtn.classList.add('hidden');
       controlsGroup.classList.remove('hidden');
+      controlsGroup.classList.add('flex-row');
       pauseBtn.classList.add('hidden');
       resumeBtn.classList.remove('hidden');
       
       statusIndicator.textContent = 'En Espera';
-      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-paused';
+      statusIndicator.className = 'status-badge status-idle';
     } else if (state === 'uploading') {
       silenceTimeoutInput.disabled = true;
       silenceTimeoutInput.classList.add('opacity-50', 'cursor-not-allowed');
       recordBtn.classList.add('hidden');
+      controlsGroup.classList.remove('flex-row');
       controlsGroup.classList.add('hidden');
       statusIndicator.textContent = 'Procesando';
-      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-paused';
+      statusIndicator.className = 'status-badge status-idle';
     } else if (state === 'completed') {
       recordBtn.classList.remove('hidden');
+      controlsGroup.classList.remove('flex-row');
       controlsGroup.classList.add('hidden');
       statusIndicator.textContent = 'Finalizado';
-      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-completed';
+      statusIndicator.className = 'status-badge status-success';
       
       setTimeout(() => updateUI('idle', audible), 3000);
     } else {
-      // idle or error
       recordBtn.classList.remove('hidden');
+      controlsGroup.classList.remove('flex-row');
       controlsGroup.classList.add('hidden');
       statusIndicator.textContent = 'Listo para Iniciar';
-      statusIndicator.className = 'text-[10px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full text-center w-full status-idle';
+      statusIndicator.className = 'status-badge status-idle';
 
       if (!audible) {
         recordBtn.disabled = true;
@@ -189,4 +204,85 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   }
+
+  // --- TABS LOGIC ---
+  tabBtnAudio.addEventListener('click', () => {
+    tabAudio.classList.remove('hidden');
+    tabCapture.classList.add('hidden');
+    
+    tabBtnAudio.className = 'segment-btn active';
+    tabBtnCapture.className = 'segment-btn';
+  });
+
+  tabBtnCapture.addEventListener('click', () => {
+    tabCapture.classList.remove('hidden');
+    tabAudio.classList.add('hidden');
+    
+    tabBtnCapture.className = 'segment-btn active';
+    tabBtnAudio.className = 'segment-btn';
+  });
+
+  // --- LOGICA DEL EXTRACTOR VISUAL DE TAREAS ---
+  captureTaskBtn.addEventListener('click', () => {
+    captureTaskBtn.disabled = true;
+    captureStatus.classList.add('hidden');
+    previewContainer.classList.add('hidden');
+    
+    chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 80 }, (dataUrl) => {
+      captureTaskBtn.disabled = false;
+      if (chrome.runtime.lastError) {
+        captureStatus.textContent = 'Error: ' + chrome.runtime.lastError.message;
+        captureStatus.className = 'status-badge status-recording mt-4';
+        captureStatus.classList.remove('hidden');
+        return;
+      }
+      currentCaptureDataUrl = dataUrl;
+      capturePreviewImg.src = dataUrl;
+      previewContainer.classList.remove('hidden');
+      previewContainer.style.display = 'flex';
+    });
+  });
+
+  sendCaptureBtn.addEventListener('click', async () => {
+    if (!currentCaptureDataUrl) return;
+    
+    try {
+      sendCaptureBtn.disabled = true;
+      captureStatus.textContent = 'Procesando Tarea...';
+      captureStatus.className = 'status-badge status-idle mt-4';
+      captureStatus.classList.remove('hidden');
+      
+      const response = await fetch('http://localhost:8000/api/extract-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: currentCaptureDataUrl })
+      });
+      
+      if (!response.ok) {
+          const errJson = await response.json().catch(() => ({}));
+          throw new Error(errJson.detail || 'Error en el servidor');
+      }
+      
+      captureStatus.textContent = '¡Tarea Guardada!';
+      captureStatus.className = 'status-badge status-success mt-4';
+      captureStatus.classList.remove('hidden');
+      
+      setTimeout(() => {
+        captureStatus.classList.add('hidden');
+        previewContainer.classList.add('hidden');
+        previewContainer.style.display = 'none';
+        sendCaptureBtn.disabled = false;
+        currentCaptureDataUrl = null;
+      }, 4000);
+      
+    } catch (err) {
+      captureStatus.textContent = 'Error: ' + err.message;
+      captureStatus.className = 'status-badge status-recording mt-4';
+      captureStatus.classList.remove('hidden');
+      setTimeout(() => {
+          captureStatus.classList.add('hidden');
+          sendCaptureBtn.disabled = false;
+      }, 4000);
+    }
+  });
 });

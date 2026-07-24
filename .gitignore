@@ -15,3 +15,8 @@ resumenes/
 .idea/
 *.swp
 .DS_Store
+papelera_audios/
+exportaciones/
+settings.json
+materias.json
+stats.json
