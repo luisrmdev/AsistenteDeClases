@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const stopBtn = document.getElementById('stopBtn');
   const pauseBtn = document.getElementById('pauseBtn');
   const resumeBtn = document.getElementById('resumeBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
   const controlsGroup = document.getElementById('controlsGroup');
   const statusIndicator = document.getElementById('statusIndicator');
   const audioWarning = document.getElementById('audioWarning');
@@ -42,6 +43,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isNaN(val) || val < 1) val = 1;
     silenceTimeoutInput.value = val;
     chrome.storage.local.set({ silenceTimeoutMin: val });
+  });
+
+  const ghostModeToggle = document.getElementById('ghostModeToggle');
+  // Load saved ghost mode
+  chrome.storage.local.get(['ghostMode'], (result) => {
+    if (result.ghostMode !== undefined) {
+      ghostModeToggle.checked = result.ghostMode;
+    }
+  });
+
+  ghostModeToggle.addEventListener('change', () => {
+    const isGhost = ghostModeToggle.checked;
+    chrome.storage.local.set({ ghostMode: isGhost });
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'SET_GHOST_MODE', ghostMode: isGhost });
   });
 
   // Obtener el tabId actual
@@ -97,6 +112,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   resumeBtn.addEventListener('click', () => {
     chrome.runtime.sendMessage({ target: 'background', type: 'RESUME_RECORDING', tabId: currentTabId });
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    if (confirm("¿Estás seguro de que deseas cancelar la grabación? Todo el audio se perderá de forma permanente.")) {
+      chrome.runtime.sendMessage({ target: 'background', type: 'CANCEL_RECORDING', tabId: currentTabId });
+    }
   });
 
   function updateCountdown() {
@@ -156,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       customFilenameInput.classList.add('opacity-50', 'cursor-not-allowed');
       recordBtn.classList.add('hidden');
       controlsGroup.classList.remove('hidden');
+      controlsGroup.classList.add('flex-row');
       pauseBtn.classList.remove('hidden');
       resumeBtn.classList.add('hidden');
       

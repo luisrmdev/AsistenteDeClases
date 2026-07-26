@@ -3,11 +3,15 @@ const recordedChunks = {};
 const audioContexts = {};
 const streams = {};
 const tempNames = {};
+const gainNodes = {};
+const cancelFlags = {};
+let isGhostMode = false;
 
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== 'offscreen') return;
 
   if (message.type === 'START_RECORDING') {
+    isGhostMode = message.ghostMode || false;
     startRecording(message.streamId, message.tabId);
   } else if (message.type === 'STOP_RECORDING') {
     stopRecording(message.tabId, message.customName);
@@ -15,6 +19,16 @@ chrome.runtime.onMessage.addListener(async (message) => {
     pauseRecording(message.tabId);
   } else if (message.type === 'RESUME_RECORDING') {
     resumeRecording(message.tabId);
+  } else if (message.type === 'CANCEL_RECORDING') {
+    cancelRecording(message.tabId);
+  } else if (message.type === 'SET_GHOST_MODE') {
+    isGhostMode = message.ghostMode;
+    // Aplicar a todos los gain nodes activos
+    for (const tabId in gainNodes) {
+      if (gainNodes[tabId]) {
+        gainNodes[tabId].gain.value = isGhostMode ? 0 : 1;
+      }
+    }
   }
 });
 
@@ -56,10 +70,17 @@ async function startRecording(streamId, tabId) {
 
     const audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(stream);
-    source.connect(audioContext.destination);
+    
+    // Crear nodo de ganancia para controlar el volumen hacia los altavoces
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = isGhostMode ? 0 : 1;
+    
+    source.connect(gainNode);
+    gainNode.connect(audioContext.destination);
 
     streams[tabId] = stream;
     audioContexts[tabId] = audioContext;
+    gainNodes[tabId] = gainNode;
     recordedChunks[tabId] = [];
     
     const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
@@ -72,6 +93,21 @@ async function startRecording(streamId, tabId) {
     };
 
     mediaRecorder.onstop = async () => {
+      if (cancelFlags[tabId]) {
+        // Just clean up without uploading
+        if (streams[tabId]) streams[tabId].getTracks().forEach(track => track.stop());
+        if (audioContexts[tabId]) audioContexts[tabId].close();
+        
+        delete streams[tabId];
+        delete audioContexts[tabId];
+        delete gainNodes[tabId];
+        delete recordedChunks[tabId];
+        delete mediaRecorders[tabId];
+        delete tempNames[tabId];
+        delete cancelFlags[tabId];
+        return;
+      }
+
       updateState(tabId, 'uploading');
       const blob = new Blob(recordedChunks[tabId], { type: 'audio/webm' });
       
@@ -82,6 +118,7 @@ async function startRecording(streamId, tabId) {
       // Clean up dictionary
       delete streams[tabId];
       delete audioContexts[tabId];
+      delete gainNodes[tabId];
       delete recordedChunks[tabId];
       delete mediaRecorders[tabId];
 
@@ -101,6 +138,14 @@ function stopRecording(tabId, customName) {
   if (customName) {
     tempNames[tabId] = customName;
   }
+  const mediaRecorder = mediaRecorders[tabId];
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+  }
+}
+
+function cancelRecording(tabId) {
+  cancelFlags[tabId] = true;
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();

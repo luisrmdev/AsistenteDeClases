@@ -37,6 +37,8 @@ PAPELERA_DIR = "papelera_audios"
 os.makedirs(PAPELERA_DIR, exist_ok=True)
 EXPORTACIONES_DIR = "exportaciones"
 os.makedirs(EXPORTACIONES_DIR, exist_ok=True)
+MEMORIA_DIR = "memoria_ia"
+os.makedirs(MEMORIA_DIR, exist_ok=True)
 MATERIAS_FILE = "materias.json"
 STATS_FILE = "stats.json"
 
@@ -363,6 +365,14 @@ async def chat_estudio(req: ChatRequest):
     client = genai.Client()
     sys_instruction = "Eres mi tutor universitario experto. Basa tus respuestas ESTRICTAMENTE en mis documentos de estudio proporcionados. Si la información no está explícitamente en los apuntes, indica claramente que 'no se menciona en los apuntes de clase'."
     
+    materia_name = req.materia_id if req.materia_id and req.materia_id != "default" else "general"
+    reglas_filepath = os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
+    if os.path.exists(reglas_filepath):
+        with open(reglas_filepath, "r", encoding="utf-8") as rf:
+            reglas_adicionales = rf.read()
+            if reglas_adicionales.strip():
+                sys_instruction += f"\n\nERES UN ASISTENTE ESTUDIANTIL. DEBES OBEDECER ESTRICTAMENTE LAS SIGUIENTES REGLAS Y MÉTODOS DEL PROFESOR AL RESOLVER PROBLEMAS:\n{reglas_adicionales}"
+    
     try:
         res = client.models.generate_content(
             model=req.modelo_elegido,
@@ -410,6 +420,10 @@ A partir de la transcripción, debes crear una nota que cumpla ESTRICTAMENTE las
    A. Técnico / Cheat Sheet: Inicia con > [!warning] o > [!info]. Pasos directos sin relleno. Bloques de código especificados.
    B. Teórico: Inicia con > [!summary] (Resumen Feynman). Desarrollo en viñetas. Ejemplos con > [!example].
 4. CERO NOTAS HUÉRFANAS: Al final de la nota, incluye un enlace de Obsidian a un concepto relacionado (ej. [[Índice - Semestre actual]]).
+5. EXHAUSTIVIDAD OBLIGATORIA (PROPORCIONALIDAD): ¡NO COMPRIMAS EN EXCESO! El nivel de detalle y la longitud de la nota deben ser directamente proporcionales a la duración del audio. Si el audio es una clase larga de 2 horas, tu respuesta debe ser un documento largo y exhaustivo, con múltiples subtítulos, capturando cada concepto, debate, y ejemplo mencionado. No recortes ni simplifiques información valiosa solo por resumir. Muestra todo el contenido relevante estructurado a profundidad.
+
+Además, debes extraer reglas:
+Si en el audio el profesor explica un método de resolución específico, una fórmula propia, o exige explícitamente que los problemas se resuelvan de una manera particular (diferente a los libros), extráelo detalladamente en el array 'nuevas_reglas_profesor' del bloque JSON. Si no hay reglas nuevas en esta clase, deja el array vacío [].
 
 Genera tu respuesta en el siguiente formato ESTRICTO:
 ---
@@ -428,7 +442,13 @@ $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
   "filename": "Titulo Exacto Googleable.md",
   "folder": "02 Recursos/Tema",
 {anki_json}
-  "calendario": [{{"titulo": "...", "fecha_YYYY_MM_DD": "...", "descripcion": "..."}}]
+  "calendario": [{{"titulo": "...", "fecha_YYYY_MM_DD": "...", "descripcion": "..."}}],
+  "nuevas_reglas_profesor": [
+    {{
+      "tema": "El tema del que habla",
+      "metodo_paso_a_paso": "La explicación detallada o fórmula estricta que el profesor exige usar, extraída textualmente del audio."
+    }}
+  ]
 }}
 ```"""
     
@@ -473,7 +493,8 @@ $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
             print("Solicitando generación a Gemini...", flush=True)
             res = client.models.generate_content(
                 model=req.modelo_elegido,
-                contents=[file, prompt_completo]
+                contents=[file, prompt_completo],
+                config={"max_output_tokens": 8192}
             )
             if not res.text or len(res.text.strip()) < 50:
                 raise ValueError("Respuesta vacía o corta. Forzando reintento.")
@@ -652,6 +673,21 @@ async def save_summary(req: SaveRequest):
                 f.write(cal.to_ical())
         except Exception as e:
             print("Error generando Calendario:", e)
+            
+    # 4. Guardar reglas del profesor
+    if json_data and "nuevas_reglas_profesor" in json_data and json_data["nuevas_reglas_profesor"]:
+        materia_name = req.materia_id if req.materia_id and req.materia_id != "default" else "general"
+        reglas_filepath = os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
+        try:
+            with open(reglas_filepath, "a+", encoding="utf-8") as rf:
+                for regla in json_data["nuevas_reglas_profesor"]:
+                    tema = regla.get("tema", "Sin tema")
+                    metodo = regla.get("metodo_paso_a_paso", "")
+                    if metodo:
+                        rf.write(f"\n### Regla extraída el {fecha_actual}: {tema}\n")
+                        rf.write(f"{metodo}\n---\n")
+        except Exception as e:
+            print("Error guardando memoria del profesor:", e)
         
     # Mover a papelera
     filename = os.path.basename(filepath)
@@ -703,8 +739,15 @@ async def list_summaries():
                 display_name = f"{custom_name} ({date_str})"
             else:
                 display_name = f"Reunión {date_str}"
+        filepath = os.path.join(RESUMENES_DIR, f)
+        try:
+            import datetime
+            mtime = os.path.getmtime(filepath)
+            created_at = datetime.datetime.fromtimestamp(mtime).strftime('%d/%m/%Y %H:%M')
+        except:
+            created_at = "Fecha desconocida"
         
-        summaries.append({"filename": f, "display_name": display_name})
+        summaries.append({"filename": f, "display_name": display_name, "created_at": created_at})
     return {"summaries": summaries}
 
 @app.get("/api/summaries/{filename}")

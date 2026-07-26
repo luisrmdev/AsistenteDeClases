@@ -244,6 +244,7 @@
         </button>
 
         <div id="controlsGroup" class="flex-row hidden">
+            <button id="cancelBtn" class="btn btn-secondary" style="color: #ef4444; border-color: #ef4444;">Cancelar</button>
             <button id="pauseBtn" class="btn btn-secondary hidden">Pausar</button>
             <button id="resumeBtn" class="btn btn-secondary hidden">Reanudar</button>
             <button id="stopBtn" class="btn btn-primary" style="background: var(--status-recording-text);">Finalizar</button>
@@ -260,6 +261,13 @@
         <div class="flex-row justify-between mt-4" style="border-top: 1px solid var(--border-light); padding-top: 16px;">
             <label class="input-label" style="margin:0;">Detención inactiva (min)</label>
             <input type="number" id="silenceTimeout" value="5" min="1" max="60" class="font-mono" style="width: 60px; padding: 4px 8px;">
+        </div>
+
+        <div class="flex-row justify-between mt-3" style="border-top: 1px solid var(--border-light); padding-top: 12px;">
+            <label class="input-label flex-row" style="margin:0; align-items:center; gap: 8px;">
+                <input type="checkbox" id="ghostModeToggle" style="cursor:pointer; width: 16px; height: 16px; margin: 0; accent-color: var(--text-main);">
+                Modo Fantasma (Silenciar para mí)
+            </label>
         </div>
     </div>
 

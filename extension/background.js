@@ -17,6 +17,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     pauseRecording(message.tabId);
   } else if (message.type === 'RESUME_RECORDING') {
     resumeRecording(message.tabId);
+  } else if (message.type === 'CANCEL_RECORDING') {
+    cancelRecording(message.tabId);
   } else if (message.type === 'UPDATE_STATE') {
     updateState(message.tabId, message.state);
   }
@@ -72,6 +74,27 @@ async function updateState(tabId, state) {
   }
   
   await chrome.storage.local.set({ recordingStates: states });
+  
+  // Limpiar timer si vuelve a estado base o hay error
+  if (state === 'idle' || state === 'error' || state === 'completed') {
+    const tResult = await chrome.storage.local.get(['recordingTimers']);
+    const timers = tResult.recordingTimers || {};
+    if (timers[tabId]) {
+      delete timers[tabId];
+      await chrome.storage.local.set({ recordingTimers: timers });
+    }
+  }
+
+  // Cerrar documento offscreen si ya no hay grabaciones activas
+  if (state === 'idle' || state === 'error' || state === 'completed') {
+    const activeStates = Object.values(states);
+    const hasActive = activeStates.some(s => s === 'recording' || s === 'paused' || s === 'uploading');
+    if (!hasActive) {
+      try {
+        await chrome.offscreen.closeDocument();
+      } catch (err) {}
+    }
+  }
 }
 
 async function startRecording(tabId) {
@@ -86,12 +109,16 @@ async function startRecording(tabId) {
     }
     
     await setupOffscreenDocument('offscreen.html');
+    
+    const ghostRes = await chrome.storage.local.get(['ghostMode']);
+    const isGhost = ghostRes.ghostMode || false;
 
     chrome.runtime.sendMessage({
       target: 'offscreen',
       type: 'START_RECORDING',
       streamId: streamId,
-      tabId: tabId
+      tabId: tabId,
+      ghostMode: isGhost
     });
 
     updateState(tabId, 'recording');
@@ -173,6 +200,30 @@ async function stopRecording(tabId) {
     });
   } catch (err) {
     console.warn("No se pudo contactar al offscreen (probablemente la extensión se recargó). Reiniciando estado.");
+    updateState(tabId, 'idle');
+  }
+}
+
+async function cancelRecording(tabId) {
+  try {
+    clearSilenceAlarm(tabId);
+    
+    const result = await chrome.storage.local.get(['recordingTimers']);
+    const timers = result.recordingTimers || {};
+    if (timers[tabId]) {
+      delete timers[tabId];
+      await chrome.storage.local.set({ recordingTimers: timers });
+    }
+
+    await chrome.runtime.sendMessage({
+      target: 'offscreen',
+      type: 'CANCEL_RECORDING',
+      tabId: tabId
+    });
+    
+    updateState(tabId, 'idle');
+  } catch (err) {
+    console.warn("Error enviando cancelación al offscreen", err);
     updateState(tabId, 'idle');
   }
 }
