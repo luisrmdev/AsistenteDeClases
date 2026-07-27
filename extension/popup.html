@@ -218,6 +218,33 @@
           0%, 100% { opacity: 1; }
           50% { opacity: 0.6; }
       }
+
+      /* Manual screenshot button */
+      .btn-screenshot {
+          background-color: var(--bg-surface);
+          color: var(--text-secondary);
+          border: 1px dashed var(--border-light);
+          font-size: 11px;
+          padding: 6px 12px;
+          gap: 6px;
+          transition: all 0.2s ease;
+      }
+      .btn-screenshot:hover:not(:disabled) {
+          border-color: var(--text-secondary);
+          color: var(--text-primary);
+      }
+
+      .screenshot-feedback {
+          font-size: 11px;
+          color: var(--status-success-text);
+          background-color: var(--status-success);
+          border-radius: 6px;
+          padding: 4px 10px;
+          text-align: center;
+          margin-top: 6px;
+          animation: fadeIn 0.2s ease;
+      }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
   </style>
 </head>
 <body>
@@ -260,6 +287,15 @@
             <button id="pauseBtn" class="btn btn-secondary hidden">Pausar</button>
             <button id="resumeBtn" class="btn btn-secondary hidden">Reanudar</button>
             <button id="stopBtn" class="btn btn-primary" style="background: var(--status-recording-text);">Finalizar</button>
+        </div>
+
+        <!-- Manual screenshot button — visible only while recording -->
+        <div style="margin-top: 10px;">
+            <button id="manualScreenshotBtn" class="btn btn-screenshot hidden">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                Capturar Pantalla Ahora
+            </button>
+            <div id="screenshotFeedback" class="screenshot-feedback hidden">Captura guardada correctamente</div>
         </div>
 
         <div id="countdownDisplay" class="status-badge status-recording hidden mt-4">

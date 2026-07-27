@@ -55,16 +55,22 @@ async def save_to_obsidian(
     suggested_filename: str,
     suggested_folder: str,
     texto_limpio: str,
+    image_paths: list = None,
 ) -> None:
     """
     Escribe el Markdown directamente en la bóveda de Obsidian si está configurada.
+    Si se proveen image_paths, copia cada imagen a vault/Adjuntos/ para que la
+    sintaxis ![[nombre.jpg]] generada por Gemini funcione correctamente en Obsidian.
     Falla silenciosamente si la ruta no existe o no está montada.
     """
+    import shutil as _shutil
+
     settings = await settings_store.read()
     obsidian_path = settings.get("obsidian_vault_path", "")
     if not obsidian_path or not os.path.exists(obsidian_path):
         return
 
+    # --- Escribir el Markdown ---
     target_dir = (
         os.path.join(obsidian_path, suggested_folder)
         if suggested_folder
@@ -77,6 +83,20 @@ async def save_to_obsidian(
             f.write(texto_limpio)
     except Exception as e:
         print("Error guardando en Obsidian:", e)
+
+    # --- Copiar imágenes a vault/Adjuntos/ ---
+    if image_paths:
+        adjuntos_dir = os.path.join(obsidian_path, "Adjuntos")
+        os.makedirs(adjuntos_dir, exist_ok=True)
+        for img_path in image_paths:
+            if not os.path.exists(img_path):
+                continue
+            dest = os.path.join(adjuntos_dir, os.path.basename(img_path))
+            try:
+                _shutil.copy2(img_path, dest)
+                print(f"[Obsidian] Imagen copiada: {os.path.basename(img_path)}")
+            except Exception as e:
+                print(f"[Obsidian] Error copiando imagen {img_path}: {e}")
 
 
 async def save_tarjetas_informativas(

@@ -11,6 +11,7 @@ from datetime import datetime
 
 import asyncio
 from contextlib import asynccontextmanager
+from typing import List
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -43,35 +44,48 @@ async def worker_loop():
         try:
             tareas = await cola_store.read()
             pending = next((t for t in tareas if t.get("estado") == "pending"), None)
-            
+
             if not pending:
                 await asyncio.sleep(5)
                 continue
-                
+
             task_id = pending["id"]
-            
+
             def set_processing(ts):
                 for t in ts:
                     if t.get("id") == task_id and t.get("estado") == "pending":
                         t["estado"] = "processing"
                         return ts
                 return None
-                
+
             updated = await cola_store.update(set_processing)
             if not updated:
                 continue
-                
-            filepath = os.path.join(AUDIOS_DIR, pending["filename"])
+
+            # --- Resolve paths from session_dir (new) or legacy filename (old) ---
+            session_dir = pending.get("session_dir")  # e.g. "audios/session_20260727_1530"
+            if session_dir:
+                audio_filename = pending["filename"]
+                filepath = os.path.join(session_dir, audio_filename)
+                image_filenames = pending.get("image_filenames", [])
+                image_paths = [os.path.join(session_dir, img) for img in image_filenames
+                               if os.path.exists(os.path.join(session_dir, img))]
+            else:
+                # Legacy: single flat file in audios/
+                filepath = os.path.join(AUDIOS_DIR, pending["filename"])
+                image_paths = []
+                session_dir = None
+
             if not os.path.exists(filepath):
                 def set_missing(ts):
                     for t in ts:
                         if t["id"] == task_id:
                             t["estado"] = "failed"
-                            t["error_msg"] = "Archivo no encontrado"
+                            t["error_msg"] = "Archivo de audio no encontrado"
                     return ts
                 await cola_store.update(set_missing)
                 continue
-                
+
             # Configurar prompt
             prompt_usar = ""
             if pending["materia_id"] and pending["materia_id"] != "default":
@@ -79,53 +93,60 @@ async def worker_loop():
                 m = next((m for m in materias if m["id"] == pending["materia_id"]), None)
                 if m:
                     prompt_usar = m["prompt_personalizado"]
-                    
+
             try:
-                # LLM Call
+                # LLM Call — now passes image_paths for multi-modal
                 upload_path = audio_service.remove_silences(filepath)
                 try:
                     texto, stats = await llm_service.generate_summary_from_audio(
-                        upload_path, prompt_usar, pending.get("modelo_elegido", "gemini-3.1-flash-lite")
+                        upload_path,
+                        prompt_usar,
+                        pending.get("modelo_elegido", "gemini-3.1-flash-lite"),
+                        image_paths=image_paths,
                     )
                 finally:
                     audio_service.cleanup_temp(upload_path, filepath)
-                    
+
                 # Guardado automático (Pipeline Completo)
                 json_data, texto_limpio = llm_service.extract_json_block(texto)
                 fecha_str = datetime.now().strftime("%Y-%m-%d")
-                
+
                 md_filename = pending["filename"].replace(".webm", ".md")
                 if md_filename.startswith("meet_"):
                     mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
                     md_filename = md_filename.replace("meet_", f"resumen__{mat_id}__meet_")
-                    
+
                 suggested_filename = json_data.get("filename", md_filename).replace("/", "-")
                 if not suggested_filename.endswith(".md"):
                     suggested_filename += ".md"
                 suggested_folder = json_data.get("folder", "")
-                
+
                 tags_match = re.search(r"tags:\s*\[(.*?)\]", texto_limpio, re.IGNORECASE)
                 if not tags_match:
                     tags_match = re.search(r"tags:\s*(.*)", texto_limpio, re.IGNORECASE)
                 tags = [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(",")] if tags_match else []
-                
+
                 await export_service.save_markdown_and_metadata(
                     md_filename, suggested_filename, suggested_folder, texto_limpio, tags, fecha_str
                 )
-                
-                await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
-                
+
+                # Pass image_paths so export can copy them to Obsidian Adjuntos/
+                await export_service.save_to_obsidian(
+                    suggested_filename, suggested_folder, texto_limpio,
+                    image_paths=image_paths,
+                )
+
                 if json_data.get("tarjetas_informativas"):
                     mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
                     await export_service.save_tarjetas_informativas(
                         json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str
                     )
-                    
+
                 if json_data.get("nuevas_reglas_profesor"):
                     await export_service.save_teacher_rules(
                         json_data["nuevas_reglas_profesor"], pending["materia_id"], fecha_str
                     )
-                    
+
                 # Marcar completado
                 def set_completed(ts):
                     for t in ts:
@@ -134,12 +155,20 @@ async def worker_loop():
                             t["error_msg"] = ""
                     return ts
                 await cola_store.update(set_completed)
-                
-                # Papelera
-                papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
-                shutil.move(filepath, papelera_path)
-                
-                # Cleanup papelera (10 files)
+
+                # --- Cleanup session directory (move audio to papelera, delete images) ---
+                if session_dir and os.path.isdir(session_dir):
+                    # Move audio to papelera
+                    papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
+                    shutil.move(filepath, papelera_path)
+                    # Delete entire session dir (images already copied to Obsidian)
+                    shutil.rmtree(session_dir, ignore_errors=True)
+                else:
+                    # Legacy: move single audio file
+                    papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
+                    shutil.move(filepath, papelera_path)
+
+                # Cleanup papelera (keep last 10)
                 papelera_files = sorted(
                     [os.path.join(PAPELERA_DIR, f) for f in os.listdir(PAPELERA_DIR)
                      if os.path.isfile(os.path.join(PAPELERA_DIR, f))],
@@ -151,7 +180,7 @@ async def worker_loop():
                         os.remove(old_file)
                     except Exception:
                         pass
-                
+
             except Exception as e:
                 def set_failed(ts):
                     for t in ts:
@@ -161,7 +190,7 @@ async def worker_loop():
                             t["intentos"] = t.get("intentos", 0) + 1
                     return ts
                 await cola_store.update(set_failed)
-                
+
         except Exception as e:
             print(f"Worker queue error: {e}")
             await asyncio.sleep(5)
@@ -212,6 +241,8 @@ class GenerateRequest(BaseModel):
     filename: str
     materia_id: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
+    session_dir: str = None
+    image_filenames: list = []
 
 
 class SaveRequest(BaseModel):
@@ -355,21 +386,54 @@ async def get_available_models():
 async def list_pending_audios():
     if not os.path.exists(AUDIOS_DIR):
         return {"audios": []}
-    files = [f for f in os.listdir(AUDIOS_DIR) if f.endswith(".webm")]
-    files.sort(key=lambda x: os.path.getmtime(os.path.join(AUDIOS_DIR, x)), reverse=True)
 
     audios = []
-    for f in files:
-        name_parts = f.replace(".webm", "").split("_")
-        if len(name_parts) >= 4:
-            date_str = name_parts[2]
-            if len(date_str) == 8:
-                date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-            custom_name = " ".join(name_parts[4:]) if len(name_parts) >= 5 else ""
-            display_name = f"{custom_name} ({date_str})" if custom_name else f"Grabación {date_str}"
-        else:
-            display_name = f
-        audios.append({"filename": f, "display_name": display_name})
+
+    for entry in os.scandir(AUDIOS_DIR):
+        # --- New: session subdirectory ---
+        if entry.is_dir() and entry.name.startswith("session_"):
+            webm_files = [f for f in os.listdir(entry.path) if f.endswith(".webm")]
+            img_files = [f for f in os.listdir(entry.path)
+                         if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
+            for f in webm_files:
+                name_parts = f.replace(".webm", "").split("_")
+                if len(name_parts) >= 4:
+                    date_str = name_parts[2]
+                    if len(date_str) == 8:
+                        date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+                    custom_name = " ".join(name_parts[4:]) if len(name_parts) >= 5 else ""
+                    display_name = f"{custom_name} ({date_str})" if custom_name else f"Grabación {date_str}"
+                else:
+                    display_name = f
+                audios.append({
+                    "filename": f,
+                    "display_name": display_name,
+                    "session_dir": entry.path,
+                    "image_count": len(img_files),
+                    "image_filenames": img_files,
+                })
+
+        # --- Legacy: flat .webm directly in audios/ ---
+        elif entry.is_file() and entry.name.endswith(".webm"):
+            f = entry.name
+            name_parts = f.replace(".webm", "").split("_")
+            if len(name_parts) >= 4:
+                date_str = name_parts[2]
+                if len(date_str) == 8:
+                    date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+                custom_name = " ".join(name_parts[4:]) if len(name_parts) >= 5 else ""
+                display_name = f"{custom_name} ({date_str})" if custom_name else f"Grabación {date_str}"
+            else:
+                display_name = f
+            audios.append({
+                "filename": f,
+                "display_name": display_name,
+                "session_dir": None,
+                "image_count": 0,
+                "image_filenames": [],
+            })
+
+    audios.sort(key=lambda x: x["filename"], reverse=True)
     return {"audios": audios}
 
 
@@ -396,13 +460,19 @@ async def upload_audio(
     request: Request,
     audio: UploadFile = File(...),
     custom_name: str = Form(None),
+    imagenes: List[UploadFile] = File(default=[]),
 ):
+    """
+    Recibe el audio .webm + N capturas de pantalla opcionales.
+    Guarda todo en un subdirectorio único: audios/session_YYYYMMDD_HHmm/
+    Retorna el directorio de sesión y los nombres de archivos para que la cola
+    pueda encontrarlos.
+    """
     settings = await settings_store.read()
     max_mb = settings.get("max_audio_upload_mb", 500)
     max_bytes = max_mb * 1024 * 1024
 
     # --- Capa 1: Content-Length header (O(1), cero RAM) ---
-    # Rechaza antes de leer un solo byte si el cliente declara un tamaño excesivo.
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > max_bytes:
         raise HTTPException(
@@ -411,50 +481,70 @@ async def upload_audio(
                    f"({int(content_length) // (1024 * 1024)} MB declarados en Content-Length).",
         )
 
-    # Construir nombre de destino
+    # --- Crear subdirectorio de sesión único ---
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    ext = os.path.splitext(audio.filename)[1] if audio.filename else ".webm"
-    if not ext:
-        ext = ".webm"
-
     if custom_name:
         safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "", custom_name.replace(" ", "_"))
-        filename = f"meet_{timestamp}_{safe_name}{ext}"
+        session_name = f"session_{timestamp}_{safe_name}"
+        audio_filename = f"meet_{timestamp}_{safe_name}.webm"
     else:
-        filename = f"meet_{timestamp}{ext}"
+        session_name = f"session_{timestamp}"
+        audio_filename = f"meet_{timestamp}.webm"
 
-    filepath = os.path.join(AUDIOS_DIR, filename)
+    session_dir = os.path.join(AUDIOS_DIR, session_name)
+    os.makedirs(session_dir, exist_ok=True)
+    audio_filepath = os.path.join(session_dir, audio_filename)
 
-    # --- Capa 2: streaming por chunks (cubre transferencias chunked sin Content-Length) ---
-    # Lee 1 MB a la vez → escribe en disco → aborta temprano si la suma supera el límite.
-    # La RAM máxima usada en cualquier momento es exactamente 1 MB (un chunk).
+    # --- Capa 2: Streaming del audio por chunks (OOM-safe) ---
     bytes_written = 0
     try:
-        with open(filepath, "wb") as f:
+        with open(audio_filepath, "wb") as f:
             while True:
                 chunk = await audio.read(CHUNK_SIZE)
                 if not chunk:
                     break
                 bytes_written += len(chunk)
                 if bytes_written > max_bytes:
-                    # Abortar: borrar el archivo parcial antes de responder
                     f.close()
-                    os.remove(filepath)
+                    shutil.rmtree(session_dir, ignore_errors=True)
                     raise HTTPException(
                         status_code=413,
-                        detail=f"El archivo supera el límite de {max_mb} MB "
-                               f"(se interrumpió al superar {max_bytes // (1024 * 1024)} MB).",
+                        detail=f"El archivo supera el límite de {max_mb} MB.",
                     )
                 f.write(chunk)
     except HTTPException:
         raise
     except Exception as e:
-        # Limpiar archivo parcial ante cualquier otro error de IO
-        if os.path.exists(filepath):
-            os.remove(filepath)
+        shutil.rmtree(session_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail=f"Error al guardar el audio: {e}")
 
-    return {"message": "Audio subido correctamente", "filename": filename, "path": filepath}
+    # --- Guardar imágenes adjuntas ---
+    image_filenames = []
+    for img_file in (imagenes or []):
+        if not img_file.filename:
+            continue
+        # Sanitize filename
+        safe_img_name = re.sub(r"[^a-zA-Z0-9_.\-]", "_", img_file.filename)
+        img_path = os.path.join(session_dir, safe_img_name)
+        try:
+            with open(img_path, "wb") as f:
+                while True:
+                    chunk = await img_file.read(CHUNK_SIZE)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+            image_filenames.append(safe_img_name)
+        except Exception as e:
+            print(f"[Upload] Error guardando imagen {safe_img_name}: {e}")
+
+    print(f"[Upload] Sesión {session_name}: audio={audio_filename}, imágenes={image_filenames}")
+
+    return {
+        "message": "Sesión subida correctamente",
+        "filename": audio_filename,
+        "session_dir": session_dir,
+        "image_filenames": image_filenames,
+    }
 
 
 # ===========================================================================
@@ -493,18 +583,50 @@ async def chat_estudio(req: ChatRequest):
 
 @app.post("/api/generate", status_code=202)
 async def queue_generate_task(req: GenerateRequest):
-    filepath = os.path.join(AUDIOS_DIR, req.filename)
-    if not os.path.exists(filepath):
+    """
+    Encola una tarea de procesamiento. Soporta tanto el nuevo esquema de sesión
+    (session_dir + image_filenames) como el legado (filename en audios/ plano).
+    """
+    # Intentar localizar el audio: primero en session_dir (nuevo), luego plano (legado)
+    session_dir = getattr(req, "session_dir", None)
+    image_filenames = getattr(req, "image_filenames", []) or []
+
+    if session_dir:
+        filepath = os.path.join(session_dir, req.filename)
+    else:
+        # Buscar en subdirectorios de sesión si no se encontró directamente
+        flat_path = os.path.join(AUDIOS_DIR, req.filename)
+        if os.path.exists(flat_path):
+            filepath = flat_path
+        else:
+            # Buscar en sesiones existentes
+            filepath = None
+            for entry in os.scandir(AUDIOS_DIR):
+                if entry.is_dir():
+                    candidate = os.path.join(entry.path, req.filename)
+                    if os.path.exists(candidate):
+                        filepath = candidate
+                        session_dir = entry.path
+                        # Collect images in that session dir
+                        image_filenames = [
+                            f for f in os.listdir(session_dir)
+                            if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))
+                        ]
+                        break
+
+    if not filepath or not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
-        
+
     task_id = str(uuid.uuid4())
-    
+
     def enqueue(ts):
         if any(t["filename"] == req.filename and t["estado"] in ["pending", "processing"] for t in ts):
             return ts
         ts.append({
             "id": task_id,
             "filename": req.filename,
+            "session_dir": session_dir,
+            "image_filenames": image_filenames,
             "materia_id": req.materia_id,
             "modelo_elegido": req.modelo_elegido,
             "estado": "pending",
@@ -513,7 +635,7 @@ async def queue_generate_task(req: GenerateRequest):
             "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
         return ts
-        
+
     await cola_store.update(enqueue)
     return {"message": "Audio encolado", "task_id": task_id}
 

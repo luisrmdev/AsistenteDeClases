@@ -118,7 +118,16 @@ async def generate_prompt_for_materia(descripcion: str, modelo: str) -> tuple[st
 # Summary generation (audio → Gemini → Markdown + JSON)
 # ---------------------------------------------------------------------------
 
-def _build_summary_prompt(prompt_usar: str, fecha_actual: str) -> str:
+def _build_summary_prompt(prompt_usar: str, fecha_actual: str, has_images: bool = False) -> str:
+    imagen_instruccion = ""
+    if has_images:
+        imagen_instruccion = """
+5. MODO MULTI-MODAL ACTIVADO: Se te han proporcionado capturas de pantalla tomadas cronológicamente durante la clase.
+   - Relaciona el contenido del audio con las imágenes. Si el profesor explica algo que coincide con lo que se ve en una captura (un diagrama, fórmula, código, diapositiva), descríbelo en detalle en el apunte.
+   - Cuando hagas referencia a una imagen específica, INSERTA LA IMAGEN en el Markdown usando la sintaxis de Obsidian: ![[nombre_de_la_imagen.jpg]]
+   - El nombre de la imagen corresponde exactamente al nombre del archivo que se te proporcionó (ej. captura_000_t0s.jpg).
+   - Solo inserta la imagen si es realmente relevante para el concepto que se está explicando en ese momento."""
+
     return f"""Eres un experto en Personal Knowledge Management (PKM) y un ingeniero de software senior. La fecha de hoy es {fecha_actual}.
 Contexto de la clase: {prompt_usar}
 
@@ -129,6 +138,7 @@ A partir de la transcripción, debes crear una nota que cumpla ESTRICTAMENTE las
    A. Técnico / Cheat Sheet: Inicia con > [!warning] o > [!info]. Pasos directos sin relleno. Bloques de código especificados.
    B. Teórico: Inicia con > [!summary] (Resumen Feynman). Desarrollo en viñetas. Ejemplos con > [!example].
 4. CERO NOTAS HUÉRFANAS: Al final de la nota, incluye un enlace de Obsidian a un concepto relacionado (ej. [[Índice - Semestre actual]]).
+{imagen_instruccion}
 5. EXHAUSTIVIDAD OBLIGATORIA (PROPORCIONALIDAD): ¡NO COMPRIMAS EN EXCESO! El nivel de detalle y la longitud de la nota deben ser directamente proporcionales a la duración del audio. Si el audio es una clase larga de 2 horas, tu respuesta debe ser un documento largo y exhaustivo, con múltiples subtítulos, capturando cada concepto, debate, y ejemplo mencionado. No recortes ni simplifiques información valiosa solo por resumir. Muestra todo el contenido relevante estructurado a profundidad.
 
 Además, debes extraer reglas:
@@ -173,36 +183,68 @@ async def generate_summary_from_audio(
     upload_path: str,
     prompt_usar: str,
     modelo: str,
+    image_paths: list = None,
 ) -> tuple[str, dict]:
     """
-    Sube el audio a la Files API de Gemini, espera procesamiento y genera el resumen.
+    Sube el audio (y opcionalmente imágenes) a la Files API de Gemini,
+    espera procesamiento y genera el resumen multi-modal.
 
     Returns:
         (texto_generado, stats_dict)
     """
+    image_paths = image_paths or []
     client = genai.Client()
     fecha_actual = datetime.now().strftime("%Y-%m-%d")
-    prompt_completo = _build_summary_prompt(prompt_usar, fecha_actual)
+    prompt_completo = _build_summary_prompt(prompt_usar, fecha_actual, has_images=bool(image_paths))
 
-    file = client.files.upload(file=upload_path, config={"mime_type": "audio/webm"})
+    # --- Upload audio ---
+    print(f"Subiendo audio a Gemini Files API...", flush=True)
+    audio_file = client.files.upload(file=upload_path, config={"mime_type": "audio/webm"})
 
-    print("Esperando a que Gemini procese el archivo...", flush=True)
-    file_info = client.files.get(name=file.name)
-    while file_info.state.name == "PROCESSING":
+    print("Esperando a que Gemini procese el audio...", flush=True)
+    audio_info = client.files.get(name=audio_file.name)
+    while audio_info.state.name == "PROCESSING":
         time.sleep(3)
-        file_info = client.files.get(name=file.name)
+        audio_info = client.files.get(name=audio_file.name)
 
-    if file_info.state.name == "FAILED":
+    if audio_info.state.name == "FAILED":
         raise RuntimeError("Gemini falló al procesar el archivo de audio.")
 
-    print("Archivo listo. Generando resumen...", flush=True)
+    # --- Upload images (if any) ---
+    uploaded_images = []
+    for img_path in image_paths:
+        if not os.path.exists(img_path):
+            continue
+        ext = os.path.splitext(img_path)[1].lower()
+        mime_map = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+                    ".png": "image/png", ".webp": "image/webp"}
+        mime_type = mime_map.get(ext, "image/jpeg")
+        try:
+            print(f"Subiendo imagen {os.path.basename(img_path)}...", flush=True)
+            img_file = client.files.upload(file=img_path, config={"mime_type": mime_type})
+            # Images process fast — brief wait
+            img_info = client.files.get(name=img_file.name)
+            retries = 0
+            while img_info.state.name == "PROCESSING" and retries < 10:
+                time.sleep(2)
+                img_info = client.files.get(name=img_file.name)
+                retries += 1
+            if img_info.state.name != "FAILED":
+                uploaded_images.append(img_info)
+        except Exception as e:
+            print(f"[LLM] Error subiendo imagen {img_path}: {e}", flush=True)
+
+    print(f"Archivos listos: 1 audio + {len(uploaded_images)} imágenes. Generando resumen...", flush=True)
+
+    # Build contents: [audio_file, img1, img2, ..., prompt]
+    contents = [audio_info] + uploaded_images + [prompt_completo]
 
     @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=5, max=60))
     def _call_gemini():
         print("Solicitando generación a Gemini...", flush=True)
         res = client.models.generate_content(
             model=modelo,
-            contents=[file, prompt_completo],
+            contents=contents,
             config={"max_output_tokens": 8192},
         )
         if not res.text or len(res.text.strip()) < 50:
