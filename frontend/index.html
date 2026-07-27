@@ -299,6 +299,9 @@
             <button onclick="switchTab('tarjetas')" id="nav-tarjetas" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
                 <i data-lucide="clipboard-list" class="w-4 h-4 opacity-70"></i> Tablón de Avisos
             </button>
+            <button onclick="switchTab('tutor')" id="nav-tutor" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1 border-t border-borderGray pt-3">
+                <i data-lucide="graduation-cap" class="w-4 h-4 opacity-70 text-emerald-500"></i> Sala de Estudio
+            </button>
             
             <div class="px-6 mt-8 mb-2">
                 <h4 class="text-[10px] font-bold uppercase tracking-wider text-textMuted">Ajustes</h4>
@@ -432,6 +435,39 @@
                 <div id="tarjetas-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <!-- Cards de tarjetas se insertarán aquí -->
                 </div>
+            </div>
+        </section>
+
+        <!-- =======================
+             TAB: TUTOR SOCRÁTICO
+        ======================== -->
+        <section id="tab-tutor" class="tab-content hidden h-full flex-col fade-in">
+            <div class="px-12 py-8 border-b border-borderGray flex justify-between items-end bg-surface">
+                <div>
+                    <h2 class="text-3xl font-serif tracking-tight text-charcoal">Sala de Estudio</h2>
+                    <p class="text-textMuted text-sm mt-2">Simulación de tutoría socrática para evaluación oral de tus conocimientos.</p>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <select id="tutor-materia-select" class="bg-surface text-xs rounded-md px-3 py-2 border border-borderGray font-medium">
+                        <option value="todas">Todas las materias</option>
+                    </select>
+                    <button id="btn-iniciar-tutor" onclick="iniciarSimulacionTutor()" class="btn-primary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow">
+                        <i data-lucide="play" class="w-3 h-3"></i> Iniciar Simulación
+                    </button>
+                </div>
+            </div>
+            
+            <div id="tutor-history" class="flex-1 overflow-y-auto px-12 py-8 flex flex-col gap-6 bg-background max-w-4xl mx-auto w-full">
+                <div class="chat-bubble chat-ai p-5 text-sm italic text-center mx-auto text-textMuted border border-transparent">
+                    Selecciona una asignatura y haz clic en "Iniciar Simulación" para que el profesor virtual te evalúe en base a tus apuntes.
+                </div>
+            </div>
+            
+            <div class="p-6 border-t border-borderGray flex justify-center bg-surface">
+                <form id="tutor-form" class="flex gap-3 w-full max-w-4xl">
+                    <input type="text" id="tutor-input" disabled class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray opacity-60 cursor-not-allowed" placeholder="Inicia la simulación para responder...">
+                    <button type="submit" id="tutor-send-btn" disabled class="btn-primary px-8 text-sm font-medium opacity-60 cursor-not-allowed">Enviar</button>
+                </form>
             </div>
         </section>
 
@@ -646,6 +682,8 @@
         let currentAudioFile = "";
         let currentMateriaId = "";
         let editingMateriaId = null;
+        let tutorHistoryState = [];
+
         
         // Init
         document.addEventListener('DOMContentLoaded', () => {
@@ -700,6 +738,12 @@
             document.getElementById('chat-form').addEventListener('submit', (e) => {
                 e.preventDefault();
                 handleChatSubmit();
+            });
+
+            // Tutor form submission
+            document.getElementById('tutor-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                handleTutorSubmit();
             });
             
             // Render icons
@@ -933,17 +977,16 @@
                     // Update Chat Select Options
                     const chatSelect = document.getElementById('chat-context-select');
                     const tarjetasSelect = document.getElementById('tarjetas-materia-filter');
+                    const tutorSelect = document.getElementById('tutor-materia-select');
                     
                     chatSelect.innerHTML = '<option value="todas">Todo el Semestre</option><option value="default">Materia General</option>';
-                    if(tarjetasSelect) {
-                        tarjetasSelect.innerHTML = '<option value="todas">Todas las materias</option>';
-                    }
+                    if(tarjetasSelect) tarjetasSelect.innerHTML = '<option value="todas">Todas las materias</option>';
+                    if(tutorSelect) tutorSelect.innerHTML = '<option value="todas">Todas las materias</option>';
                     
                     data.forEach(m => {
                         chatSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
-                        if(tarjetasSelect) {
-                            tarjetasSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
-                        }
+                        if(tarjetasSelect) tarjetasSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+                        if(tutorSelect) tutorSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
                     });
                 });
         }
@@ -1414,6 +1457,101 @@
             
             chatHistory.appendChild(bubble);
             chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+        // ====== TAB: TUTOR SOCRÁTICO ======
+        function iniciarSimulacionTutor() {
+            tutorHistoryState = [];
+            const historyDiv = document.getElementById('tutor-history');
+            historyDiv.innerHTML = '';
+            
+            const input = document.getElementById('tutor-input');
+            const btn = document.getElementById('tutor-send-btn');
+            
+            input.disabled = false;
+            input.classList.remove('opacity-60', 'cursor-not-allowed');
+            input.placeholder = "Responde al profesor...";
+            
+            btn.disabled = false;
+            btn.classList.remove('opacity-60', 'cursor-not-allowed');
+            
+            const select = document.getElementById('tutor-materia-select');
+            const matName = select.options[select.selectedIndex].text;
+            
+            const inicioText = `¡Hola! Soy tu tutor virtual. He analizado tus apuntes de la materia **${matName}**. ¿Estás listo para comenzar con la primera pregunta de razonamiento para evaluar tus conocimientos?`;
+            appendTutorMessage(inicioText, false);
+            
+            tutorHistoryState.push({
+                role: 'model',
+                text: inicioText
+            });
+            
+            input.focus();
+        }
+        
+        function appendTutorMessage(text, isUser = false) {
+            const historyDiv = document.getElementById('tutor-history');
+            const bubble = document.createElement('div');
+            
+            if(isUser) {
+                bubble.className = `chat-bubble chat-user p-5 text-sm prose dark:prose-invert max-w-none shadow-sm`;
+                bubble.innerHTML = escapeHTML(text);
+            } else {
+                bubble.className = `chat-bubble chat-ai border border-borderGray p-5 text-sm prose dark:prose-invert max-w-none`;
+                bubble.innerHTML = marked.parse(text);
+            }
+            
+            historyDiv.appendChild(bubble);
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+        }
+
+        async function handleTutorSubmit() {
+            const input = document.getElementById('tutor-input');
+            const btn = document.getElementById('tutor-send-btn');
+            const text = input.value.trim();
+            if(!text) return;
+            
+            const materiaId = document.getElementById('tutor-materia-select').value;
+            const model = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
+            
+            appendTutorMessage(text, true);
+            input.value = '';
+            input.disabled = true;
+            btn.disabled = true;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+            lucide.createIcons({root: btn});
+            
+            try {
+                const response = await fetch('/api/tutor/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        materia_id: materiaId,
+                        historial: tutorHistoryState,
+                        pregunta: text,
+                        modelo_elegido: model
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if(!response.ok) throw new Error(data.detail || 'Error en la conexión del tutor');
+                
+                tutorHistoryState.push({ role: 'user', text: text });
+                tutorHistoryState.push({ role: 'model', text: data.respuesta });
+                
+                appendTutorMessage(data.respuesta, false);
+                if(data.stats) updateStatsUI(data.stats);
+                
+            } catch (error) {
+                console.error(error);
+                appendTutorMessage("⚠️ Error de conexión con el modelo. Por favor, intenta de nuevo.", false);
+            } finally {
+                input.disabled = false;
+                btn.disabled = false;
+                btn.innerHTML = 'Enviar';
+                input.focus();
+            }
         }
     </script>
 </body>

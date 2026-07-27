@@ -261,6 +261,12 @@ class ChatRequest(BaseModel):
     materia_id: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
 
+class TutorChatRequest(BaseModel):
+    materia_id: str
+    historial: list = []
+    pregunta: str
+    modelo_elegido: str = "gemini-3.1-flash-lite"
+
 
 class SummaryUpdate(BaseModel):
     content: str
@@ -571,6 +577,19 @@ async def chat_estudio(req: ChatRequest):
     try:
         respuesta, stats = await llm_service.chat_with_rag(
             req.mensaje, req.materia_id, req.modelo_elegido
+        )
+        return {"respuesta": respuesta, "stats": stats}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/tutor/chat")
+async def tutor_chat(req: TutorChatRequest):
+    try:
+        respuesta, stats = await llm_service.tutor_chat_with_rag(
+            historial_mensajes=req.historial,
+            pregunta_actual=req.pregunta,
+            materia_id=req.materia_id,
+            modelo=req.modelo_elegido
         )
         return {"respuesta": respuesta, "stats": stats}
     except Exception as e:

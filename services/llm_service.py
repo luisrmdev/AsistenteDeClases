@@ -392,6 +392,131 @@ async def chat_with_rag(
 
 
 # ---------------------------------------------------------------------------
+# Tutor Socrático
+# ---------------------------------------------------------------------------
+
+async def tutor_chat_with_rag(
+    historial_mensajes: list,
+    pregunta_actual: str,
+    materia_id: str,
+    modelo: str,
+) -> tuple[str, dict]:
+    """
+    Tutor Socrático: Reutiliza el motor RAG para recuperar contexto, pero 
+    cambia el System Instruction para evaluar al alumno interactivamente.
+    Mantiene el historial de la conversación.
+    """
+    import os as _os
+
+    meta_data = await meta_store.read()
+    settings = await settings_store.read()
+    rag_max_docs = settings.get("rag_max_docs", 8)
+
+    # 1. Filtrado por materia
+    all_files = list(meta_data.keys())
+    if materia_id == "todas":
+        valid_files = all_files
+    elif materia_id == "default":
+        valid_files = [f for f in all_files if "__default__" in f or "__" not in f]
+    else:
+        valid_files = [f for f in all_files if f"__{materia_id}__" in f]
+
+    valid_files.sort()
+
+    # 2. Filtro temporal
+    date_range = nlp_engine.parse_temporal_filter(pregunta_actual)
+
+    filtered_summaries = []
+    for f in valid_files:
+        f_meta = meta_data.get(f)
+        if not f_meta:
+            continue
+        f_fecha_str = f_meta.get("fecha", "")
+        if date_range and f_fecha_str:
+            try:
+                f_fecha = datetime.strptime(f_fecha_str, "%Y-%m-%d")
+                if not (date_range[0] <= f_fecha <= date_range[1]):
+                    continue
+            except Exception:
+                pass
+        filtered_summaries.append(f_meta)
+
+    # 3. Índice condensado cronológico
+    filtered_summaries.sort(key=lambda x: x.get("fecha", ""))
+    indice_condensado = "\n".join(
+        f"- {m.get('fecha', 'N/A')}: {m.get('condensado', '')}"
+        for m in filtered_summaries
+    )
+
+    # 4. Scoring de relevancia
+    relevant_summaries = nlp_engine.score_relevance(pregunta_actual, filtered_summaries, max_results=rag_max_docs)
+    relevant_filenames = {m.get("filename") for m in relevant_summaries if m.get("filename")}
+    relevant_list = [m for m in filtered_summaries if m.get("filename") in relevant_filenames]
+    resumenes_completos = "".join(
+        f"\n\n--- Documento: {m.get('filename')} ---\n{m.get('resumen', '')}"
+        for m in relevant_list
+    )
+
+    # 5. System instruction para el Tutor Socrático
+    sys_instruction = (
+        "Eres un profesor universitario riguroso evaluando a tu alumno. "
+        "Tienes acceso a sus apuntes, los cuales pueden contener referencias a imágenes. "
+        "Tu objetivo NO es darle las respuestas directas, sino hacerle preguntas de "
+        "razonamiento basadas en el material para comprobar que estudió.\n"
+        "Reglas:\n"
+        "Haz UNA pregunta a la vez.\n"
+        "Evalúa la respuesta del alumno. Si acierta, felicítalo brevemente y sube la dificultad con otra pregunta del material.\n"
+        "Si se equivoca, no le des la respuesta; guíalo socráticamente con pistas hasta que lo entienda."
+    )
+
+    materia_name = materia_id if materia_id and materia_id != "default" else "general"
+    reglas_filepath = _os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
+    if _os.path.exists(reglas_filepath):
+        with open(reglas_filepath, "r", encoding="utf-8") as rf:
+            reglas_adicionales = rf.read()
+            if reglas_adicionales.strip():
+                sys_instruction += (
+                    "\n\nTEN EN CUENTA ESTAS REGLAS/MÉTODOS DEL PROFESOR AL EVALUAR:\n"
+                    + reglas_adicionales
+                )
+
+    # 6. Llamada a Gemini con historial
+    client = genai.Client()
+
+    # Formatear el historial para pasarlo a contents
+    contents = []
+    
+    # Añadimos el RAG como contexto en el primer mensaje de usuario o lo simulamos
+    rag_context = f"ÍNDICE CONDENSADO:\n{indice_condensado}\nAPUNTES:\n{resumenes_completos}"
+    
+    if len(historial_mensajes) == 0:
+        # Primer turno
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=f"Contexto: {rag_context}\n\nPregunta: {pregunta_actual}")]))
+    else:
+        # Reconstruir historial
+        for idx, msg in enumerate(historial_mensajes):
+            role = msg.get("role", "user")
+            text = msg.get("text", "")
+            
+            # Solo en el primer mensaje inyectar RAG
+            if idx == 0 and role == "user":
+                text = f"Contexto: {rag_context}\n\nPregunta: {text}"
+                
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=text)]))
+        
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=pregunta_actual)]))
+
+    res = client.models.generate_content(
+        model=modelo,
+        contents=contents,
+        config=types.GenerateContentConfig(system_instruction=sys_instruction),
+    )
+    tokens = res.usage_metadata.total_token_count if res.usage_metadata else 0
+    stats = await update_stats(modelo, tokens)
+    return res.text.strip(), stats
+
+
+# ---------------------------------------------------------------------------
 # Task extraction from image
 # ---------------------------------------------------------------------------
 
