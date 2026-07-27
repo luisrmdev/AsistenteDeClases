@@ -16,8 +16,14 @@ memoria_ia/
 .idea/
 *.swp
 .DS_Store
+
+# Runtime data & user config
 papelera_audios/
 exportaciones/
 settings.json
 materias.json
 stats.json
+
+# Dev / Audit artifacts
+model_output.txt
+estado_actual_proyecto.md

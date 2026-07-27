@@ -1,21 +1,33 @@
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
-from fastapi.responses import FileResponse
+"""
+server.py — Punto de entrada de FastAPI.
+Responsabilidad única: definir rutas y delegar a los servicios.
+"""
+import base64
+import os
+import re
+import shutil
+import uuid
+from datetime import datetime
+
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from datetime import datetime
-import os
-import shutil
-import json
-import uuid
-from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-from tenacity import retry, stop_after_attempt, wait_exponential
-import re
-import nlp_engine
-import subprocess
 
+from database import (
+    AUDIOS_DIR,
+    EXPORTACIONES_DIR,
+    PAPELERA_DIR,
+    RESUMENES_DIR,
+    materias_store,
+    meta_store,
+    settings_store,
+    tareas_store,
+)
+from services import audio_service, export_service, llm_service
+
+from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
@@ -28,241 +40,190 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-AUDIOS_DIR = "audios"
-os.makedirs(AUDIOS_DIR, exist_ok=True)
-RESUMENES_DIR = "resumenes"
-os.makedirs(RESUMENES_DIR, exist_ok=True)
-PAPELERA_DIR = "papelera_audios"
-os.makedirs(PAPELERA_DIR, exist_ok=True)
-EXPORTACIONES_DIR = "exportaciones"
-os.makedirs(EXPORTACIONES_DIR, exist_ok=True)
-MEMORIA_DIR = "memoria_ia"
-os.makedirs(MEMORIA_DIR, exist_ok=True)
-MATERIAS_FILE = "materias.json"
-STATS_FILE = "stats.json"
+# Servir archivos de audio via /media
+app.mount("/media", StaticFiles(directory=AUDIOS_DIR), name="media")
 
-# Models
+
+# ===========================================================================
+# Pydantic Models
+# ===========================================================================
+
 class MateriaCreate(BaseModel):
     nombre: str
     prompt_personalizado: str
 
+
 class MateriaUpdate(BaseModel):
     nombre: str
     prompt_personalizado: str
+
 
 class GenerateRequest(BaseModel):
     filename: str
     materia_id: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
 
+
 class SaveRequest(BaseModel):
     filename: str
     content: str
     materia_id: str = None
 
+
 class PromptGenRequest(BaseModel):
     descripcion: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
+
 
 class ChatRequest(BaseModel):
     mensaje: str
     materia_id: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
 
+
 class SummaryUpdate(BaseModel):
     content: str
 
+
 class SettingsUpdate(BaseModel):
     obsidian_vault_path: str
-    enable_anki: bool = True
     browser_cookie_source: str = "brave"
     max_audio_upload_mb: int = 500
     default_model: str = "gemini-3.1-flash-lite"
+
 
 class TaskExtractRequest(BaseModel):
     image_base64: str
     modelo_elegido: str = None
 
-# Helper functions for Materias
-def load_app_settings():
-    if not os.path.exists("settings.json"):
-        return {"obsidian_vault_path": os.getenv("OBSIDIAN_VAULT_PATH", "")}
-    try:
-        with open("settings.json", "r", encoding="utf-8") as f:
-            return json.load(f)
-    except:
-        return {"obsidian_vault_path": os.getenv("OBSIDIAN_VAULT_PATH", "")}
 
-def save_app_settings(data):
-    with open("settings.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-def load_materias():
-    if not os.path.exists(MATERIAS_FILE):
-        return []
-    try:
-        with open(MATERIAS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-def save_materias(materias):
-    with open(MATERIAS_FILE, "w", encoding="utf-8") as f:
-        json.dump(materias, f, ensure_ascii=False, indent=4)
-
-def get_or_reset_stats():
-    today = datetime.now().strftime("%Y-%m-%d")
-    default_stats = {
-        "fecha": today,
-        "gemini-3.5-flash": {"peticiones": 0, "tokens": 0},
-        "gemini-3.1-flash-lite": {"peticiones": 0, "tokens": 0}
-    }
-    
-    if not os.path.exists(STATS_FILE):
-        return default_stats
-        
-    try:
-        with open(STATS_FILE, "r", encoding="utf-8") as f:
-            stats = json.load(f)
-            if stats.get("fecha") != today:
-                return default_stats
-            return stats
-    except Exception:
-        return default_stats
-
-def update_stats(model: str, tokens: int):
-    stats = get_or_reset_stats()
-    if model not in stats:
-        stats[model] = {"peticiones": 0, "tokens": 0}
-    
-    stats[model]["peticiones"] += 1
-    stats[model]["tokens"] += tokens
-    
-    with open(STATS_FILE, "w", encoding="utf-8") as f:
-        json.dump(stats, f, ensure_ascii=False, indent=4)
-    return stats
+# ===========================================================================
+# Stats
+# ===========================================================================
 
 @app.get("/api/stats")
 async def get_stats_endpoint():
-    return get_or_reset_stats()
+    return await llm_service.get_or_reset_stats()
 
-# Mount media to serve audio files for HTML <audio>
-app.mount("/media", StaticFiles(directory=AUDIOS_DIR), name="media")
 
-# --- Materias Endpoints ---
+# ===========================================================================
+# Materias
+# ===========================================================================
+
 @app.get("/api/materias")
 async def get_materias():
-    return load_materias()
+    return await materias_store.read()
+
 
 @app.post("/api/materias")
 async def create_materia(materia: MateriaCreate):
-    materias = load_materias()
     new_materia = {
         "id": str(uuid.uuid4()),
         "nombre": materia.nombre,
-        "prompt_personalizado": materia.prompt_personalizado
+        "prompt_personalizado": materia.prompt_personalizado,
     }
-    materias.append(new_materia)
-    save_materias(materias)
+
+    async def _append(materias: list) -> list:
+        materias.append(new_materia)
+        return materias
+
+    await materias_store.update(_append)
     return new_materia
+
 
 @app.put("/api/materias/{materia_id}")
 async def update_materia(materia_id: str, materia: MateriaUpdate):
-    materias = load_materias()
-    for m in materias:
-        if m["id"] == materia_id:
-            m["nombre"] = materia.nombre
-            m["prompt_personalizado"] = materia.prompt_personalizado
-            save_materias(materias)
-            return m
-    raise HTTPException(status_code=404, detail="Materia no encontrada")
+    found = {}
+
+    async def _update(materias: list) -> list:
+        for m in materias:
+            if m["id"] == materia_id:
+                m["nombre"] = materia.nombre
+                m["prompt_personalizado"] = materia.prompt_personalizado
+                found.update(m)
+        return materias
+
+    await materias_store.update(_update)
+    if not found:
+        raise HTTPException(status_code=404, detail="Materia no encontrada")
+    return found
+
 
 @app.delete("/api/materias/{materia_id}")
 async def delete_materia(materia_id: str):
-    materias = load_materias()
-    new_materias = [m for m in materias if m["id"] != materia_id]
-    if len(materias) == len(new_materias):
+    original_len = [0]
+
+    async def _delete(materias: list) -> list:
+        original_len[0] = len(materias)
+        return [m for m in materias if m["id"] != materia_id]
+
+    result = await materias_store.update(_delete)
+    if len(result) == original_len[0]:
         raise HTTPException(status_code=404, detail="Materia no encontrada")
-    save_materias(new_materias)
     return {"message": "Materia eliminada"}
 
-# --- Settings Endpoints ---
+
+# ===========================================================================
+# Settings
+# ===========================================================================
+
 @app.get("/api/settings")
 async def get_settings_endpoint():
-    return load_app_settings()
+    return await settings_store.read()
+
 
 @app.put("/api/settings")
 async def update_settings_endpoint(req: SettingsUpdate):
-    settings = load_app_settings()
-    settings["obsidian_vault_path"] = req.obsidian_vault_path
-    settings["enable_anki"] = req.enable_anki
-    settings["browser_cookie_source"] = req.browser_cookie_source
-    settings["max_audio_upload_mb"] = req.max_audio_upload_mb
-    settings["default_model"] = req.default_model
-    save_app_settings(settings)
+    async def _update(settings: dict) -> dict:
+        settings["obsidian_vault_path"] = req.obsidian_vault_path
+        settings["browser_cookie_source"] = req.browser_cookie_source
+        settings["max_audio_upload_mb"] = req.max_audio_upload_mb
+        settings["default_model"] = req.default_model
+        return settings
+
+    await settings_store.update(_update)
     return {"message": "Configuración actualizada"}
 
-# --- Models Endpoint ---
+
+# ===========================================================================
+# Models
+# ===========================================================================
+
 @app.get("/api/models")
 async def get_available_models():
-    try:
-        client = genai.Client()
-        modelos = client.models.list()
-        
-        valid_models = []
-        for model in modelos:
-            if hasattr(model, 'supported_actions') and model.supported_actions and "generateContent" in model.supported_actions:
-                model_name = model.name.replace("models/", "") if model.name.startswith("models/") else model.name
-                # Filtrar modelos legacy (bison) y gemini 1.0 (que no soportan audio)
-                if "gemini" in model_name and "1.0" not in model_name:
-                    valid_models.append({
-                        "id": model_name,
-                        "name": model_name,
-                        "description": getattr(model, 'description', 'Modelo de IA')
-                    })
-        
-        # Sort so that flash models appear first if possible
-        valid_models.sort(key=lambda x: ("flash" not in x["id"].lower(), x["id"]))
-        return {"models": valid_models}
-    except Exception as e:
-        print("Error fetching models:", e)
-        return {"models": [
-            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash", "description": "Modelo rápido por defecto."},
-            {"id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite", "description": "Modelo ligero por defecto."}
-        ]}
+    models = await llm_service.list_available_models()
+    return {"models": models}
 
-# --- Audios Pendientes Endpoints ---
+
+# ===========================================================================
+# Audios pendientes
+# ===========================================================================
+
 @app.get("/api/audios")
 async def list_pending_audios():
     if not os.path.exists(AUDIOS_DIR):
         return {"audios": []}
-    files = [f for f in os.listdir(AUDIOS_DIR) if f.endswith('.webm')]
+    files = [f for f in os.listdir(AUDIOS_DIR) if f.endswith(".webm")]
     files.sort(key=lambda x: os.path.getmtime(os.path.join(AUDIOS_DIR, x)), reverse=True)
-    
+
     audios = []
     for f in files:
         name_parts = f.replace(".webm", "").split("_")
-        display_name = f
         if len(name_parts) >= 4:
             date_str = name_parts[2]
             if len(date_str) == 8:
                 date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-            
-            custom_name = ""
-            if len(name_parts) >= 5:
-                custom_name = " ".join(name_parts[4:])
-                
-            if custom_name:
-                display_name = f"{custom_name} ({date_str})"
-            else:
-                display_name = f"Grabación {date_str}"
+            custom_name = " ".join(name_parts[4:]) if len(name_parts) >= 5 else ""
+            display_name = f"{custom_name} ({date_str})" if custom_name else f"Grabación {date_str}"
         else:
             display_name = f
         audios.append({"filename": f, "display_name": display_name})
     return {"audios": audios}
 
+
 @app.delete("/api/audios/{filename}")
 async def delete_audio(filename: str):
-    if not filename.endswith('.webm'):
+    if not filename.endswith(".webm"):
         raise HTTPException(status_code=400, detail="Formato inválido")
     filepath = os.path.join(AUDIOS_DIR, filename)
     if os.path.exists(filepath):
@@ -270,494 +231,266 @@ async def delete_audio(filename: str):
         return {"message": "Audio eliminado exitosamente"}
     raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
 
-# --- Original Upload ---
+
+# ===========================================================================
+# Upload  (validación de tamaño OOM-safe: header + chunks)
+# ===========================================================================
+
+CHUNK_SIZE = 1 * 1024 * 1024  # 1 MB por chunk
+
+
 @app.post("/upload")
-async def upload_audio(audio: UploadFile = File(...), custom_name: str = Form(None)):
+async def upload_audio(
+    request: Request,
+    audio: UploadFile = File(...),
+    custom_name: str = Form(None),
+):
+    settings = await settings_store.read()
+    max_mb = settings.get("max_audio_upload_mb", 500)
+    max_bytes = max_mb * 1024 * 1024
+
+    # --- Capa 1: Content-Length header (O(1), cero RAM) ---
+    # Rechaza antes de leer un solo byte si el cliente declara un tamaño excesivo.
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > max_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=f"El archivo supera el límite de {max_mb} MB "
+                   f"({int(content_length) // (1024 * 1024)} MB declarados en Content-Length).",
+        )
+
+    # Construir nombre de destino
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     ext = os.path.splitext(audio.filename)[1] if audio.filename else ".webm"
     if not ext:
         ext = ".webm"
-        
+
     if custom_name:
-        import re
-        safe_name = re.sub(r'[^a-zA-Z0-9_\-]', '', custom_name.replace(" ", "_"))
+        safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "", custom_name.replace(" ", "_"))
         filename = f"meet_{timestamp}_{safe_name}{ext}"
     else:
         filename = f"meet_{timestamp}{ext}"
-        
+
     filepath = os.path.join(AUDIOS_DIR, filename)
-    with open(filepath, "wb") as buffer:
-        shutil.copyfileobj(audio.file, buffer)
-        
+
+    # --- Capa 2: streaming por chunks (cubre transferencias chunked sin Content-Length) ---
+    # Lee 1 MB a la vez → escribe en disco → aborta temprano si la suma supera el límite.
+    # La RAM máxima usada en cualquier momento es exactamente 1 MB (un chunk).
+    bytes_written = 0
+    try:
+        with open(filepath, "wb") as f:
+            while True:
+                chunk = await audio.read(CHUNK_SIZE)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                if bytes_written > max_bytes:
+                    # Abortar: borrar el archivo parcial antes de responder
+                    f.close()
+                    os.remove(filepath)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"El archivo supera el límite de {max_mb} MB "
+                               f"(se interrumpió al superar {max_bytes // (1024 * 1024)} MB).",
+                    )
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception as e:
+        # Limpiar archivo parcial ante cualquier otro error de IO
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        raise HTTPException(status_code=500, detail=f"Error al guardar el audio: {e}")
+
     return {"message": "Audio subido correctamente", "filename": filename, "path": filepath}
 
-# --- AI Prompt Gen ---
+
+# ===========================================================================
+# AI Prompt Gen
+# ===========================================================================
+
 @app.post("/api/generate-prompt")
 async def generate_prompt(req: PromptGenRequest):
-    client = genai.Client()
-    sys_prompt = "Eres un ingeniero de prompts experto. Tu objetivo es convertir la petición natural del usuario en un prompt de sistema robusto, estructurado con [Rol], [Contexto], [Tarea] y [Formato de Salida] listos para dárselo a otro LLM. Responde ÚNICAMENTE con el prompt generado final, sin introducciones, saludos ni comillas extra. Hazlo directo."
     try:
-        res = client.models.generate_content(
-            model=req.modelo_elegido,
-            contents=[f"Petición natural del usuario: {req.descripcion}", sys_prompt]
+        prompt_generado, stats = await llm_service.generate_prompt_for_materia(
+            req.descripcion, req.modelo_elegido
         )
-        tokens = res.usage_metadata.total_token_count if res.usage_metadata else 0
-        stats = update_stats(req.modelo_elegido, tokens)
-        return {"prompt_generado": res.text.strip(), "stats": stats}
+        return {"prompt_generado": prompt_generado, "stats": stats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Chat de Estudio (RAG) ---
+
+# ===========================================================================
+# Chat RAG
+# ===========================================================================
+
 @app.post("/api/chat")
 async def chat_estudio(req: ChatRequest):
-    files = [f for f in os.listdir(RESUMENES_DIR) if f.endswith('.md')]
-    valid_files = []
-    
-    if req.materia_id != "todas":
-        if req.materia_id == "default":
-            # Viejos y los marcados como default
-            valid_files = [f for f in files if "__default__" in f or "__" not in f]
-        else:
-            valid_files = [f for f in files if f"__{req.materia_id}__" in f]
-    else:
-        valid_files = files
-    # CRÍTICO: Ordenar alfabéticamente para caché inmutable
-    valid_files.sort()
-    # CRÍTICO: Leer metadata
-    meta_filepath = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
-    meta_data = {}
-    if os.path.exists(meta_filepath):
-        with open(meta_filepath, "r", encoding="utf-8") as fm:
-            meta_data = json.load(fm)
-
-    # 1. Filtro Temporal
-    date_range = nlp_engine.parse_temporal_filter(req.mensaje)
-    
-    filtered_summaries = []
-    for f in valid_files:
-        if f in meta_data:
-            f_meta = meta_data[f]
-            f_fecha_str = f_meta.get("fecha", "")
-            if date_range and f_fecha_str:
-                try:
-                    f_fecha = datetime.strptime(f_fecha_str, "%Y-%m-%d")
-                    if not (date_range[0] <= f_fecha <= date_range[1]):
-                        continue
-                except:
-                    pass
-            filtered_summaries.append(f_meta)
-
-    # 2. Índice Condensado cronológico
-    filtered_summaries.sort(key=lambda x: x.get("fecha", ""))
-    indice_condensado_textos = []
-    for m in filtered_summaries:
-        indice_condensado_textos.append(f"- {m.get('fecha', 'N/A')}: {m.get('condensado', '')}")
-
-    # 3. Scoring de Relevancia
-    relevant_summaries = nlp_engine.score_relevance(req.mensaje, filtered_summaries)
-    relevant_filenames = {m.get("filename") for m in relevant_summaries if m.get("filename")}
-
-    # 4. Resúmenes Completos
-    relevant_list = [m for m in filtered_summaries if m.get("filename") in relevant_filenames]
-    resumenes_completos_textos = []
-    for m in relevant_list:
-        resumenes_completos_textos.append(f"\n\n--- Documento: {m.get('filename')} ---\n{m.get('resumen', '')}")
-            
-    client = genai.Client()
-    sys_instruction = "Eres mi tutor universitario experto. Basa tus respuestas ESTRICTAMENTE en mis documentos de estudio proporcionados. Si la información no está explícitamente en los apuntes, indica claramente que 'no se menciona en los apuntes de clase'."
-    
-    materia_name = req.materia_id if req.materia_id and req.materia_id != "default" else "general"
-    reglas_filepath = os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
-    if os.path.exists(reglas_filepath):
-        with open(reglas_filepath, "r", encoding="utf-8") as rf:
-            reglas_adicionales = rf.read()
-            if reglas_adicionales.strip():
-                sys_instruction += f"\n\nERES UN ASISTENTE ESTUDIANTIL. DEBES OBEDECER ESTRICTAMENTE LAS SIGUIENTES REGLAS Y MÉTODOS DEL PROFESOR AL RESOLVER PROBLEMAS:\n{reglas_adicionales}"
-    
     try:
-        res = client.models.generate_content(
-            model=req.modelo_elegido,
-            contents=[
-                "ÍNDICE CONDENSADO (Filtrado temporalmente):\n" + "\n".join(indice_condensado_textos),
-                "APUNTES COMPLETOS (Más relevantes):\n" + "".join(resumenes_completos_textos),
-                req.mensaje
-            ],
-            config=types.GenerateContentConfig(
-                system_instruction=sys_instruction
-            )
+        respuesta, stats = await llm_service.chat_with_rag(
+            req.mensaje, req.materia_id, req.modelo_elegido
         )
-        tokens = res.usage_metadata.total_token_count if res.usage_metadata else 0
-        stats = update_stats(req.modelo_elegido, tokens)
-        return {"respuesta": res.text.strip(), "stats": stats}
+        return {"respuesta": respuesta, "stats": stats}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Human-in-the-Loop AI Endpoints ---
+
+# ===========================================================================
+# Generate (Human-in-the-Loop)
+# ===========================================================================
+
 @app.post("/api/generate")
 async def generate_summary(req: GenerateRequest):
     filepath = os.path.join(AUDIOS_DIR, req.filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
-        
+
+    # Obtener prompt de la materia
     prompt_usar = ""
     if req.materia_id and req.materia_id != "default":
-        materias = load_materias()
+        materias = await materias_store.read()
         materia = next((m for m in materias if m["id"] == req.materia_id), None)
         if materia:
             prompt_usar = materia["prompt_personalizado"]
-            
-    fecha_actual = datetime.now().strftime("%Y-%m-%d")
-    
-    settings = load_app_settings()
-    anki_json = '  "anki_cards": [{"pregunta": "...", "respuesta": "..."}],' if settings.get("enable_anki", True) else ''
-    
-    prompt_completo = f"""Eres un experto en Personal Knowledge Management (PKM) y un ingeniero de software senior. La fecha de hoy es {fecha_actual}. 
-Contexto de la clase: {prompt_usar}
 
-A partir de la transcripción, debes crear una nota que cumpla ESTRICTAMENTE las siguientes reglas de mi bóveda de Obsidian:
-1. ESTRUCTURA DE CARPETAS: Mi bóveda usa PARA (01 Proyectos, 02 Recursos, 03 Areas, 04 Archivo).
-2. REGLA DE TITULACIÓN (Googleability): Una nota = Un solo concepto. Títulos directos. Ej Teórico: "Costo de Oportunidad". Ej Técnico: "Cómo configurar Git con SSH en Linux".
-3. ARQUETIPOS DE NOTA:
-   A. Técnico / Cheat Sheet: Inicia con > [!warning] o > [!info]. Pasos directos sin relleno. Bloques de código especificados.
-   B. Teórico: Inicia con > [!summary] (Resumen Feynman). Desarrollo en viñetas. Ejemplos con > [!example].
-4. CERO NOTAS HUÉRFANAS: Al final de la nota, incluye un enlace de Obsidian a un concepto relacionado (ej. [[Índice - Semestre actual]]).
-5. EXHAUSTIVIDAD OBLIGATORIA (PROPORCIONALIDAD): ¡NO COMPRIMAS EN EXCESO! El nivel de detalle y la longitud de la nota deben ser directamente proporcionales a la duración del audio. Si el audio es una clase larga de 2 horas, tu respuesta debe ser un documento largo y exhaustivo, con múltiples subtítulos, capturando cada concepto, debate, y ejemplo mencionado. No recortes ni simplifiques información valiosa solo por resumir. Muestra todo el contenido relevante estructurado a profundidad.
-
-Además, debes extraer reglas:
-Si en el audio el profesor explica un método de resolución específico, una fórmula propia, o exige explícitamente que los problemas se resuelvan de una manera particular (diferente a los libros), extráelo detalladamente en el array 'nuevas_reglas_profesor' del bloque JSON. Si no hay reglas nuevas en esta clase, deja el array vacío [].
-
-Genera tu respuesta en el siguiente formato ESTRICTO:
----
-tipo: [teoria o cheatsheet]
-estado: borrador
-tags: [tag1, tag2]
----
-
-[Contenido de la nota usando Callouts de Obsidian y estructura requerida]
-
-[Enlace MOC o Concepto Relacionado]
-
-$$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
-```json
-{{
-  "filename": "Titulo Exacto Googleable.md",
-  "folder": "02 Recursos/Tema",
-{anki_json}
-  "calendario": [{{"titulo": "...", "fecha_YYYY_MM_DD": "...", "descripcion": "..."}}],
-  "nuevas_reglas_profesor": [
-    {{
-      "tema": "El tema del que habla",
-      "metodo_paso_a_paso": "La explicación detallada o fórmula estricta que el profesor exige usar, extraída textualmente del audio."
-    }}
-  ]
-}}
-```"""
-    
     try:
         print(f"Procesando {filepath} con Gemini...")
-        client = genai.Client()
-        
-        # FFmpeg: Remover silencios
-        temp_filepath = os.path.join(AUDIOS_DIR, "temp_" + req.filename)
-        upload_path = filepath
-        try:
-            subprocess.run([
-                "ffmpeg", "-y", "-i", filepath,
-                "-af", "silenceremove=stop_periods=-1:stop_duration=2:stop_threshold=-30dB",
-                temp_filepath
-            ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            if os.path.exists(temp_filepath):
-                upload_path = temp_filepath
-                print("Audio optimizado con FFmpeg.")
-        except Exception as e:
-            print(f"Fallo FFmpeg (usando original): {e}")
 
-        file = client.files.upload(file=upload_path, config={'mime_type': 'audio/webm'})
-        
-        if upload_path == temp_filepath and os.path.exists(temp_filepath):
-            os.remove(temp_filepath)
-        
-        import time
-        print("Esperando a que Gemini procese el archivo...", flush=True)
-        file_info = client.files.get(name=file.name)
-        while file_info.state.name == "PROCESSING":
-            time.sleep(3)
-            file_info = client.files.get(name=file.name)
-            
-        if file_info.state.name == "FAILED":
-            raise Exception("Gemini falló al procesar el archivo.")
-        
-        print("Archivo listo. Generando resumen...", flush=True)
-        
-        @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=5, max=60))
-        def call_gemini():
-            print("Solicitando generación a Gemini...", flush=True)
-            res = client.models.generate_content(
-                model=req.modelo_elegido,
-                contents=[file, prompt_completo],
-                config={"max_output_tokens": 8192}
-            )
-            if not res.text or len(res.text.strip()) < 50:
-                raise ValueError("Respuesta vacía o corta. Forzando reintento.")
-            return res
-            
-        response = call_gemini()
-        tokens = response.usage_metadata.total_token_count if response.usage_metadata else 0
-        stats = update_stats(req.modelo_elegido, tokens)
-        
-        return {"content": response.text, "stats": stats}
-        
+        # Preprocesamiento FFmpeg
+        upload_path = audio_service.remove_silences(filepath)
+
+        texto, stats = await llm_service.generate_summary_from_audio(
+            upload_path, prompt_usar, req.modelo_elegido
+        )
+
+        # Limpiar temp si aplica
+        audio_service.cleanup_temp(upload_path, filepath)
+
+        return {"content": texto, "stats": stats}
     except Exception as e:
         print(f"Error procesando el audio con Gemini: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ===========================================================================
+# Save (Human-in-the-Loop: aprobación y persistencia)
+# ===========================================================================
 
 @app.post("/api/save")
 async def save_summary(req: SaveRequest):
     filepath = os.path.join(AUDIOS_DIR, req.filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
-        
+
     fecha_str = datetime.now().strftime("%Y-%m-%d")
 
+    # Naming del archivo de resumen
     md_filename = req.filename.replace(".webm", ".md")
     if md_filename.startswith("meet_"):
         mat_id = req.materia_id if (req.materia_id and req.materia_id != "default") else "default"
         md_filename = md_filename.replace("meet_", f"resumen__{mat_id}__meet_")
-    
-    md_filepath = os.path.join(RESUMENES_DIR, md_filename)
-    
-    # Parseo de Tags y Condensado
-    texto_limpio = req.content
-    json_data = {}
-    anki_file = None
-    ics_file = None
-    
-    # Extraer el bloque JSON
-    json_match = re.search(r'```json\s*(\{.*?\})\s*```', texto_limpio, re.DOTALL | re.IGNORECASE)
-    if not json_match:
-        # Fallback sin markdown ticks
-        json_match = re.search(r'(\{[\s\n]*"filename".*?\})', texto_limpio, re.DOTALL | re.IGNORECASE)
 
-    if json_match:
-        json_str = json_match.group(1)
-        texto_limpio = texto_limpio.replace(json_match.group(0), "").strip()
-        try:
-            json_data = json.loads(json_str)
-        except Exception as e:
-            print("Error parseando JSON de Gemini:", e)
-            
+    # Extraer JSON embebido de Gemini
+    json_data, texto_limpio = llm_service.extract_json_block(req.content)
+
     suggested_filename = json_data.get("filename", md_filename).replace("/", "-")
     if not suggested_filename.endswith(".md"):
         suggested_filename += ".md"
-        
     suggested_folder = json_data.get("folder", "")
-            
-    # Guardar en Obsidian si existe la ruta
-    settings = load_app_settings()
-    obsidian_path = settings.get("obsidian_vault_path", "")
-    if obsidian_path and os.path.exists(obsidian_path):
-        target_dir = os.path.join(obsidian_path, suggested_folder) if suggested_folder else obsidian_path
-        os.makedirs(target_dir, exist_ok=True)
-        obs_file = os.path.join(target_dir, suggested_filename)
-        try:
-            with open(obs_file, "w", encoding="utf-8") as f:
-                f.write(texto_limpio)
-        except Exception as e:
-            print("Error guardando en Obsidian:", e)
 
-    # 1. Extraer tags manuales si aplican (Frontmatter YAML)
+    # Extraer tags del Frontmatter
     tags_match = re.search(r"tags:\s*\[(.*?)\]", texto_limpio, re.IGNORECASE)
     if not tags_match:
         tags_match = re.search(r"tags:\s*(.*)", texto_limpio, re.IGNORECASE)
-    tags = [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(',')] if tags_match else []
-    
-    meta_filepath = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
-    meta_data = {}
-    if os.path.exists(meta_filepath):
-        with open(meta_filepath, "r", encoding="utf-8") as fm:
-            try:
-                meta_data = json.load(fm)
-            except:
-                meta_data = {}
-    
-    condensado_text = texto_limpio[:150].replace('\n', ' ').strip()
-    if len(texto_limpio) > 150:
-        condensado_text += "..."
-                
-    meta_data[md_filename] = {
-        "filename": suggested_filename,
-        "folder": suggested_folder,
-        "tags": tags,
-        "condensado": condensado_text,
-        "fecha": fecha_str,
-        "resumen": texto_limpio
-    }
-    
-    with open(meta_filepath, "w", encoding="utf-8") as fm:
-        json.dump(meta_data, fm, ensure_ascii=False, indent=2)
+    tags = (
+        [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(",")]
+        if tags_match
+        else []
+    )
 
-    with open(os.path.join(RESUMENES_DIR, suggested_filename), "w", encoding="utf-8") as f:
-        f.write(texto_limpio)
-        
-    # 2. Generar Anki (.apkg)
-    if json_data and "anki_cards" in json_data and json_data["anki_cards"]:
-        try:
-            import genanki
-            import random
-            deck_id = random.randrange(1 << 30, 1 << 31)
-            model_id = random.randrange(1 << 30, 1 << 31)
-            
-            my_model = genanki.Model(
-                model_id,
-                'Modelo Asistente Clases',
-                fields=[
-                    {'name': 'Pregunta'},
-                    {'name': 'Respuesta'},
-                ],
-                templates=[
-                    {
-                        'name': 'Tarjeta 1',
-                        'qfmt': '{{Pregunta}}',
-                        'afmt': '{{FrontSide}}<hr id="answer">{{Respuesta}}',
-                    },
-                ])
-            
-            my_deck = genanki.Deck(deck_id, f'Asistente::{md_filename.replace(".md", "")}')
-            
-            for card in json_data["anki_cards"]:
-                pregunta = card.get("pregunta", "")
-                respuesta = card.get("respuesta", "")
-                if pregunta and respuesta:
-                    note = genanki.Note(model=my_model, fields=[pregunta, respuesta])
-                    my_deck.add_note(note)
-                    
-            anki_file = f"{md_filename.replace('.md', '')}.apkg"
-            genanki.Package(my_deck).write_to_file(os.path.join(EXPORTACIONES_DIR, anki_file))
-        except Exception as e:
-            print("Error generando Anki:", e)
+    # Guardar Markdown + metadata
+    await export_service.save_markdown_and_metadata(
+        md_filename, suggested_filename, suggested_folder, texto_limpio, tags, fecha_str
+    )
 
-    # 3. Generar Calendario (.ics) y Guardar en Tareas
-    if json_data and "calendario" in json_data and json_data["calendario"]:
-        # Guardar en Base de Datos de Tareas (JSON)
-        tareas_meta_filepath = os.path.join(RESUMENES_DIR, "tareas_meta.json")
-        tareas_data = []
-        if os.path.exists(tareas_meta_filepath):
-            with open(tareas_meta_filepath, "r", encoding="utf-8") as fm:
-                try: tareas_data = json.load(fm)
-                except: pass
-        
-        import uuid
-        for t in json_data["calendario"]:
-            t["id"] = str(uuid.uuid4())
-            t["origen"] = suggested_filename
-            t["completada"] = False
-            tareas_data.append(t)
-            
-        with open(tareas_meta_filepath, "w", encoding="utf-8") as fm:
-            json.dump(tareas_data, fm, ensure_ascii=False, indent=2)
+    # Guardar en Obsidian
+    await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
 
-        # Generar ICS File
-        try:
-            from icalendar import Calendar, Event
-            cal = Calendar()
-            for evento in json_data["calendario"]:
-                fecha_evt_str = evento.get("fecha_YYYY_MM_DD")
-                if fecha_evt_str:
-                    try:
-                        dt = datetime.strptime(fecha_evt_str, "%Y-%m-%d").date()
-                        ievent = Event()
-                        ievent.add('summary', evento.get("titulo", "Sin título"))
-                        ievent.add('dtstart', dt)
-                        ievent.add('description', evento.get("descripcion", ""))
-                        cal.add_component(ievent)
-                    except Exception as e:
-                        print("Error parseando fecha para ICS:", e)
-                        
-            ics_file = f"{md_filename.replace('.md', '')}.ics"
-            with open(os.path.join(EXPORTACIONES_DIR, ics_file), 'wb') as f:
-                f.write(cal.to_ical())
-        except Exception as e:
-            print("Error generando Calendario:", e)
-            
-    # 4. Guardar reglas del profesor
-    if json_data and "nuevas_reglas_profesor" in json_data and json_data["nuevas_reglas_profesor"]:
-        materia_name = req.materia_id if req.materia_id and req.materia_id != "default" else "general"
-        reglas_filepath = os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
-        try:
-            with open(reglas_filepath, "a+", encoding="utf-8") as rf:
-                for regla in json_data["nuevas_reglas_profesor"]:
-                    tema = regla.get("tema", "Sin tema")
-                    metodo = regla.get("metodo_paso_a_paso", "")
-                    if metodo:
-                        rf.write(f"\n### Regla extraída el {fecha_actual}: {tema}\n")
-                        rf.write(f"{metodo}\n---\n")
-        except Exception as e:
-            print("Error guardando memoria del profesor:", e)
-        
-    # Mover a papelera
-    filename = os.path.basename(filepath)
-    papelera_path = os.path.join(PAPELERA_DIR, filename)
+    # Calendario ICS + tareas
+    ics_file = None
+    if json_data.get("calendario"):
+        ics_file = await export_service.generate_ics_and_save_tasks(
+            json_data["calendario"], suggested_filename, md_filename
+        )
+
+    # Reglas del profesor
+    if json_data.get("nuevas_reglas_profesor"):
+        await export_service.save_teacher_rules(
+            json_data["nuevas_reglas_profesor"], req.materia_id, fecha_str
+        )
+
+    # Mover audio a papelera
+    papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
     shutil.move(filepath, papelera_path)
-    
-    papelera_files = [os.path.join(PAPELERA_DIR, f) for f in os.listdir(PAPELERA_DIR) if os.path.isfile(os.path.join(PAPELERA_DIR, f))]
-    papelera_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+
+    # Retención de papelera: máximo 10 archivos
+    papelera_files = sorted(
+        [os.path.join(PAPELERA_DIR, f) for f in os.listdir(PAPELERA_DIR)
+         if os.path.isfile(os.path.join(PAPELERA_DIR, f))],
+        key=os.path.getmtime,
+        reverse=True,
+    )
     for old_file in papelera_files[10:]:
         try:
             os.remove(old_file)
         except Exception:
             pass
-            
+
     return {
-        "message": "Guardado exitoso", 
+        "message": "Guardado exitoso",
         "md_filename": md_filename,
-        "anki_file": anki_file,
-        "ics_file": ics_file
+        "anki_file": None,
+        "ics_file": ics_file,
     }
 
-# --- Original Summaries Endpoints (For the UI) ---
+
+# ===========================================================================
+# Summaries
+# ===========================================================================
+
 @app.get("/api/summaries")
 async def list_summaries():
     if not os.path.exists(RESUMENES_DIR):
         return {"summaries": []}
-    files = [f for f in os.listdir(RESUMENES_DIR) if f.endswith('.md')]
+    files = [f for f in os.listdir(RESUMENES_DIR) if f.endswith(".md")]
     files.sort(key=lambda x: os.path.getmtime(os.path.join(RESUMENES_DIR, x)), reverse=True)
+
     summaries = []
     for f in files:
-        # Extraer nombre amigable ocultando los IDs
-        import re
-        display_name = f
-        
-        # Eliminar el bloque __id__ si existe
-        clean_name = re.sub(r'__.*?__', '', f).replace('resumen_meet_', '').replace('.md', '')
-        
+        clean_name = re.sub(r"__.*?__", "", f).replace("resumen_meet_", "").replace(".md", "")
         parts = clean_name.split("_")
         if len(parts) >= 2:
             date_str = parts[0]
             if len(date_str) == 8:
                 date_str = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
-            
-            custom_name = ""
-            if len(parts) >= 3:
-                custom_name = " ".join(parts[2:])
-                
-            if custom_name:
-                display_name = f"{custom_name} ({date_str})"
-            else:
-                display_name = f"Reunión {date_str}"
-        filepath = os.path.join(RESUMENES_DIR, f)
+            custom_name = " ".join(parts[2:]) if len(parts) >= 3 else ""
+            display_name = f"{custom_name} ({date_str})" if custom_name else f"Reunión {date_str}"
+        else:
+            display_name = f
+
         try:
-            import datetime
-            mtime = os.path.getmtime(filepath)
-            created_at = datetime.datetime.fromtimestamp(mtime).strftime('%d/%m/%Y %H:%M')
-        except:
+            mtime = os.path.getmtime(os.path.join(RESUMENES_DIR, f))
+            created_at = datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
+        except Exception:
             created_at = "Fecha desconocida"
-        
+
         summaries.append({"filename": f, "display_name": display_name, "created_at": created_at})
     return {"summaries": summaries}
 
+
 @app.get("/api/summaries/{filename}")
 async def get_summary(filename: str):
-    if not filename.endswith('.md'):
+    if not filename.endswith(".md"):
         return {"error": "Solo se permiten archivos markdown."}
     filepath = os.path.join(RESUMENES_DIR, filename)
     if not os.path.exists(filepath):
@@ -766,46 +499,47 @@ async def get_summary(filename: str):
         content = f.read()
     return {"content": content}
 
+
 @app.put("/api/summaries/{filename}")
 async def update_summary(filename: str, req: SummaryUpdate):
-    if not filename.endswith('.md'):
+    if not filename.endswith(".md"):
         raise HTTPException(status_code=400, detail="Solo archivos markdown.")
     filepath = os.path.join(RESUMENES_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(req.content)
-        
-    meta_filepath = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
-    if os.path.exists(meta_filepath):
-        with open(meta_filepath, "r", encoding="utf-8") as fm:
-            meta_data = json.load(fm)
+
+    async def _update_meta(meta_data: dict) -> dict:
         if filename in meta_data:
             meta_data[filename]["resumen"] = req.content
-            with open(meta_filepath, "w", encoding="utf-8") as fm:
-                json.dump(meta_data, fm, ensure_ascii=False, indent=2)
-                
+        return meta_data
+
+    await meta_store.update(_update_meta)
     return {"message": "Resumen actualizado"}
+
 
 @app.delete("/api/summaries/{filename}")
 async def delete_summary(filename: str):
-    if not filename.endswith('.md'):
+    if not filename.endswith(".md"):
         raise HTTPException(status_code=400, detail="Solo archivos markdown.")
     filepath = os.path.join(RESUMENES_DIR, filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
     os.remove(filepath)
-    
-    meta_filepath = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
-    if os.path.exists(meta_filepath):
-        with open(meta_filepath, "r", encoding="utf-8") as fm:
-            meta_data = json.load(fm)
-        if filename in meta_data:
-            del meta_data[filename]
-            with open(meta_filepath, "w", encoding="utf-8") as fm:
-                json.dump(meta_data, fm, ensure_ascii=False, indent=2)
-                
+
+    async def _remove_meta(meta_data: dict) -> dict:
+        meta_data.pop(filename, None)
+        return meta_data
+
+    await meta_store.update(_remove_meta)
     return {"message": "Resumen eliminado"}
+
+
+# ===========================================================================
+# Exportaciones
+# ===========================================================================
 
 @app.get("/api/exportaciones/{filename}")
 async def download_export(filename: str):
@@ -814,134 +548,82 @@ async def download_export(filename: str):
         raise HTTPException(status_code=404, detail="Archivo no encontrado")
     return FileResponse(filepath, filename=filename)
 
+
+# ===========================================================================
+# Info
+# ===========================================================================
+
 @app.get("/info")
 async def get_system_info():
-    return {"status": "ok", "message": "Asistente de Clases v2 - Human in the Loop Architecture"}
+    return {"status": "ok", "message": "Asistente de Clases v3 - Modular Architecture"}
+
+
+# ===========================================================================
+# Tareas
+# ===========================================================================
 
 @app.get("/api/tareas")
 async def get_tareas():
-    tareas_meta_filepath = os.path.join(RESUMENES_DIR, "tareas_meta.json")
-    if os.path.exists(tareas_meta_filepath):
-        try:
-            with open(tareas_meta_filepath, "r", encoding="utf-8") as fm:
-                return {"tareas": json.load(fm)}
-        except: pass
-    return {"tareas": []}
+    return {"tareas": await tareas_store.read()}
+
 
 @app.put("/api/tareas/{tarea_id}")
 async def update_tarea(tarea_id: str, payload: dict):
-    tareas_meta_filepath = os.path.join(RESUMENES_DIR, "tareas_meta.json")
-    if os.path.exists(tareas_meta_filepath):
-        with open(tareas_meta_filepath, "r", encoding="utf-8") as fm:
-            tareas = json.load(fm)
+    async def _update(tareas: list) -> list:
         for t in tareas:
-            if t.get("id") == tarea_id:
-                if "completada" in payload:
-                    t["completada"] = payload["completada"]
-        with open(tareas_meta_filepath, "w", encoding="utf-8") as fm:
-            json.dump(tareas, fm, ensure_ascii=False, indent=2)
+            if t.get("id") == tarea_id and "completada" in payload:
+                t["completada"] = payload["completada"]
+        return tareas
+
+    await tareas_store.update(_update)
     return {"message": "ok"}
+
+
+# ===========================================================================
+# Extract task from image
+# ===========================================================================
+
 @app.post("/api/extract-task")
 async def extract_task_from_image(req: TaskExtractRequest):
-    import base64
     b64_str = req.image_base64.split(",")[1] if "," in req.image_base64 else req.image_base64
     img_bytes = base64.b64decode(b64_str)
-    
-    prompt = """Eres un experto en Personal Knowledge Management (PKM). A partir de esta captura de pantalla de una plataforma educativa, extrae la información de la tarea.
-Debes crear una nota que cumpla ESTRICTAMENTE las siguientes reglas de mi bóveda de Obsidian:
-1. ESTRUCTURA DE CARPETAS: Usa PARA (01 Proyectos/Tareas).
-2. Títulos directos. Ej: "Tarea de Cálculo II - Integrales".
 
-Genera tu respuesta en el siguiente formato ESTRICTO:
----
-tipo: tarea
-estado: pendiente
-tags: [tarea]
----
+    modelo = req.modelo_elegido
+    if not modelo:
+        settings = await settings_store.read()
+        modelo = settings.get("default_model", "gemini-3.1-flash-lite")
 
-[Contenido de la nota con detalles de la tarea]
-
-$$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
-```json
-{
-  "filename": "Titulo Tarea.md",
-  "folder": "01 Proyectos/Tareas",
-  "calendario": [{"titulo": "...", "fecha_YYYY_MM_DD": "...", "descripcion": "..."}]
-}
-```"""
     try:
-        client = genai.Client()
-        
-        # Usa el modelo enviado en el payload, o el global configurado
-        model_name = req.modelo_elegido
-        if not model_name:
-            settings = load_app_settings()
-            model_name = settings.get("default_model", "gemini-3.1-flash-lite")
-            
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[
-                types.Part.from_bytes(data=img_bytes, mime_type='image/jpeg'),
-                prompt
-            ]
-        )
-        texto_limpio = response.text
-        json_data = {}
-        
-        json_match = re.search(r'```json\s*(\{.*?\})\s*```', texto_limpio, re.DOTALL | re.IGNORECASE)
-        if not json_match:
-            json_match = re.search(r'(\{[\s\n]*"filename".*?\})', texto_limpio, re.DOTALL | re.IGNORECASE)
+        texto, _ = await llm_service.extract_task_from_image(img_bytes, modelo)
+        json_data, texto_limpio = llm_service.extract_json_block(texto)
 
-        if json_match:
-            json_str = json_match.group(1)
-            texto_limpio = texto_limpio.replace(json_match.group(0), "").strip()
-            try:
-                json_data = json.loads(json_str)
-            except Exception:
-                pass
-                
-        suggested_filename = json_data.get("filename", f"Tarea_Captura_{datetime.now().strftime('%Y%m%d%H%M%S')}.md").replace("/", "-")
+        suggested_filename = json_data.get(
+            "filename",
+            f"Tarea_Captura_{datetime.now().strftime('%Y%m%d%H%M%S')}.md",
+        ).replace("/", "-")
         if not suggested_filename.endswith(".md"):
             suggested_filename += ".md"
-            
         suggested_folder = json_data.get("folder", "01 Proyectos/Tareas")
-        
-        # Save to Obsidian
-        settings = load_app_settings()
-        obsidian_path = settings.get("obsidian_vault_path", "")
-        if obsidian_path and os.path.exists(obsidian_path):
-            target_dir = os.path.join(obsidian_path, suggested_folder)
-            os.makedirs(target_dir, exist_ok=True)
-            obs_file = os.path.join(target_dir, suggested_filename)
-            try:
-                with open(obs_file, "w", encoding="utf-8") as f:
-                    f.write(texto_limpio)
-            except Exception: pass
-            
+
+        # Guardar .md local
         with open(os.path.join(RESUMENES_DIR, suggested_filename), "w", encoding="utf-8") as f:
             f.write(texto_limpio)
-            
-        if "calendario" in json_data and json_data["calendario"]:
-            tareas_meta_filepath = os.path.join(RESUMENES_DIR, "tareas_meta.json")
-            tareas_data = []
-            if os.path.exists(tareas_meta_filepath):
-                with open(tareas_meta_filepath, "r", encoding="utf-8") as fm:
-                    try: tareas_data = json.load(fm)
-                    except: pass
-            
-            import uuid
-            for t in json_data["calendario"]:
-                t["id"] = str(uuid.uuid4())
-                t["origen"] = suggested_filename
-                t["completada"] = False
-                tareas_data.append(t)
-                
-            with open(tareas_meta_filepath, "w", encoding="utf-8") as fm:
-                json.dump(tareas_data, fm, ensure_ascii=False, indent=2)
-                
+
+        # Guardar en Obsidian
+        await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
+
+        # Guardar tareas en tareas_meta.json
+        if json_data.get("calendario"):
+            await export_service.generate_ics_and_save_tasks(
+                json_data["calendario"], suggested_filename, suggested_filename
+            )
+
         return {"message": "Tarea extraída y guardada correctamente", "filename": suggested_filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Servir frontend estáticamente (Debe ir siempre al final)
+
+# ===========================================================================
+# Frontend estático (SIEMPRE al final)
+# ===========================================================================
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

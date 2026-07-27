@@ -1,5 +1,5 @@
 # Estado Actual del Proyecto — AsistenteClases
-> Generado el 2026-07-27 mediante auditoría directa del código fuente. Cero alucinaciones.
+> Última actualización: 2026-07-27. Refleja la arquitectura post-refactor modular (v3).
 
 ---
 
@@ -8,369 +8,332 @@
 **AsistenteClases** es una aplicación web local (localhost:8000) que funciona como asistente académico personal. Su flujo central es: **captura de audio de clase → procesamiento por IA → almacenamiento de resúmenes estructurados → consulta mediante chat**.
 
 El sistema tiene tres capas:
-1. **Backend** — `server.py` (FastAPI, Python, 996 líneas). Toda la lógica de negocio, llamadas a Gemini y manejo de archivos.
-2. **Frontend** — `frontend/index.html` (SPA monolítica, un solo archivo de 74 KB).
-3. **Extensión de Chrome** — carpeta `extension/`. Captura el audio de la pestaña y lo sube al backend.
+1. **Backend** — `server.py` (FastAPI, Python, ~340 líneas). Únicamente enrutador: define rutas y delega a servicios.
+2. **Frontend** — `frontend/index.html` (SPA monolítica, un solo archivo de ~74 KB).
+3. **Extensión de Chrome** — carpeta `extension/`. Captura audio de la pestaña y lo sube al backend.
 
-**Dependencias reales** (`requirements.txt`): `fastapi`, `uvicorn`, `python-multipart`, `google-genai`, `python-dotenv`, `genanki`, `icalendar`, `yt-dlp`.
-> `tenacity` se usa en código para reintentos pero **no está en requirements.txt**.
+**Stack de dependencias** (`requirements.txt`): `fastapi`, `uvicorn`, `python-multipart`, `google-genai`, `python-dotenv`, `tenacity`, `icalendar`, `yt-dlp`.
 
 ---
 
-## 2. Flujo Principal de Procesamiento (El Pipeline)
+## 2. Arquitectura de Módulos
 
-El pipeline tiene **dos puntos de entrada** y un núcleo compartido.
+```
+AsistenteClases/
+│
+├── server.py              Enrutador FastAPI puro. Sin lógica de negocio.
+├── database.py            Gestor de persistencia con asyncio.Lock por archivo JSON.
+├── nlp_engine.py          Motor NLP local (filtro temporal + scoring de relevancia).
+│
+├── services/
+│   ├── audio_service.py   Preprocesamiento FFmpeg (remove_silences, cleanup_temp).
+│   ├── llm_service.py     Todo el SDK de Gemini: prompts, RAG, chat, stats, image tasks.
+│   └── export_service.py  Guardado Markdown, Obsidian, ICS, reglas del profesor.
+│
+├── frontend/
+│   └── index.html         Dashboard web (SPA monolítica).
+│
+└── extension/             Extensión de Chrome (Manifest V3).
+    ├── manifest.json
+    ├── background.js      Service Worker orquestador.
+    ├── offscreen.js       MediaRecorder + upload al servidor.
+    ├── popup.html
+    └── popup.js
+```
+
+### `database.py` — Protección de Concurrencia
+
+Clase `JsonStore` con `asyncio.Lock()`. Cada archivo JSON del sistema tiene su propia instancia:
+
+| Instancia | Archivo |
+|---|---|
+| `settings_store` | `settings.json` |
+| `materias_store` | `materias.json` |
+| `stats_store` | `stats.json` |
+| `meta_store` | `resumenes/resumenes_meta.json` |
+| `tareas_store` | `resumenes/tareas_meta.json` |
+
+Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o `store.update(fn)`. Ningún endpoint hace `open('archivo.json', 'w')` directamente.
+
+---
+
+## 3. Flujo Principal de Procesamiento (El Pipeline)
 
 ### Punto de Entrada A — Extensión de Chrome (Ruta Principal)
 
 ```
 [Usuario abre clase en Google Meet]
-  → popup.js: usuario presiona "Grabar"
+  → popup.js: presiona "Grabar"
   → background.js: obtiene streamId via chrome.tabCapture
-  → offscreen.js: MediaRecorder graba audio/webm en memoria (array de Blobs)
-  → [Al detener] offscreen.js ensambla Blob y llama uploadAudio()
+  → offscreen.js: MediaRecorder graba audio/webm en memoria
+  → [Al detener] offscreen.js ensambla Blob → uploadAudio()
   → POST http://localhost:8000/upload (multipart: audio + custom_name opcional)
-  → server.py /upload: guarda en audios/ como meet_YYYYMMDD_HHMMSS[_nombre].webm
-  → El audio queda en audios/ esperando procesamiento manual por el usuario
-```
 
-**Fallback si el servidor no responde:**
-```
-offscreen.js: fetch() falla → saveAudioLocallyFallback()
-  → convierte Blob a base64
-  → divide en chunks de 5 MB (límite IPC de Chrome)
-  → background.js ensambla chunks → chrome.downloads.download()
-  → Se descarga .webm a la carpeta local configurada (default: Backups_Clases/)
-```
+  VALIDACIÓN DE TAMAÑO (Fase 4):
+  → server.py lee el contenido en memoria
+  → Si tamaño > max_audio_upload_mb (settings) → HTTP 413
+  → Si OK → guarda en audios/meet_YYYYMMDD_HHMMSS[_nombre].webm
 
-### Punto de Entrada B — Descarga desde Google Drive
-
-```
-POST /api/download-drive { url }
-  → yt-dlp intenta descarga con cookies del browser (Brave por defecto)
-  → Reintenta con authuser=0, 1, 2 si recibe 403
-  → Si exitoso: archivo en audios/ + BackgroundTask que llama generate_summary()
-    inmediatamente (materia_id="default", modelo=gemini-3.5-flash)
-  → Si 403: error HTTP 403 con instrucción de usar la extensión
-  → Único flujo donde la generación ocurre automáticamente sin revisión humana
+  FALLBACK (si servidor no responde):
+  → saveAudioLocallyFallback() → base64 en chunks de 5 MB → chrome.downloads
+  → Descarga local en Backups_Clases/ (carpeta configurable)
 ```
 
 ### Núcleo — Generación del Resumen (POST /api/generate)
 
 ```
 { filename, materia_id, modelo_elegido }
-
-1. PROMPT:
-   Si materia_id != "default" → busca en materias.json → usa prompt_personalizado
-   Si materia_id == "default" → prompt_usar = "" (vacío)
-   Mezcla: Rol PKM + Fecha actual + Contexto de materia + Reglas Obsidian PARA
-   Solicita bloque JSON al final: filename, folder, anki_cards, calendario, nuevas_reglas_profesor
-
-2. PRE-PROCESAMIENTO (FFmpeg):
-   Elimina silencios > 2s a -30dB → guarda como audios/temp_{filename}
-   Si FFmpeg falla → usa archivo original sin preprocesar
-   El temp se borra inmediatamente después del upload a Gemini
-
-3. UPLOAD A GEMINI FILE API:
-   client.files.upload(file=..., mime_type='audio/webm')
-   Poll cada 3s hasta state != "PROCESSING"
-   Si state == "FAILED" → lanza excepción
-
-4. LLAMADA A GEMINI (con reintento tenacity):
-   stop_after_attempt(5), wait_exponential(multiplier=2, min=5, max=60)
-   max_output_tokens: 8192
-   Si respuesta < 50 chars → fuerza reintento
-   Actualiza stats.json
-
-5. RETORNO al frontend:
-   { content: texto_completo_con_JSON_embebido, stats: ... }
-   El usuario revisa el contenido (Human-in-the-Loop) y aprueba
+  → server.py delega a:
+    1. materias_store.read() → obtiene prompt_personalizado de la materia
+    2. audio_service.remove_silences(filepath) → FFmpeg silenceremove
+    3. llm_service.generate_summary_from_audio(upload_path, prompt, modelo)
+       → Gemini File API upload → poll hasta ACTIVE → generate_content (retry x5)
+    4. audio_service.cleanup_temp() → borra el .webm temporal
+  → Retorna { content: texto_con_JSON_embebido, stats }
 ```
 
 ### Etapa Final — Guardado (POST /api/save)
 
 ```
 { filename, content, materia_id }
-
-1. NAMING:
-   meet_YYYYMMDD_HHMMSS.webm → resumen__{materia_id}__meet_YYYYMMDD_HHMMSS.md
-
-2. EXTRACCIÓN DEL BLOQUE JSON:
-   Regex: ```json ... ``` (fallback: busca {"filename":... sin backticks)
-   El bloque JSON se elimina del texto antes de guardarlo
-
-3. GUARDADO EN OBSIDIAN (si ruta configurada):
-   Crea carpeta vault/suggested_folder/ y escribe suggested_filename
-   Si falla → silencioso (print + continúa)
-
-4. GUARDADO LOCAL:
-   resumenes/{suggested_filename} — Markdown limpio
-   resumenes/resumenes_meta.json — actualizado con metadata
-
-5. ANKI (si enable_anki=True y hay anki_cards):
-   genanki → exportaciones/{base}.apkg
-   IDs de deck aleatorios en cada guardado (no persistentes)
-
-6. CALENDARIO ICS (si hay "calendario" en JSON):
-   exportaciones/{base}.ics (eventos de día completo, sin hora)
-   + agrega entradas a resumenes/tareas_meta.json
-
-7. REGLAS DEL PROFESOR (si hay "nuevas_reglas_profesor"):
-   APPEND en memoria_ia/reglas_{materia_name}.md
-   Formato: ### Regla extraída el YYYY-MM-DD: {tema}\n{metodo}\n---
-
-8. MOVER AUDIO A PAPELERA:
-   audios/{filename} → papelera_audios/{filename}
-   Retención máxima: 10 archivos (los más viejos se eliminan)
+  → server.py:
+    1. llm_service.extract_json_block(content) → separa JSON del Markdown
+    2. Extrae tags del Frontmatter YAML con regex
+    3. export_service.save_markdown_and_metadata(...) → .md local + meta_store.update()
+    4. export_service.save_to_obsidian(...) → copia a bóveda si ruta existe
+    5. Si json_data["calendario"]: export_service.generate_ics_and_save_tasks(...)
+       → .ics en exportaciones/ + tareas_store.update()
+    6. Si json_data["nuevas_reglas_profesor"]: export_service.save_teacher_rules(...)
+       → append en memoria_ia/reglas_{materia}.md
+    7. shutil.move(audio → papelera_audios/) + retención de 10 archivos
+  → Retorna { message, md_filename, anki_file: null, ics_file }
 ```
+
+> **Nota:** `anki_file` siempre es `null`. La generación de Anki fue eliminada completamente.
 
 ---
 
-## 3. Estructura de Directorios y Archivos
+## 4. Estructura de Directorios y Archivos
 
 ```
 AsistenteClases/
-├── server.py              Backend FastAPI (996 líneas, único archivo de lógica)
-├── nlp_engine.py          Motor NLP local para el RAG
-├── materias.json          BD de asignaturas (array JSON)
-├── settings.json          Configuración global
-├── stats.json             Uso de modelos por día (se resetea diario)
-│
-├── audios/                COLA DE ESPERA. .webm pendientes. Vacía en runtime normal.
-│                          Contiene temp_*.webm durante el procesado (vida muy corta)
-│
-├── papelera_audios/       Audios ya procesados. Límite: 10 archivos.
-│
-├── resumenes/             CORAZÓN DE DATOS
-│   ├── *.md               Resúmenes (Markdown con Frontmatter YAML)
-│   ├── resumenes_meta.json Índice central de todos los resúmenes
-│   └── tareas_meta.json   Lista de tareas/eventos extraídos
-│
-├── memoria_ia/            Reglas del profesor por materia. ACTUALMENTE VACÍO.
-│   └── reglas_{materia}.md (se crea al detectar nuevas_reglas_profesor)
-│
-├── exportaciones/         Archivos descargables. ACTUALMENTE VACÍO.
-│   ├── *.apkg             Mazos de Anki
-│   └── *.ics              Calendarios iCalendar
-│
-├── extension/             Extensión de Chrome (Manifest V3)
-└── frontend/
-    └── index.html         Dashboard web (SPA monolítica)
+├── audios/                COLA DE ESPERA. .webm pendientes. Archivos temp_*.webm
+│                          de vida muy corta durante el procesado.
+├── papelera_audios/       Audios procesados. Límite: 10 archivos.
+├── resumenes/             CORAZÓN DE DATOS.
+│   ├── *.md               Resúmenes (Markdown con Frontmatter YAML).
+│   ├── resumenes_meta.json Índice central (gestionado por meta_store con Lock).
+│   └── tareas_meta.json   Tareas/eventos (gestionado por tareas_store con Lock).
+├── memoria_ia/            Reglas del profesor por materia.
+│   └── reglas_{materia}.md (append al detectar nuevas_reglas_profesor)
+└── exportaciones/         Archivos descargables.
+    └── *.ics              Calendarios iCalendar.
 ```
 
 ### Formatos internos clave
 
-**Resúmenes .md:**
+**Resúmenes .md** (el bloque JSON de Gemini se elimina antes de guardar):
 ```markdown
 ---
 tipo: [teoria | cheatsheet | tarea]
 estado: [borrador | pendiente]
 tags: [tag1, tag2]
 ---
-[Cuerpo con callouts de Obsidian: > [!summary], > [!example], etc.]
+[Cuerpo con callouts de Obsidian]
 [[Enlace MOC relacionado]]
 ```
-> El bloque JSON que genera Gemini se **elimina** del .md antes de guardarlo.
 
-**resumenes_meta.json** (dict, clave = nombre archivo .md interno):
+**`resumenes_meta.json`** (dict, clave = nombre archivo .md interno):
 ```json
 {
   "resumen__{id}__meet_FECHA.md": {
     "filename": "Titulo Googleable.md",
     "folder": "02 Recursos/Tema",
     "tags": ["tag1"],
-    "condensado": "Resumen autogenerado de la clase.",
+    "condensado": "Primeros 150 chars del contenido...",
     "fecha": "YYYY-MM-DD",
     "resumen": "...contenido completo del markdown..."
   }
 }
 ```
-> **BUG CONOCIDO:** El campo `condensado` siempre se guarda con el texto fijo
-> `"Resumen autogenerado de la clase."`. El valor real generado por Gemini no se persiste.
 
-**tareas_meta.json** (array):
+**`settings.json`**:
+```json
+{
+  "obsidian_vault_path": "/ruta/boveda/",
+  "browser_cookie_source": "brave",
+  "max_audio_upload_mb": 500,
+  "default_model": "gemini-3.1-flash-lite"
+}
+```
+
+**`tareas_meta.json`** (array):
 ```json
 [{ "titulo":"...", "fecha_YYYY_MM_DD":"...", "descripcion":"...",
    "id":"uuid", "origen":"archivo.md", "completada": false }]
 ```
 
-**settings.json:**
-```json
-{
-  "obsidian_vault_path": "/ruta/boveda/",
-  "enable_anki": false,
-  "browser_cookie_source": "brave",
-  "max_audio_upload_mb": 500
-}
-```
-> `max_audio_upload_mb` se guarda pero **no se usa en ninguna validación del servidor**.
-
 ---
 
-## 4. Módulos y Funcionalidades Clave
+## 5. Módulos y Funcionalidades Clave
 
-### 4.1 Gestión de Asignaturas
+### 5.1 Gestión de Asignaturas (Materias)
 
 - CRUD completo: `GET/POST /api/materias`, `PUT/DELETE /api/materias/{id}`.
-- El `prompt_personalizado` **reemplaza** el contexto vacío en el prompt de Gemini (no se concatena con el prompt base, sino que llena el slot `{prompt_usar}`).
-- El `materia_id` (UUID) se incrusta en el nombre del archivo .md del resumen, permitiendo filtrado en el chat.
+- Persistencia via `materias_store` con Lock.
+- El `prompt_personalizado` llena el slot `{prompt_usar}` del prompt de Gemini.
+- El `materia_id` (UUID) se incrusta en el nombre del .md para filtrado en el chat.
 - **4 materias activas:** Sistemas Operativos 2, Modelado y Simulación 1, Ingeniería Económica 1, Ética Profesional.
 
-### 4.2 Memoria Dinámica del Profesor
+### 5.2 Memoria Dinámica del Profesor
 
-- Gemini extrae reglas en el campo `nuevas_reglas_profesor` del JSON.
-- Se acumulan con APPEND en `memoria_ia/reglas_{materia_name}.md`.
-- El directorio `memoria_ia/` está **actualmente vacío**.
-- En el chat, si existe el archivo de reglas de la materia, su contenido se inyecta al `system_instruction` antes de llamar a Gemini.
+- Gemini extrae reglas en `nuevas_reglas_profesor` del JSON embebido.
+- `export_service.save_teacher_rules()` acumula en `memoria_ia/reglas_{materia}.md` con APPEND.
+- Directorio `memoria_ia/` **actualmente vacío** (ninguna clase ha generado reglas aún).
+- En el chat, `llm_service.chat_with_rag()` lee ese archivo e inyecta su contenido al `system_instruction`.
 
-### 4.3 Generación Asistida de Prompts
+### 5.3 Generación Asistida de Prompts
 
-- `POST /api/generate-prompt { descripcion }` → llama a Gemini con un prompt de "ingeniero de prompts" → devuelve texto estructurado [Rol][Contexto][Tarea][Formato].
-- Sirve para que el usuario construya el `prompt_personalizado` de una materia.
+- `POST /api/generate-prompt` → `llm_service.generate_prompt_for_materia()`.
+- Transforma descripción natural en prompt estructurado [Rol][Contexto][Tarea][Formato].
 
-### 4.4 Integración Obsidian
+### 5.4 Integración Obsidian
 
-- El servidor escribe directamente el .md en la ruta configurada en `settings.obsidian_vault_path`.
-- La carpeta destino y el nombre del archivo los propone Gemini en el JSON (estructura PARA: `02 Recursos/Tema`).
-- Si la ruta no está montada: falla silenciosamente y continúa con el guardado local.
+- `export_service.save_to_obsidian()` escribe directamente el .md en la bóveda configurada.
+- La carpeta destino y el nombre los propone Gemini en el JSON (estructura PARA: `02 Recursos/Tema`).
+- Falla silenciosamente si la ruta no está montada.
 
-### 4.5 Integración Anki
+### 5.5 Integración Calendario (ICS)
 
-- Actualmente **desactivada** (`enable_anki: false` en settings.json).
-- Cuando activa: `genanki` genera `.apkg` en `exportaciones/`. IDs aleatorios en cada guardado.
+- `export_service.generate_ics_and_save_tasks()` genera `.ics` y persiste en `tareas_meta.json`.
+- El dashboard permite marcar tareas como completadas (`PUT /api/tareas/{id}`).
 
-### 4.6 Integración Calendario
+### 5.6 Extractor Visual de Tareas (Captura de Pantalla)
 
-- Eventos de `calendario` del JSON → archivo `.ics` en `exportaciones/` + entradas en `tareas_meta.json`.
-- Solo fecha (sin hora). El dashboard permite marcar tareas como completadas.
-
-### 4.7 Extractor Visual de Tareas
-
-- Pestaña "Captura" de la extensión → `chrome.tabs.captureVisibleTab()` → JPEG de la pantalla.
-- `POST /api/extract-task { image_base64 }` → Gemini analiza la imagen con modelo `gemini-3.5-flash` (hardcodeado).
+- Pestaña "Captura" de la extensión → `chrome.tabs.captureVisibleTab()` → JPEG.
+- `POST /api/extract-task { image_base64, modelo_elegido }` → `llm_service.extract_task_from_image()`.
+- Usa el modelo enviado en el payload, con fallback a `settings.default_model`.
 - Resultado: .md en `resumenes/`, copia en Obsidian, entradas en `tareas_meta.json`.
-- **No pasa por la cola de audios pendientes ni por `/api/generate`.**
 
-### 4.8 Edición de Resúmenes
+### 5.7 Validación de Tamaño de Upload (OOM-safe)
 
-- `PUT /api/summaries/{filename}` sobreescribe el .md **y** actualiza el campo `resumen` en `resumenes_meta.json`.
+El endpoint `POST /upload` implementa **dos capas de defensa** para nunca cargar un archivo gigante en RAM:
+
+**Capa 1 — `Content-Length` header (O(1), cero RAM):**
+Antes de leer ningún byte, se inspecciona el header `Content-Length` de la request. Si el cliente declara un tamaño superior a `max_audio_upload_mb`, se devuelve **HTTP 413** inmediatamente sin tocar el cuerpo de la petición.
+
+**Capa 2 — Streaming por chunks de 1 MB (fallback para transferencias chunked):**
+Cubre el caso en que el cliente no envía `Content-Length` (ej. transferencias chunked). El archivo se escribe en disco en fragmentos de 1 MB. Si la suma acumulada supera el límite, se interrumpe la escritura, **se borra el archivo parcial** del disco y se devuelve HTTP 413. La RAM máxima consumida en cualquier punto es exactamente 1 MB.
+
+Si ocurre cualquier otro error de IO durante la escritura, el archivo parcial también se borra antes de responder HTTP 500.
+
+### 5.8 Estadísticas de Uso
+
+- `llm_service.update_stats()` usa `stats_store.update()` (con Lock) en cada llamada a Gemini.
+- Se resetea automáticamente si la fecha del archivo no coincide con hoy.
+- `GET /api/stats` expone los contadores del día.
 
 ---
 
-## 5. El Motor de Chat y RAG
+## 6. El Motor de Chat y RAG
 
-RAG ligero sin embeddings ni base de datos vectorial. Usa coincidencia de palabras clave y metadatos.
+Implementado en `llm_service.chat_with_rag()`. RAG ligero sin embeddings.
 
 ### Flujo `POST /api/chat { mensaje, materia_id, modelo_elegido }`
 
-**Paso 1 — Selección por materia:**
-| materia_id | Archivos seleccionados |
+**Paso 1 — Filtrado por materia** (desde `meta_store`):
+| materia_id | Documentos seleccionados |
 |---|---|
-| `"todas"` | Todos los .md de resumenes/ |
-| `"default"` | Archivos con `__default__` en el nombre O sin `__` (formato antiguo) |
-| `{uuid}` | Archivos con `__{uuid}__` en el nombre |
+| `"todas"` | Todos los registros en resumenes_meta.json |
+| `"default"` | Registros con `__default__` en clave, o sin `__` |
+| `{uuid}` | Registros con `__{uuid}__` en clave |
 
 **Paso 2 — Filtro temporal** (`nlp_engine.parse_temporal_filter`):
-| Expresión en el mensaje | Rango |
+| Expresión | Rango |
 |---|---|
 | "clase pasada" / "última clase" | Últimos 7 días |
 | "esta semana" | Desde el lunes de la semana actual |
 | "semana pasada" | Semana anterior completa |
 | Nombre de mes en español | Todo ese mes del año actual |
-| Sin expresión temporal | Sin filtro (None) |
+| Sin expresión temporal | Sin filtro |
 
-**Paso 3 — Índice condensado cronológico:**
-Lista de `"- YYYY-MM-DD: {condensado}"` de los documentos filtrados.
-> Inutilizado en la práctica porque el campo `condensado` siempre es la cadena fija.
+**Paso 3 — Índice condensado** (lista cronológica de `condensado` por documento).
 
-**Paso 4 — Scoring de relevancia** (`nlp_engine.score_relevance`):
+**Paso 4 — Scoring** (`nlp_engine.score_relevance`):
 ```
-query_tokens = tokenizar(mensaje) - stopwords_español
-score += coincidencia_con_tags * 3.0
-score += coincidencia_con_texto_resumen * 1.0
-threshold = 1.0, máximo 8 documentos devueltos
+score += coincidencia_tags * 3.0
+score += coincidencia_texto * 1.0
+threshold = 1.0, máximo 8 documentos en contexto
 ```
 
-**Paso 5 — Contexto enviado a Gemini:**
+**Paso 5 — Contexto a Gemini**:
 ```python
 contents = [
-  "ÍNDICE CONDENSADO:\n" + indice_condensado,
-  "APUNTES COMPLETOS:\n" + resumenes_completos,  # top 8 relevantes
-  req.mensaje
+  "ÍNDICE CONDENSADO:\n" + indice,
+  "APUNTES COMPLETOS:\n" + resumenes_completos,  # top 8
+  mensaje_usuario
 ]
 ```
-El texto de los resúmenes viene del campo `resumen` de `resumenes_meta.json` (no se leen los .md directamente).
 
-**Paso 6 — Inyección de reglas del profesor:**
-Si `memoria_ia/reglas_{materia_id}.md` existe → se agrega al `system_instruction`.
-
-**Limitaciones actuales:**
-- El índice condensado no aporta información real (bug del campo fijo).
-- Solo overlap de palabras (no semántica real).
-- Máximo 8 documentos en contexto.
+**Paso 6 — Reglas del profesor**: si `memoria_ia/reglas_{materia}.md` existe, se inyecta al `system_instruction`.
 
 ---
 
-## 6. La Extensión de Chrome en Detalle
+## 7. La Extensión de Chrome
 
-**Arquitectura Manifest V3:** tres componentes que se comunican por mensajes.
+**Arquitectura Manifest V3:**
 
 | Archivo | Rol |
 |---|---|
-| `background.js` | Service Worker. Orquestador. Estados, timers, alarmas de silencio. |
-| `offscreen.js` | Documento offscreen. MediaRecorder, AudioContext, upload al servidor. |
+| `background.js` | Service Worker. Orquestador de estados, timers y alarmas. |
+| `offscreen.js` | MediaRecorder, AudioContext, upload + fallback local. |
 | `popup.html/js` | UI: pestañas "Grabar Audio", "Captura de Tarea", panel Ajustes. |
 
-**Ciclo de estados por tabId** (en `chrome.storage.local.recordingStates`):
+**Ciclo de estados** (`chrome.storage.local.recordingStates[tabId]`):
 `idle → recording ↔ paused → uploading → completed | fallback_saved | error → idle`
 
-**Auto-Stop por silencio:**
-- `chrome.tabs.onUpdated` detecta cambio en `tab.audible`.
-- Si la pestaña graba y se vuelve inaudible → `chrome.alarms.create("silence_{tabId}", delayInMinutes)`.
-- Si vuelve a sonar → cancela la alarma.
-- Si se dispara → `stopRecording(tabId)`.
+**Auto-Stop por silencio**: detecta `tab.audible` vía `chrome.tabs.onUpdated`. Crea alarma con delay configurable. Si el audio vuelve, cancela la alarma.
 
-**Ghost Mode:**
-- Cuando activo: `gainNode.gain.value = 0` en AudioContext. El audio se graba pero no se escucha.
+**Ghost Mode**: `gainNode.gain.value = 0` → graba sin reproducir por altavoces.
 
-**Backup local (panel Ajustes):**
-- `backupSubfolder`: carpeta destino (default `Backups_Clases/`).
-- `backupAskAlways`: mostrar diálogo "Guardar como" en cada backup.
-
----
-
-## 7. Scripts y Archivos Auxiliares
-
-| Archivo | Estado | Descripción |
-|---|---|---|
-| `nlp_engine.py` | Activo (módulo) | Importado por server.py. Dos funciones: `parse_temporal_filter` y `score_relevance`. Sin dependencias externas. |
-| `test_file.py` | Inactivo | Archivo de prueba manual, no integrado al servidor. |
-| `test_models.py` | Inactivo | Archivo de prueba de conexión a la API de Gemini. |
-| `model_output.txt` | Inactivo | Salida de prueba guardada manualmente. No es leído por ningún módulo. |
+**Configuración de backup local**: carpeta destino (`Backups_Clases/` por defecto) y opción "Guardar como" en cada backup.
 
 ---
 
 ## 8. Tabla de Endpoints
 
-| Método | Ruta | Descripción |
+| Método | Ruta | Servicio |
 |---|---|---|
-| GET | `/api/stats` | Estadísticas de tokens del día |
-| GET | `/api/models` | Lista modelos Gemini disponibles |
-| GET/POST | `/api/materias` | Listar / Crear materia |
-| PUT/DELETE | `/api/materias/{id}` | Editar / Eliminar materia |
-| GET/PUT | `/api/settings` | Leer / Actualizar configuración global |
-| GET/DELETE | `/api/audios` `/api/audios/{f}` | Listar / Eliminar audio pendiente |
-| POST | `/upload` | Subir audio desde extensión (multipart) |
-| POST | `/api/generate` | Generar resumen de un audio con Gemini |
-| POST | `/api/save` | Guardar resumen aprobado + artefactos |
-| GET | `/api/summaries` | Listar resúmenes guardados |
-| GET/PUT/DELETE | `/api/summaries/{f}` | Leer / Editar / Eliminar resumen |
-| POST | `/api/chat` | Chat RAG con los resúmenes |
-| POST | `/api/generate-prompt` | Generar prompt con IA |
-| GET/PUT | `/api/tareas` `/api/tareas/{id}` | Listar tareas / Marcar completada |
-| POST | `/api/extract-task` | Extraer tarea desde captura de pantalla |
-| POST | `/api/download-drive` | Descargar audio desde Google Drive |
-| GET | `/api/exportaciones/{f}` | Descargar .apkg o .ics |
-| GET | `/info` | Health check |
-| GET | `/media/*` | Servir archivos de audio (static) |
-| GET | `/*` | Servir el frontend (index.html) |
+| GET | `/api/stats` | `llm_service.get_or_reset_stats` |
+| GET | `/api/models` | `llm_service.list_available_models` |
+| GET/POST | `/api/materias` | `materias_store` |
+| PUT/DELETE | `/api/materias/{id}` | `materias_store` |
+| GET/PUT | `/api/settings` | `settings_store` |
+| GET/DELETE | `/api/audios` `/api/audios/{f}` | filesystem directo |
+| POST | `/upload` | filesystem + validación 413 |
+| POST | `/api/generate` | `audio_service` + `llm_service` |
+| POST | `/api/save` | `llm_service` + `export_service` + stores |
+| GET | `/api/summaries` | filesystem |
+| GET/PUT/DELETE | `/api/summaries/{f}` | filesystem + `meta_store` |
+| POST | `/api/chat` | `llm_service.chat_with_rag` |
+| POST | `/api/generate-prompt` | `llm_service.generate_prompt_for_materia` |
+| GET/PUT | `/api/tareas` `/api/tareas/{id}` | `tareas_store` |
+| POST | `/api/extract-task` | `llm_service` + `export_service` |
+| GET | `/api/exportaciones/{f}` | filesystem |
+| GET | `/info` | health check |
+| GET | `/media/*` | static (audios/) |
+| GET | `/*` | static (frontend/) |
+
+---
+
+## 9. Cambios Respecto a la Versión Anterior (v2 → v3)
+
+| Área | Antes (v2) | Ahora (v3) |
+|---|---|---|
+| Arquitectura | Monolítico (~950 líneas en server.py) | Modular: server + database + 3 services |
+| Concurrencia | `open('file.json', 'w')` sin protección | `asyncio.Lock()` por archivo JSON |
+| Anki | Generaba `.apkg` con IDs aleatorios (bug) | **Eliminado completamente** |
+| `requirements.txt` | Incluía `genanki`, omitía `tenacity` | Corregido |
+| Upload tamaño | `max_audio_upload_mb` guardado pero ignorado | Validación activa → HTTP 413 |
+| `condensado` en meta | Siempre cadena fija (bug) | Primeros 150 chars del contenido real |
+| `enable_anki` | Campo en settings y UI | **Eliminado** |

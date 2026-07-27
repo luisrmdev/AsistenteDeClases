@@ -562,13 +562,7 @@
                                     <p class="text-xs text-textMuted mt-3 leading-relaxed">Los resúmenes generados se guardarán automáticamente en esta carpeta local de tu equipo.</p>
                                 </div>
                                 
-                                <div class="pt-4 border-t border-borderGray/60">
-                                    <label class="flex items-center gap-3 cursor-pointer w-fit group">
-                                        <input type="checkbox" id="config-enable-anki" class="w-4 h-4 rounded border-borderGray text-accent focus:ring-accent accent-accent cursor-pointer">
-                                        <span class="text-sm font-bold text-charcoal group-hover:text-accent transition-colors">Generar Tarjetas de Memoria (Anki)</span>
-                                    </label>
-                                    <p class="text-xs text-textMuted mt-2 ml-7 leading-relaxed">Si desactivas esto, la IA no extraerá tarjetas y el resumen tardará menos en procesarse.</p>
-                                </div>
+
 
                                 <div class="pt-4 border-t border-borderGray/60">
                                     <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Navegador para extracción de Drive (Bypass)</label>
@@ -631,9 +625,6 @@
                     </div>
 
                     <div id="export-buttons" class="mt-6 flex flex-col md:flex-row justify-between items-center gap-4 hidden">
-                        <a id="btn-download-anki" href="#" target="_blank" class="flex-1 px-6 py-2.5 btn-secondary text-sm font-medium text-center !border-[#86EFAC] !text-[#14532D] dark:!text-[#86EFAC] dark:!border-[#14532D] hidden">
-                            Descargar Mazos Anki (.apkg)
-                        </a>
                         <a id="btn-download-ics" href="#" target="_blank" class="flex-1 px-6 py-2.5 btn-secondary text-sm font-medium text-center !border-[#93C5FD] !text-[#1E3A5F] dark:!text-[#93C5FD] dark:!border-[#1E3A5F] hidden">
                             Añadir a Calendario (.ics)
                         </a>
@@ -778,7 +769,7 @@
                 .then(r => r.json())
                 .then(data => {
                     document.getElementById('config-obsidian-path').value = data.obsidian_vault_path || '';
-                    document.getElementById('config-enable-anki').checked = data.enable_anki !== false;
+
                     document.getElementById('config-max-audio-mb').value = data.max_audio_upload_mb || 500;
                     
                     if (data.browser_cookie_source) {
@@ -795,7 +786,6 @@
         
         function saveAppSettings() {
             const path = document.getElementById('config-obsidian-path').value;
-            const anki = document.getElementById('config-enable-anki').checked;
             const browserSource = document.getElementById('config-browser-cookie').value;
             const maxAudioMB = parseInt(document.getElementById('config-max-audio-mb').value) || 500;
             const selectedModel = document.getElementById('model-selector').value;
@@ -809,8 +799,7 @@
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    obsidian_vault_path: path, 
-                    enable_anki: anki,
+                    obsidian_vault_path: path,
                     browser_cookie_source: browserSource,
                     max_audio_upload_mb: maxAudioMB,
                     default_model: selectedModel
@@ -1250,11 +1239,7 @@
                 actionsContainer.classList.add('hidden');
                 exportContainer.classList.remove('hidden');
                 
-                if (data.anki_file) {
-                    const btnAnki = document.getElementById('btn-download-anki');
-                    btnAnki.href = '/api/exportaciones/' + data.anki_file;
-                    btnAnki.classList.remove('hidden');
-                }
+
                 
                 if (data.ics_file) {
                     const btnIcs = document.getElementById('btn-download-ics');
@@ -1276,7 +1261,7 @@
             if(actionsContainer && exportContainer) {
                 actionsContainer.classList.remove('hidden');
                 exportContainer.classList.add('hidden');
-                document.getElementById('btn-download-anki').classList.add('hidden');
+
                 document.getElementById('btn-download-ics').classList.add('hidden');
             }
         }
