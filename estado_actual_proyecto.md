@@ -167,10 +167,13 @@ tags: [tag1, tag2]
 }
 ```
 
-**`tareas_meta.json`** (array):
+**`tarjetas_informativas.json`** (array):
 ```json
-[{ "titulo":"...", "fecha_YYYY_MM_DD":"...", "descripcion":"...",
-   "id":"uuid", "origen":"archivo.md", "completada": false }]
+[{
+  "id": "uuid", "materia_id": "...", "fecha_creacion": "YYYY-MM-DD",
+  "origen_md": "archivo.md", "tipo": "tarea|examen|aviso",
+  "contenido": "...", "referencia_temporal": "...", "nota_personal": ""
+}]
 ```
 
 ---
@@ -203,17 +206,18 @@ tags: [tag1, tag2]
 - La carpeta destino y el nombre los propone Gemini en el JSON (estructura PARA: `02 Recursos/Tema`).
 - Falla silenciosamente si la ruta no está montada.
 
-### 5.5 Integración Calendario (ICS)
+### 5.5 Tablón de Tarjetas Informativas (Ex ICS)
 
-- `export_service.generate_ics_and_save_tasks()` genera `.ics` y persiste en `tareas_meta.json`.
-- El dashboard permite marcar tareas como completadas (`PUT /api/tareas/{id}`).
+- `export_service.save_tarjetas_informativas()` extrae tareas, avisos y exámenes detectados por Gemini y los persiste en `tarjetas_informativas.json`.
+- Cada tarjeta almacena la fecha de la clase (`fecha_creacion`) para dar contexto a referencias como "próxima semana".
+- El dashboard permite agregar anotaciones personales vía `PUT /api/tarjetas/{id}` (modificando únicamente `nota_personal`) y borrar avisos (`DELETE`).
 
-### 5.6 Extractor Visual de Tareas (Captura de Pantalla)
+### 5.6 Extractor Visual Multimodal (Captura de Pantalla)
 
-- Pestaña "Captura" de la extensión → `chrome.tabs.captureVisibleTab()` → JPEG.
+- Pestaña "Captura" de la extensión → botón "Capturar como Tarjeta Informativa" → `chrome.tabs.captureVisibleTab()` → JPEG.
 - `POST /api/extract-task { image_base64, modelo_elegido }` → `llm_service.extract_task_from_image()`.
 - Usa el modelo enviado en el payload, con fallback a `settings.default_model`.
-- Resultado: .md en `resumenes/`, copia en Obsidian, entradas en `tareas_meta.json`.
+- Resultado: Extrae la imagen directo a un JSON `tarjetas_informativas`, creando el `.md` en `resumenes/`, copia en Obsidian, y guardando la nueva tarjeta en `tarjetas_informativas.json` con origen `Captura_Pantalla`.
 
 ### 5.7 Validación de Tamaño de Upload (OOM-safe)
 
@@ -325,7 +329,7 @@ Al iniciar grabación, `background.js` inyecta un listener `beforeunload` en la 
 | GET/PUT/DELETE | `/api/summaries/{f}` | filesystem + `meta_store` |
 | POST | `/api/chat` | `llm_service.chat_with_rag` |
 | POST | `/api/generate-prompt` | `llm_service.generate_prompt_for_materia` |
-| GET/PUT | `/api/tareas` `/api/tareas/{id}` | `tareas_store` |
+| GET/PUT/DEL | `/api/tarjetas` `/api/tarjetas/{id}` | `tarjetas_store` |
 | POST | `/api/extract-task` | `llm_service` + `export_service` |
 | GET | `/api/exportaciones/{f}` | filesystem |
 | GET | `/info` | health check |

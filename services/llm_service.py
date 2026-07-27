@@ -134,6 +134,8 @@ A partir de la transcripción, debes crear una nota que cumpla ESTRICTAMENTE las
 Además, debes extraer reglas:
 Si en el audio el profesor explica un método de resolución específico, una fórmula propia, o exige explícitamente que los problemas se resuelvan de una manera particular (diferente a los libros), extráelo detalladamente en el array 'nuevas_reglas_profesor' del bloque JSON. Si no hay reglas nuevas en esta clase, deja el array vacío [].
 
+Finalmente, extrae cualquier anuncio importante, tarea, fecha de examen o cambio logístico en el array 'tarjetas_informativas'. Respeta cómo el profesor refirió el tiempo en 'referencia_temporal'.
+
 Genera tu respuesta en el siguiente formato ESTRICTO:
 ---
 tipo: [teoria o cheatsheet]
@@ -150,7 +152,13 @@ $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
 {{
   "filename": "Titulo Exacto Googleable.md",
   "folder": "02 Recursos/Tema",
-  "calendario": [{{"titulo": "...", "fecha_YYYY_MM_DD": "...", "descripcion": "..."}}],
+  "tarjetas_informativas": [
+    {{
+      "tipo": "tarea|examen|aviso|otro",
+      "contenido": "Información detallada...",
+      "referencia_temporal": "ej. próxima clase, 15 de mayo, la otra semana"
+    }}
+  ],
   "nuevas_reglas_profesor": [
     {{
       "tema": "El tema del que habla",
@@ -359,14 +367,20 @@ estado: pendiente
 tags: [tarea]
 ---
 
-[Contenido de la nota con detalles de la tarea]
+[Contenido de la nota con detalles de la tarea o aviso]
 
 $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
 ```json
 {
-  "filename": "Titulo Tarea.md",
+  "filename": "Titulo Tarea o Aviso.md",
   "folder": "01 Proyectos/Tareas",
-  "calendario": [{"titulo": "...", "fecha_YYYY_MM_DD": "...", "descripcion": "..."}]
+  "tarjetas_informativas": [
+    {
+      "tipo": "tarea|examen|aviso|otro",
+      "contenido": "...",
+      "referencia_temporal": "..."
+    }
+  ]
 }
 ```"""
     client = genai.Client()

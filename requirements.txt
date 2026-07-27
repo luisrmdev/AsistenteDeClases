@@ -4,5 +4,4 @@ python-multipart
 google-genai
 python-dotenv
 tenacity
-icalendar
 yt-dlp

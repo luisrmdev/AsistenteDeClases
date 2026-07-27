@@ -296,8 +296,8 @@
             <button onclick="switchTab('chat')" id="nav-chat" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
                 <i data-lucide="message-square" class="w-4 h-4 opacity-70"></i> Tutor Virtual
             </button>
-            <button onclick="switchTab('tareas')" id="nav-tareas" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <i data-lucide="check-square" class="w-4 h-4 opacity-70"></i> Tareas
+            <button onclick="switchTab('tarjetas')" id="nav-tarjetas" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+                <i data-lucide="clipboard-list" class="w-4 h-4 opacity-70"></i> Tablón de Avisos
             </button>
             
             <div class="px-6 mt-8 mb-2">
@@ -412,29 +412,23 @@
         </section>
 
         <!-- =======================
-             TAB: TAREAS
+             TAB: TARJETAS INFORMATIVAS
         ======================== -->
-        <section id="tab-tareas" class="tab-content hidden h-full flex-col fade-in">
+        <section id="tab-tarjetas" class="tab-content hidden h-full flex-col fade-in">
             <div class="px-16 py-12 border-b border-borderGray flex justify-between items-end">
                 <div>
-                    <h2 class="text-4xl font-serif tracking-tight text-charcoal">Tareas Pendientes</h2>
-                    <p class="text-textMuted mt-3 text-sm">Eventos y recordatorios detectados automáticamente en tus clases.</p>
+                    <h2 class="text-4xl font-serif tracking-tight text-charcoal">Tablón de Avisos</h2>
+                    <p class="text-textMuted mt-3 text-sm">Anuncios importantes, exámenes, tareas y logística de tus clases.</p>
+                </div>
+                <div>
+                    <select id="tarjetas-materia-filter" onchange="loadTarjetas()" class="px-4 py-2 border border-borderGray rounded bg-surface text-sm focus:outline-none">
+                        <option value="todas">Todas las materias</option>
+                    </select>
                 </div>
             </div>
             <div class="flex-1 overflow-y-auto px-16 py-12 max-w-5xl mx-auto w-full">
-                <div class="bento-card overflow-hidden">
-                    <table class="w-full text-sm text-left">
-                        <thead class="text-xs uppercase bg-surface text-textMuted border-b border-borderGray">
-                            <tr>
-                                <th class="px-6 py-4 font-bold">Estado</th>
-                                <th class="px-6 py-4 font-bold">Título</th>
-                                <th class="px-6 py-4 font-bold">Fecha Límite</th>
-                                <th class="px-6 py-4 font-bold">Origen</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tareas-list" class="divide-y divide-borderGray bg-background">
-                        </tbody>
-                    </table>
+                <div id="tarjetas-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Cards de tarjetas se insertarán aquí -->
                 </div>
             </div>
         </section>
@@ -852,7 +846,7 @@
             if(tabId === 'audios') loadAudios();
             if(tabId === 'config') loadMaterias();
             if(tabId === 'resumenes') loadSummaries();
-            if(tabId === 'tareas') loadTareas();
+            if(tabId === 'tarjetas') loadTarjetas();
         }
 
         // ====== TAB: RESUMENES ======
@@ -974,9 +968,18 @@
                     
                     // Update Chat Select Options
                     const chatSelect = document.getElementById('chat-context-select');
+                    const tarjetasSelect = document.getElementById('tarjetas-materia-filter');
+                    
                     chatSelect.innerHTML = '<option value="todas">Todo el Semestre</option><option value="default">Materia General</option>';
+                    if(tarjetasSelect) {
+                        tarjetasSelect.innerHTML = '<option value="todas">Todas las materias</option>';
+                    }
+                    
                     data.forEach(m => {
                         chatSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+                        if(tarjetasSelect) {
+                            tarjetasSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+                        }
                     });
                 });
         }
@@ -1081,50 +1084,82 @@
             }
         }
 
-        // ====== TAB: TAREAS ======
-        function loadTareas() {
-            fetch('/api/tareas')
+        // ====== TAB: TARJETAS ======
+        function loadTarjetas() {
+            const materiaId = document.getElementById('tarjetas-materia-filter').value;
+            fetch(`/api/tarjetas?materia_id=${materiaId}`)
                 .then(r => r.json())
                 .then(data => {
-                    const list = document.getElementById('tareas-list');
-                    list.innerHTML = '';
-                    if (!data.tareas || data.tareas.length === 0) {
-                        list.innerHTML = '<tr><td colspan="4" class="px-6 py-8 text-center text-textMuted font-serif italic">No hay tareas pendientes.</td></tr>';
+                    const grid = document.getElementById('tarjetas-grid');
+                    grid.innerHTML = '';
+                    if (!data.tarjetas || data.tarjetas.length === 0) {
+                        grid.innerHTML = '<div class="col-span-full text-center text-textMuted font-serif italic py-8">No hay avisos pendientes.</div>';
                         return;
                     }
-                    data.tareas.forEach(t => {
-                        const tr = document.createElement('tr');
-                        tr.className = "hover:bg-surfaceHover transition-colors";
-                        const isChecked = t.completada ? 'checked' : '';
-                        tr.innerHTML = `
-                            <td class="px-6 py-4">
-                                <input type="checkbox" class="w-4 h-4 rounded border-borderGray text-accent focus:ring-accent accent-accent cursor-pointer" 
-                                       onchange="toggleTarea('${t.id}', this.checked)" ${isChecked}>
-                            </td>
-                            <td class="px-6 py-4 font-medium text-charcoal">
-                                <div class="${t.completada ? 'line-through opacity-50' : ''}">${t.titulo}</div>
-                                <div class="text-xs text-textMuted font-normal mt-1 ${t.completada ? 'opacity-50' : ''}">${t.descripcion || ''}</div>
-                            </td>
-                            <td class="px-6 py-4">
-                                <span class="bg-surface border border-borderGray px-2 py-1 rounded-md text-xs font-mono font-medium ${t.completada ? 'opacity-50' : ''}">
-                                    ${t.fecha_YYYY_MM_DD || 'Sin fecha'}
+                    data.tarjetas.forEach(t => {
+                        const card = document.createElement('div');
+                        card.className = "bento-card p-6 flex flex-col gap-4 relative group hover:border-textMuted transition-colors";
+                        
+                        let badgeColor = "bg-gray-100 text-gray-700 border-gray-200";
+                        if (t.tipo === 'tarea') badgeColor = "bg-blue-50 text-blue-700 border-blue-200";
+                        if (t.tipo === 'examen') badgeColor = "bg-red-50 text-red-700 border-red-200";
+                        if (t.tipo === 'aviso') badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+                        
+                        card.innerHTML = `
+                            <button onclick="deleteTarjeta('${t.id}')" class="absolute top-4 right-4 text-textMuted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar aviso">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${badgeColor}">
+                                    ${t.tipo}
                                 </span>
-                            </td>
-                            <td class="px-6 py-4 text-xs text-textMuted">
-                                ${t.origen}
-                            </td>
+                                <span class="text-[10px] text-textMuted font-mono">
+                                    ${t.fecha_creacion}
+                                </span>
+                            </div>
+                            <div class="text-sm text-charcoal font-medium leading-relaxed">
+                                ${t.contenido}
+                            </div>
+                            <div class="text-xs text-textMuted flex items-center gap-1.5 border-b border-borderGray pb-4">
+                                <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                                Para: <span class="font-bold">${t.referencia_temporal || 'Sin especificar'}</span>
+                            </div>
+                            
+                            <div class="mt-auto pt-2">
+                                <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-1">Mis Notas</label>
+                                <textarea id="nota-${t.id}" class="w-full text-xs p-2 rounded bg-surface border border-borderGray focus:border-charcoal outline-none resize-none" rows="2" placeholder="Añade una nota...">${t.nota_personal || ''}</textarea>
+                                <button onclick="updateNotaPersonal('${t.id}')" class="text-[10px] uppercase font-bold tracking-wider text-charcoal hover:text-accent mt-1 flex items-center gap-1">
+                                    <i data-lucide="save" class="w-3 h-3"></i> Guardar
+                                </button>
+                            </div>
                         `;
-                        list.appendChild(tr);
+                        grid.appendChild(card);
                     });
+                    lucide.createIcons();
                 });
         }
         
-        function toggleTarea(id, completada) {
-            fetch(`/api/tareas/${id}`, {
+        function deleteTarjeta(id) {
+            if(confirm('¿Eliminar aviso?')) {
+                fetch(`/api/tarjetas/${id}`, { method: 'DELETE' }).then(() => loadTarjetas());
+            }
+        }
+
+        function updateNotaPersonal(id) {
+            const nota = document.getElementById(`nota-${id}`).value;
+            fetch(`/api/tarjetas/${id}`, {
                 method: 'PUT',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({completada})
-            }).then(() => loadTareas());
+                body: JSON.stringify({nota_personal: nota})
+            }).then(() => {
+                const btn = document.querySelector(`#nota-${id}`).nextElementSibling;
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 text-emerald-500"></i> Guardado';
+                lucide.createIcons();
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                }, 2000);
+            });
         }
 
         // ====== TAB: AUDIOS PENDIENTES ======

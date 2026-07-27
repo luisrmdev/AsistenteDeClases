@@ -23,7 +23,7 @@ from database import (
     materias_store,
     meta_store,
     settings_store,
-    tareas_store,
+    tarjetas_store,
 )
 from services import audio_service, export_service, llm_service
 
@@ -419,11 +419,11 @@ async def save_summary(req: SaveRequest):
     # Guardar en Obsidian
     await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
 
-    # Calendario ICS + tareas
-    ics_file = None
-    if json_data.get("calendario"):
-        ics_file = await export_service.generate_ics_and_save_tasks(
-            json_data["calendario"], suggested_filename, md_filename
+    # Tarjetas Informativas
+    if json_data.get("tarjetas_informativas"):
+        mat_id = req.materia_id if (req.materia_id and req.materia_id != "default") else "default"
+        await export_service.save_tarjetas_informativas(
+            json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str
         )
 
     # Reglas del profesor
@@ -562,24 +562,40 @@ async def get_system_info():
 
 
 # ===========================================================================
-# Tareas
+# Tarjetas Informativas
 # ===========================================================================
 
-@app.get("/api/tareas")
-async def get_tareas():
-    return {"tareas": await tareas_store.read()}
+@app.get("/api/tarjetas")
+async def get_tarjetas(materia_id: str = None):
+    tarjetas = await tarjetas_store.read()
+    if materia_id and materia_id != "default" and materia_id != "todas":
+        tarjetas = [t for t in tarjetas if t.get("materia_id") == materia_id]
+    return {"tarjetas": tarjetas}
 
 
-@app.put("/api/tareas/{tarea_id}")
-async def update_tarea(tarea_id: str, payload: dict):
-    async def _update(tareas: list) -> list:
-        for t in tareas:
-            if t.get("id") == tarea_id and "completada" in payload:
-                t["completada"] = payload["completada"]
-        return tareas
+@app.put("/api/tarjetas/{tarjeta_id}")
+async def update_tarjeta(tarjeta_id: str, payload: dict):
+    if "nota_personal" not in payload:
+        raise HTTPException(status_code=400, detail="Solo se permite actualizar nota_personal")
+        
+    async def _update(tarjetas: list) -> list:
+        for t in tarjetas:
+            if t.get("id") == tarjeta_id:
+                t["nota_personal"] = payload["nota_personal"]
+        return tarjetas
 
-    await tareas_store.update(_update)
+    await tarjetas_store.update(_update)
     return {"message": "ok"}
+
+
+@app.delete("/api/tarjetas/{tarjeta_id}")
+async def delete_tarjeta(tarjeta_id: str):
+    async def _delete(tarjetas: list) -> list:
+        return [t for t in tarjetas if t.get("id") != tarjeta_id]
+
+    await tarjetas_store.update(_delete)
+    return {"message": "ok"}
+
 
 
 # ===========================================================================
@@ -615,10 +631,11 @@ async def extract_task_from_image(req: TaskExtractRequest):
         # Guardar en Obsidian
         await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
 
-        # Guardar tareas en tareas_meta.json
-        if json_data.get("calendario"):
-            await export_service.generate_ics_and_save_tasks(
-                json_data["calendario"], suggested_filename, suggested_filename
+        # Guardar tarjetas informativas
+        if json_data.get("tarjetas_informativas"):
+            fecha_str = datetime.now().strftime("%Y-%m-%d")
+            await export_service.save_tarjetas_informativas(
+                json_data["tarjetas_informativas"], "Captura_Pantalla", "default", fecha_str
             )
 
         return {"message": "Tarea extraída y guardada correctamente", "filename": suggested_filename}

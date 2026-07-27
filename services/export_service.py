@@ -12,7 +12,7 @@ from database import (
     RESUMENES_DIR,
     meta_store,
     settings_store,
-    tareas_store,
+    tarjetas_store,
 )
 
 
@@ -79,57 +79,32 @@ async def save_to_obsidian(
         print("Error guardando en Obsidian:", e)
 
 
-async def generate_ics_and_save_tasks(
-    eventos: list,
-    suggested_filename: str,
+async def save_tarjetas_informativas(
+    tarjetas: list,
     md_filename: str,
-) -> str | None:
+    materia_id: str,
+    fecha_creacion: str,
+) -> None:
     """
-    Genera un archivo .ics en exportaciones/ y persiste los eventos en
-    tareas_meta.json.
-
-    Returns:
-        El nombre del archivo .ics generado, o None si hubo error.
+    Persiste las tarjetas informativas extraídas en tarjetas_informativas.json.
     """
-    ics_filename = None
+    if not tarjetas:
+        return
 
-    # Persistir en tareas_meta.json
-    async def _add_tasks(tareas_data: list) -> list:
-        for t in eventos:
+    async def _add_tarjetas(tarjetas_data: list) -> list:
+        for t in tarjetas:
             t["id"] = str(uuid.uuid4())
-            t["origen"] = suggested_filename
-            t["completada"] = False
-            tareas_data.append(t)
-        return tareas_data
+            t["materia_id"] = materia_id
+            t["fecha_creacion"] = fecha_creacion
+            t["origen_md"] = md_filename
+            t["tipo"] = t.get("tipo", "otro")
+            t["contenido"] = t.get("contenido", "")
+            t["referencia_temporal"] = t.get("referencia_temporal", "")
+            t["nota_personal"] = ""
+            tarjetas_data.append(t)
+        return tarjetas_data
 
-    await tareas_store.update(_add_tasks)
-
-    # Generar archivo ICS
-    try:
-        from icalendar import Calendar, Event  # type: ignore
-
-        cal = Calendar()
-        for evento in eventos:
-            fecha_evt_str = evento.get("fecha_YYYY_MM_DD")
-            if not fecha_evt_str:
-                continue
-            try:
-                dt = datetime.strptime(fecha_evt_str, "%Y-%m-%d").date()
-                ievent = Event()
-                ievent.add("summary", evento.get("titulo", "Sin título"))
-                ievent.add("dtstart", dt)
-                ievent.add("description", evento.get("descripcion", ""))
-                cal.add_component(ievent)
-            except Exception as e:
-                print("Error parseando fecha para ICS:", e)
-
-        ics_filename = f"{md_filename.replace('.md', '')}.ics"
-        with open(os.path.join(EXPORTACIONES_DIR, ics_filename), "wb") as f:
-            f.write(cal.to_ical())
-    except Exception as e:
-        print("Error generando Calendario:", e)
-
-    return ics_filename
+    await tarjetas_store.update(_add_tarjetas)
 
 
 async def save_teacher_rules(

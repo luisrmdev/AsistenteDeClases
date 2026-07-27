@@ -22,7 +22,7 @@ MATERIAS_FILE = "materias.json"
 STATS_FILE = "stats.json"
 SETTINGS_FILE = "settings.json"
 META_FILE = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
-TAREAS_FILE = os.path.join(RESUMENES_DIR, "tareas_meta.json")
+TARJETAS_FILE = os.path.join(RESUMENES_DIR, "tarjetas_informativas.json")
 
 # Crear directorios necesarios al importar
 for _dir in [AUDIOS_DIR, RESUMENES_DIR, PAPELERA_DIR, EXPORTACIONES_DIR, MEMORIA_DIR]:
@@ -81,4 +81,4 @@ settings_store = JsonStore(SETTINGS_FILE, default={
 materias_store = JsonStore(MATERIAS_FILE, default=list)
 stats_store = JsonStore(STATS_FILE, default=dict)
 meta_store = JsonStore(META_FILE, default=dict)
-tareas_store = JsonStore(TAREAS_FILE, default=list)
+tarjetas_store = JsonStore(TARJETAS_FILE, default=list)
