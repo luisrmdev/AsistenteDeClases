@@ -76,6 +76,7 @@ settings_store = JsonStore(SETTINGS_FILE, default={
     "browser_cookie_source": "brave",
     "max_audio_upload_mb": 500,
     "default_model": "gemini-3.1-flash-lite",
+    "rag_max_docs": 8,
 })
 materias_store = JsonStore(MATERIAS_FILE, default=list)
 stats_store = JsonStore(STATS_FILE, default=dict)

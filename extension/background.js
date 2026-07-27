@@ -21,61 +21,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     cancelRecording(message.tabId);
   } else if (message.type === 'UPDATE_STATE') {
     updateState(message.tabId, message.state);
-  } else if (message.type === 'DOWNLOAD_FALLBACK_CHUNK') {
-    handleFallbackChunk(message);
+  } else if (message.type === 'DOWNLOAD_FALLBACK_URL') {
+    handleFallbackUrl(message);
   }
 });
 
-const fallbackChunks = {};
-
-async function handleFallbackChunk(message) {
-  if (!fallbackChunks[message.fileId]) {
-    fallbackChunks[message.fileId] = new Array(message.total);
-  }
-  
-  fallbackChunks[message.fileId][message.index] = message.chunk;
-  
-  // Revisar si están todos
-  let complete = true;
-  for (let i = 0; i < message.total; i++) {
-    if (fallbackChunks[message.fileId][i] === undefined) {
-      complete = false;
-      break;
-    }
-  }
-  
-  if (complete) {
-    const dataUrl = fallbackChunks[message.fileId].join('');
-    delete fallbackChunks[message.fileId];
-    await executeFallbackDownload(dataUrl, message.customName, message.tabId);
-  }
-}
-
-async function executeFallbackDownload(dataUrl, customName, tabId) {
+async function handleFallbackUrl(message) {
   try {
     const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
     const subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
     const askAlways = result.backupAskAlways || false;
 
     const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-    const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
+    const safeCustomName = message.customName ? message.customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
     const filename = `${subfolder}backup-${safeCustomName}${dateStr}.webm`;
     
     chrome.downloads.download({
-      url: dataUrl,
+      url: message.url,
       filename: filename,
       saveAs: askAlways
     }, (downloadId) => {
       if (chrome.runtime.lastError) {
         console.error("Download failed:", chrome.runtime.lastError);
-        updateState(tabId, 'error');
+        updateState(message.tabId, 'error');
       } else {
-        updateState(tabId, 'fallback_saved');
+        updateState(message.tabId, 'fallback_saved');
       }
     });
   } catch (e) {
     console.error('Fallback download executed failed', e);
-    updateState(tabId, 'error');
+    updateState(message.tabId, 'error');
   }
 }
 
@@ -185,6 +160,23 @@ async function startRecording(tabId) {
     const timers = timerRes.recordingTimers || {};
     timers[tabId] = { startTime: Date.now(), elapsed: 0, paused: false };
     await chrome.storage.local.set({ recordingTimers: timers });
+
+    // FASE 2: Inyectar protección de pestaña (beforeunload)
+    try {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => {
+          window._asistenteBeforeUnload = (e) => {
+            e.preventDefault();
+            e.returnValue = "¿Seguro que quieres salir? Se detendrá la grabación.";
+            return e.returnValue;
+          };
+          window.addEventListener('beforeunload', window._asistenteBeforeUnload);
+        }
+      });
+    } catch(err) {
+      console.warn("No se pudo inyectar protección en pestaña:", err);
+    }
   });
 }
 
@@ -254,6 +246,20 @@ async function stopRecording(tabId) {
       tabId: tabId,
       customName: customName
     });
+
+    // FASE 2: Remover protección de pestaña
+    try {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => {
+          if (window._asistenteBeforeUnload) {
+            window.removeEventListener('beforeunload', window._asistenteBeforeUnload);
+            delete window._asistenteBeforeUnload;
+          }
+        }
+      });
+    } catch(err) {}
+
   } catch (err) {
     console.warn("No se pudo contactar al offscreen (probablemente la extensión se recargó). Reiniciando estado.");
     updateState(tabId, 'idle');
@@ -277,6 +283,19 @@ async function cancelRecording(tabId) {
       tabId: tabId
     });
     
+    // FASE 2: Remover protección
+    try {
+      chrome.scripting.executeScript({
+        target: { tabId: tabId },
+        func: () => {
+          if (window._asistenteBeforeUnload) {
+            window.removeEventListener('beforeunload', window._asistenteBeforeUnload);
+            delete window._asistenteBeforeUnload;
+          }
+        }
+      });
+    } catch(err) {}
+
     updateState(tabId, 'idle');
   } catch (err) {
     console.warn("Error enviando cancelación al offscreen", err);

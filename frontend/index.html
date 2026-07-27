@@ -542,7 +542,13 @@
                                 <div class="flex gap-2">
                                     <input type="number" id="config-max-audio-mb" class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all" placeholder="Ej. 500" min="10" max="2000">
                                 </div>
-                                <p class="text-xs text-textMuted mt-3 leading-relaxed">Previene la carga accidental de archivos crudos gigantes (ej. .wav). Máximo sugerido: 500 MB.</p>
+                                <p class="text-xs text-textMuted mt-3 leading-relaxed mb-6">Previene la carga accidental de archivos crudos gigantes (ej. .wav). Máximo sugerido: 500 MB.</p>
+                                
+                                <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 border-t border-borderGray/60 pt-6">Memoria RAG (Documentos Máximos)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="config-rag-max-docs" class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all" placeholder="Ej. 8" min="1" max="20">
+                                </div>
+                                <p class="text-xs text-textMuted mt-3 leading-relaxed">Número máximo de clases pasadas que la IA puede leer al mismo tiempo durante un chat (default: 8).</p>
                             </div>
                         </div>
                     </div>
@@ -771,6 +777,7 @@
                     document.getElementById('config-obsidian-path').value = data.obsidian_vault_path || '';
 
                     document.getElementById('config-max-audio-mb').value = data.max_audio_upload_mb || 500;
+                    document.getElementById('config-rag-max-docs').value = data.rag_max_docs || 8;
                     
                     if (data.browser_cookie_source) {
                         document.getElementById('config-browser-cookie').value = data.browser_cookie_source;
@@ -788,6 +795,7 @@
             const path = document.getElementById('config-obsidian-path').value;
             const browserSource = document.getElementById('config-browser-cookie').value;
             const maxAudioMB = parseInt(document.getElementById('config-max-audio-mb').value) || 500;
+            const ragMaxDocs = parseInt(document.getElementById('config-rag-max-docs').value) || 8;
             const selectedModel = document.getElementById('model-selector').value;
             
             const btn = document.getElementById('btn-save-settings');
@@ -802,6 +810,7 @@
                     obsidian_vault_path: path,
                     browser_cookie_source: browserSource,
                     max_audio_upload_mb: maxAudioMB,
+                    rag_max_docs: ragMaxDocs,
                     default_model: selectedModel
                 })
             })

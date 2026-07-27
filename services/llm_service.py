@@ -259,6 +259,8 @@ async def chat_with_rag(
     import os as _os
 
     meta_data = await meta_store.read()
+    settings = await settings_store.read()
+    rag_max_docs = settings.get("rag_max_docs", 8)
 
     # 1. Filtrado por materia
     all_files = list(meta_data.keys())
@@ -297,7 +299,7 @@ async def chat_with_rag(
     )
 
     # 4. Scoring de relevancia
-    relevant_summaries = nlp_engine.score_relevance(mensaje, filtered_summaries)
+    relevant_summaries = nlp_engine.score_relevance(mensaje, filtered_summaries, max_results=rag_max_docs)
     relevant_filenames = {m.get("filename") for m in relevant_summaries if m.get("filename")}
     relevant_list = [m for m in filtered_summaries if m.get("filename") in relevant_filenames]
     resumenes_completos = "".join(

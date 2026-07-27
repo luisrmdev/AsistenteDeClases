@@ -90,6 +90,7 @@ class SettingsUpdate(BaseModel):
     browser_cookie_source: str = "brave"
     max_audio_upload_mb: int = 500
     default_model: str = "gemini-3.1-flash-lite"
+    rag_max_docs: int = 8
 
 
 class TaskExtractRequest(BaseModel):
@@ -179,6 +180,7 @@ async def update_settings_endpoint(req: SettingsUpdate):
         settings["browser_cookie_source"] = req.browser_cookie_source
         settings["max_audio_upload_mb"] = req.max_audio_upload_mb
         settings["default_model"] = req.default_model
+        settings["rag_max_docs"] = req.rag_max_docs
         return settings
 
     await settings_store.update(_update)
@@ -359,14 +361,15 @@ async def generate_summary(req: GenerateRequest):
         # Preprocesamiento FFmpeg
         upload_path = audio_service.remove_silences(filepath)
 
-        texto, stats = await llm_service.generate_summary_from_audio(
-            upload_path, prompt_usar, req.modelo_elegido
-        )
+        try:
+            texto, stats = await llm_service.generate_summary_from_audio(
+                upload_path, prompt_usar, req.modelo_elegido
+            )
+            return {"content": texto, "stats": stats}
+        finally:
+            # FASE 3: Limpieza garantizada
+            audio_service.cleanup_temp(upload_path, filepath)
 
-        # Limpiar temp si aplica
-        audio_service.cleanup_temp(upload_path, filepath)
-
-        return {"content": texto, "stats": stats}
     except Exception as e:
         print(f"Error procesando el audio con Gemini: {e}")
         raise HTTPException(status_code=500, detail=str(e))

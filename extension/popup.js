@@ -34,6 +34,68 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let countdownInterval = null;
 
+  // --- FASE 1: Recuperación de Desastres ---
+  async function runDisasterRecovery() {
+    try {
+      const db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('AudioRescueDB', 1);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      if (!db.objectStoreNames.contains('chunks')) return;
+
+      const tx = db.transaction('chunks', 'readonly');
+      const store = tx.objectStore('chunks');
+      const req = store.getAll();
+      
+      req.onsuccess = async () => {
+        const allChunks = req.result;
+        if (!allChunks || allChunks.length === 0) return;
+        
+        // Group by tabId
+        const byTab = {};
+        allChunks.forEach(c => {
+          if (!byTab[c.tabId]) byTab[c.tabId] = [];
+          byTab[c.tabId].push(c);
+        });
+
+        const states = await new Promise(r => chrome.storage.local.get(['recordingStates'], res => r(res.recordingStates || {})));
+        
+        for (const tabIdStr in byTab) {
+          const tabId = parseInt(tabIdStr);
+          const state = states[tabId];
+          // Si el estado no está activo, entonces es un registro huérfano de una sesión anterior que crasheó
+          if (state !== 'recording' && state !== 'paused' && state !== 'uploading') {
+            console.log(`Orphaned recording found for tab ${tabId}. Recovering...`);
+            const chunks = byTab[tabId].sort((a,b) => a.timestamp - b.timestamp).map(c => c.chunk);
+            const customName = byTab[tabId][0].customName || '';
+            const blob = new Blob(chunks, { type: 'audio/webm' });
+            const url = URL.createObjectURL(blob);
+            
+            chrome.runtime.sendMessage({
+              target: 'background',
+              type: 'DOWNLOAD_FALLBACK_URL',
+              url: url,
+              customName: customName,
+              tabId: tabId
+            });
+            
+            // Delete recovered chunks from DB
+            const dTx = db.transaction('chunks', 'readwrite');
+            const dStore = dTx.objectStore('chunks');
+            allChunks.filter(c => c.tabId === tabId).forEach(c => {
+              dStore.delete(c.id);
+            });
+          }
+        }
+      };
+    } catch(e) {
+      console.warn("Error en Disaster Recovery:", e);
+    }
+  }
+
+  runDisasterRecovery();
+
   // Load saved silence timeout
   chrome.storage.local.get(['silenceTimeoutMin'], (result) => {
     if (result.silenceTimeoutMin) {

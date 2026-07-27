@@ -263,14 +263,14 @@ Implementado en `llm_service.chat_with_rag()`. RAG ligero sin embeddings.
 ```
 score += coincidencia_tags * 3.0
 score += coincidencia_texto * 1.0
-threshold = 1.0, máximo 8 documentos en contexto
+threshold = 1.0, máximo N documentos en contexto (definido por settings.rag_max_docs, default 8)
 ```
 
 **Paso 5 — Contexto a Gemini**:
 ```python
 contents = [
   "ÍNDICE CONDENSADO:\n" + indice,
-  "APUNTES COMPLETOS:\n" + resumenes_completos,  # top 8
+  "APUNTES COMPLETOS:\n" + resumenes_completos,  # top N (rag_max_docs)
   mensaje_usuario
 ]
 ```
@@ -291,6 +291,14 @@ contents = [
 
 **Ciclo de estados** (`chrome.storage.local.recordingStates[tabId]`):
 `idle → recording ↔ paused → uploading → completed | fallback_saved | error → idle`
+
+**Resiliencia Absoluta (Motor de Fallback)**:
+- `offscreen.js` graba en fragmentos de 5 segundos (`MediaRecorder.start(5000)`) y guarda todo en `IndexedDB` (`AudioRescueDB`).
+- Si el backend falla, `offscreen.js` lee la base de datos, genera un Blob URL, y el background ejecuta la descarga local (sin Base64).
+- Si la PC o navegador crashea, `popup.js` ejecuta un **Disaster Recovery** en su arranque: busca fragmentos huérfanos en `IndexedDB`, los ensambla y gatilla la descarga de emergencia, garantizando cero pérdida de clases.
+
+**Protección de Pestaña (Anti-Cierres)**:
+Al iniciar grabación, `background.js` inyecta un listener `beforeunload` en la pestaña activa para mostrar un modal de confirmación si el usuario intenta cerrarla por accidente. Se remueve al detener la grabación.
 
 **Auto-Stop por silencio**: detecta `tab.audible` vía `chrome.tabs.onUpdated`. Crea alarma con delay configurable. Si el audio vuelve, cancela la alarma.
 

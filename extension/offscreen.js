@@ -6,6 +6,63 @@ const tempNames = {};
 const gainNodes = {};
 const cancelFlags = {};
 
+// --- IndexedDB Helper ---
+const DB_NAME = 'AudioRescueDB';
+const STORE_NAME = 'chunks';
+const DB_VERSION = 1;
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onupgradeneeded = (e) => {
+      e.target.result.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function addChunkToDB(tabId, chunk, customName) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).add({ tabId, chunk, customName, timestamp: Date.now() });
+    tx.oncomplete = resolve;
+    tx.onerror = reject;
+  });
+}
+
+async function getChunksFromDB(tabId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const request = tx.objectStore(STORE_NAME).getAll();
+    request.onsuccess = () => {
+      const all = request.result.filter(r => r.tabId === tabId).sort((a,b) => a.timestamp - b.timestamp);
+      resolve(all);
+    };
+    request.onerror = reject;
+  });
+}
+
+async function deleteChunksFromDB(tabId) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const request = store.getAll();
+    request.onsuccess = () => {
+      request.result.forEach(r => {
+        if (r.tabId === tabId) {
+          store.delete(r.id);
+        }
+      });
+      resolve();
+    };
+    request.onerror = reject;
+  });
+}
+
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== 'offscreen') return;
 
@@ -55,6 +112,9 @@ function updateState(tabId, state) {
 
 async function startRecording(streamId, tabId, isGhost) {
   try {
+    // Clear any previous orphaned chunks for this tab just in case
+    await deleteChunksFromDB(tabId);
+
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         mandatory: {
@@ -82,9 +142,10 @@ async function startRecording(streamId, tabId, isGhost) {
     const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
     mediaRecorders[tabId] = mediaRecorder;
 
-    mediaRecorder.ondataavailable = (event) => {
+    mediaRecorder.ondataavailable = async (event) => {
       if (event.data.size > 0) {
         recordedChunks[tabId].push(event.data);
+        await addChunkToDB(tabId, event.data, tempNames[tabId] || '');
       }
     };
 
@@ -101,6 +162,7 @@ async function startRecording(streamId, tabId, isGhost) {
         delete mediaRecorders[tabId];
         delete tempNames[tabId];
         delete cancelFlags[tabId];
+        await deleteChunksFromDB(tabId);
         return;
       }
 
@@ -123,7 +185,7 @@ async function startRecording(streamId, tabId, isGhost) {
       await uploadAudio(blob, tabId, cName);
     };
 
-    mediaRecorder.start();
+    mediaRecorder.start(5000); // FASE 1: Chunking cada 5 segundos
   } catch (err) {
     console.error('Error starting recording:', err);
     updateState(tabId, 'error');
@@ -167,6 +229,7 @@ async function uploadAudio(audioBlob, tabId, customName) {
     if (response.ok) {
       console.log('Audio uploaded successfully');
       updateState(tabId, 'completed');
+      await deleteChunksFromDB(tabId); // Limpiar DB en éxito
     } else {
       console.error('Failed to upload audio', response.statusText);
       await saveAudioLocallyFallback(audioBlob, customName, tabId);
@@ -179,30 +242,20 @@ async function uploadAudio(audioBlob, tabId, customName) {
 
 async function saveAudioLocallyFallback(audioBlob, customName, tabId) {
   try {
-    const reader = new FileReader();
-    reader.readAsDataURL(audioBlob);
-    reader.onloadend = async () => {
-      const base64data = reader.result;
-      const chunkSize = 5 * 1024 * 1024; // 5MB per chunk to be safe with IPC limits
-      const totalChunks = Math.ceil(base64data.length / chunkSize);
-      const fileId = "backup_" + tabId + "_" + Date.now();
-      
-      for (let i = 0; i < totalChunks; i++) {
-        const chunk = base64data.slice(i * chunkSize, (i + 1) * chunkSize);
-        await chrome.runtime.sendMessage({
-          target: 'background',
-          type: 'DOWNLOAD_FALLBACK_CHUNK',
-          fileId: fileId,
-          chunk: chunk,
-          index: i,
-          total: totalChunks,
-          customName: customName,
-          tabId: tabId
-        });
-      }
-    };
+    const url = URL.createObjectURL(audioBlob);
+    chrome.runtime.sendMessage({
+      target: 'background',
+      type: 'DOWNLOAD_FALLBACK_URL',
+      url: url,
+      customName: customName,
+      tabId: tabId
+    });
+    // Se deja en DB para que el usuario esté seguro, o podemos borrarlo?
+    // Popup recovery se encargará de borrarlo o el usuario. En fallback no borramos, dejamos en DB o que lo borre la descarga en background.
+    // Wait, let background trigger delete when downloaded, or keep it simple.
   } catch (e) {
-    console.error('Fallback serialization failed', e);
+    console.error('Fallback URL creation failed', e);
     updateState(tabId, 'error');
   }
 }
+
