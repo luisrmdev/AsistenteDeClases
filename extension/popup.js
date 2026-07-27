@@ -24,6 +24,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const tabAudio = document.getElementById('tab-audio');
   const tabCapture = document.getElementById('tab-capture');
   
+  const settingsBtn = document.getElementById('settingsBtn');
+  const tabSettings = document.getElementById('tab-settings');
+  const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+  const backupSubfolder = document.getElementById('backupSubfolder');
+  const backupAskAlways = document.getElementById('backupAskAlways');
+  
   let currentCaptureDataUrl = null;
 
   let countdownInterval = null;
@@ -45,25 +51,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.set({ silenceTimeoutMin: val });
   });
 
-  const ghostModeToggle = document.getElementById('ghostModeToggle');
-  // Load saved ghost mode
-  chrome.storage.local.get(['ghostMode'], (result) => {
-    if (result.ghostMode !== undefined) {
-      ghostModeToggle.checked = result.ghostMode;
-    }
-  });
-
-  ghostModeToggle.addEventListener('change', () => {
-    const isGhost = ghostModeToggle.checked;
-    chrome.storage.local.set({ ghostMode: isGhost });
-    chrome.runtime.sendMessage({ target: 'offscreen', type: 'SET_GHOST_MODE', ghostMode: isGhost });
-  });
-
   // Obtener el tabId actual
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
   const currentTabId = tab.id;
   const isAudible = tab.audible;
+
+  const ghostModeToggle = document.getElementById('ghostModeToggle');
+  // Load saved ghost mode for this tab
+  chrome.storage.local.get(['ghostModes'], (result) => {
+    const modes = result.ghostModes || {};
+    if (modes[currentTabId] !== undefined) {
+      ghostModeToggle.checked = modes[currentTabId];
+    } else {
+      ghostModeToggle.checked = false;
+    }
+  });
+
+  ghostModeToggle.addEventListener('change', () => {
+    const isGhost = ghostModeToggle.checked;
+    chrome.storage.local.get(['ghostModes'], (result) => {
+      const modes = result.ghostModes || {};
+      modes[currentTabId] = isGhost;
+      chrome.storage.local.set({ ghostModes: modes });
+    });
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'SET_GHOST_MODE', ghostMode: isGhost, tabId: currentTabId });
+  });
+
+  // Load and save backup settings
+  chrome.storage.local.get(['backupSubfolder', 'backupAskAlways'], (result) => {
+    backupSubfolder.value = result.backupSubfolder !== undefined ? result.backupSubfolder : 'Backups_Clases/';
+    backupAskAlways.checked = result.backupAskAlways || false;
+  });
+
+  backupSubfolder.addEventListener('input', () => {
+    chrome.storage.local.set({ backupSubfolder: backupSubfolder.value });
+  });
+
+  backupAskAlways.addEventListener('change', () => {
+    chrome.storage.local.set({ backupAskAlways: backupAskAlways.checked });
+  });
 
   // Load saved custom name
   chrome.storage.local.get(['customNames'], (result) => {
@@ -213,6 +240,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       statusIndicator.className = 'status-badge status-success';
       
       setTimeout(() => updateUI('idle', audible), 3000);
+    } else if (state === 'fallback_saved') {
+      recordBtn.classList.remove('hidden');
+      controlsGroup.classList.remove('flex-row');
+      controlsGroup.classList.add('hidden');
+      statusIndicator.textContent = 'Servidor inalcanzable. Audio guardado localmente como respaldo.';
+      statusIndicator.className = 'status-badge status-warning';
+      
+      setTimeout(() => updateUI('idle', audible), 5000);
     } else {
       recordBtn.classList.remove('hidden');
       controlsGroup.classList.remove('flex-row');
@@ -231,6 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   tabBtnAudio.addEventListener('click', () => {
     tabAudio.classList.remove('hidden');
     tabCapture.classList.add('hidden');
+    tabSettings.classList.add('hidden');
     
     tabBtnAudio.className = 'segment-btn active';
     tabBtnCapture.className = 'segment-btn';
@@ -239,9 +275,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   tabBtnCapture.addEventListener('click', () => {
     tabCapture.classList.remove('hidden');
     tabAudio.classList.add('hidden');
+    tabSettings.classList.add('hidden');
     
     tabBtnCapture.className = 'segment-btn active';
     tabBtnAudio.className = 'segment-btn';
+  });
+
+  settingsBtn.addEventListener('click', () => {
+    tabAudio.classList.add('hidden');
+    tabCapture.classList.add('hidden');
+    tabSettings.classList.remove('hidden');
+    
+    tabBtnAudio.classList.remove('active');
+    tabBtnCapture.classList.remove('active');
+  });
+
+  closeSettingsBtn.addEventListener('click', () => {
+    tabSettings.classList.add('hidden');
+    tabAudio.classList.remove('hidden');
+    tabBtnAudio.classList.add('active');
   });
 
   // --- LOGICA DEL EXTRACTOR VISUAL DE TAREAS ---

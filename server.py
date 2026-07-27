@@ -11,7 +11,6 @@ import uuid
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-import yt_dlp
 from tenacity import retry, stop_after_attempt, wait_exponential
 import re
 import nlp_engine
@@ -77,12 +76,12 @@ class SettingsUpdate(BaseModel):
     obsidian_vault_path: str
     enable_anki: bool = True
     browser_cookie_source: str = "brave"
+    max_audio_upload_mb: int = 500
+    default_model: str = "gemini-3.1-flash-lite"
 
 class TaskExtractRequest(BaseModel):
     image_base64: str
-
-class DriveDownloadRequest(BaseModel):
-    url: str
+    modelo_elegido: str = None
 
 # Helper functions for Materias
 def load_app_settings():
@@ -197,6 +196,8 @@ async def update_settings_endpoint(req: SettingsUpdate):
     settings["obsidian_vault_path"] = req.obsidian_vault_path
     settings["enable_anki"] = req.enable_anki
     settings["browser_cookie_source"] = req.browser_cookie_source
+    settings["max_audio_upload_mb"] = req.max_audio_upload_mb
+    settings["default_model"] = req.default_model
     save_app_settings(settings)
     return {"message": "Configuración actualizada"}
 
@@ -578,12 +579,16 @@ async def save_summary(req: SaveRequest):
                 meta_data = json.load(fm)
             except:
                 meta_data = {}
+    
+    condensado_text = texto_limpio[:150].replace('\n', ' ').strip()
+    if len(texto_limpio) > 150:
+        condensado_text += "..."
                 
     meta_data[md_filename] = {
         "filename": suggested_filename,
         "folder": suggested_folder,
         "tags": tags,
-        "condensado": "Resumen autogenerado de la clase.",
+        "condensado": condensado_text,
         "fecha": fecha_str,
         "resumen": texto_limpio
     }
@@ -866,8 +871,13 @@ $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
 ```"""
     try:
         client = genai.Client()
-        # Fallback para asegurarse de que el modelo soporta multimodality
-        model_name = 'gemini-3.5-flash'
+        
+        # Usa el modelo enviado en el payload, o el global configurado
+        model_name = req.modelo_elegido
+        if not model_name:
+            settings = load_app_settings()
+            model_name = settings.get("default_model", "gemini-3.1-flash-lite")
+            
         response = client.models.generate_content(
             model=model_name,
             contents=[
@@ -932,62 +942,6 @@ $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
         return {"message": "Tarea extraída y guardada correctamente", "filename": suggested_filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/download-drive")
-async def download_drive(req: DriveDownloadRequest, background_tasks: BackgroundTasks):
-    settings = load_app_settings()
-    browser_choice = settings.get("browser_cookie_source", "brave")
-    
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': f'{AUDIOS_DIR}/%(title)s.%(ext)s',
-        'cookiesfrombrowser': (browser_choice,),
-        'quiet': False
-    }
-    
-    # Intentar con authuser=0, 1 y 2 (por si tiene múltiples cuentas de Google, e.g. Personal y Universidad)
-    success = False
-    last_error = ""
-    
-    for authuser in [0, 1, 2]:
-        try:
-            # Modificamos la URL para forzar el authuser
-            test_url = req.url
-            if "?" in test_url:
-                test_url = test_url + f"&authuser={authuser}"
-            else:
-                test_url = test_url + f"?authuser={authuser}"
-                
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(test_url, download=True)
-                filename = ydl.prepare_filename(info)
-                basename = os.path.basename(filename)
-                
-                gen_req = GenerateRequest(
-                    filename=basename,
-                    materia_id="default",
-                    modelo_elegido="gemini-3.5-flash"
-                )
-                background_tasks.add_task(generate_summary, gen_req)
-                
-            success = True
-            break
-        except Exception as e:
-            last_error = str(e)
-            if "403: Forbidden" not in last_error:
-                # Si no es un 403, probablemente el link es inválido o no funciona yt-dlp, rompemos igual
-                break
-                
-    if not success:
-        if "403: Forbidden" in last_error:
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Google Drive bloqueó la descarga (403 Forbidden). Esto sucede si la clase es de una cuenta institucional que bloquea extracciones externas o si no tienes permiso. SOLUCIÓN: Reproduce el video en Drive y usa la pestaña 'Grabar Audio' de la extensión de Chrome."
-            )
-        else:
-            raise HTTPException(status_code=400, detail=f"Error en yt-dlp usando cookies de {browser_choice}: {last_error}")
-            
-    return {"status": "success", "message": "Audio extraído y procesado en segundo plano."}
 
 # Servir frontend estáticamente (Debe ir siempre al final)
 app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

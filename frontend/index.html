@@ -363,16 +363,16 @@
                 <p class="text-textMuted mt-3 text-sm">Convierte tus grabaciones locales en documentos estructurados.</p>
             </div>
             <div class="flex-1 overflow-y-auto px-16 py-12">
-                <!-- IMPORTAR DRIVE -->
+                <!-- CARGAR RESPALDO MANUAL -->
                 <div class="bento-card p-8 mb-8 max-w-5xl mx-auto bg-surface/50 border border-borderGray">
                     <h3 class="text-sm font-bold text-charcoal mb-2 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="hard-drive" class="w-4 h-4 text-blue-500"></i> Importar desde Google Drive
+                        <i data-lucide="upload-cloud" class="w-4 h-4 text-emerald-500"></i> Cargar Audio de Respaldo
                     </h3>
-                    <p class="text-xs text-textMuted mb-4">Pega el enlace de una grabación en Drive (incluso con descarga deshabilitada) para extraer el audio e importarlo automáticamente a la cola de procesamiento.</p>
+                    <p class="text-xs text-textMuted mb-4">Sube un archivo de audio (.webm, .ogg, .mp4, etc.) guardado localmente cuando el servidor estuvo desconectado.</p>
                     
                     <div class="flex gap-2">
-                        <input type="url" id="drive-url-input" class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray" placeholder="https://drive.google.com/file/d/...">
-                        <button onclick="downloadFromDrive()" id="btn-drive-download" class="btn-primary px-6 text-sm font-medium transition-all">Extraer y Procesar</button>
+                        <input type="file" id="backup-audio-input" accept="audio/*,video/*" class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray">
+                        <button onclick="uploadBackupAudio()" id="btn-backup-upload" class="btn-primary px-6 text-sm font-medium transition-all">Subir y Encolar</button>
                     </div>
                 </div>
 
@@ -507,56 +507,94 @@
         <!-- =======================
              TAB: CONFIGURACION
         ======================== -->
-        <section id="tab-config" class="tab-content hidden h-full flex-col fade-in">
-            <div class="px-16 py-12 border-b border-borderGray">
+        <section id="tab-config" class="tab-content hidden h-full flex-col fade-in relative">
+            <div class="px-16 py-12 border-b border-borderGray shrink-0 bg-background z-10">
                 <h2 class="text-4xl font-serif tracking-tight text-charcoal">Preferencias</h2>
-                <p class="text-textMuted mt-3 text-sm">Ajustes a nivel de sistema.</p>
+                <p class="text-textMuted mt-3 text-sm">Ajustes a nivel de sistema y ecosistema local.</p>
             </div>
-            <div class="flex-1 overflow-y-auto px-16 py-12 max-w-4xl w-full">
-                <div class="bento-card p-8">
-                    <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider">Módulo de Inteligencia</h3>
-                    <div>
-                        <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Red de Inferencia Predeterminada</label>
-                        <select id="model-selector" class="w-full rounded-md p-3 text-sm bg-surface">
-                            <option value="gemini-3.5-flash">Gemini 3.5 Flash (Más Rápido, Limitado)</option>
-                            <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Menos Restricciones)</option>
-                        </select>
-                        <p class="text-xs text-textMuted mt-3">Este modelo alimentará el procesamiento del Tutor Virtual, RAG y extracción de resúmenes.</p>
+            <div class="flex-1 overflow-y-auto px-16 py-12 w-full pb-32">
+                <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    
+                    <!-- Columna Izquierda -->
+                    <div class="flex flex-col gap-8">
+                        <!-- Módulo de Inteligencia -->
+                        <div class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors">
+                            <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2">
+                                <i data-lucide="brain" class="w-4 h-4 text-accent"></i> Módulo de Inteligencia
+                            </h3>
+                            <div>
+                                <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Red de Inferencia Predeterminada</label>
+                                <select id="model-selector" class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all">
+                                    <option value="gemini-3.5-flash">Gemini 3.5 Flash (Más Rápido, Limitado)</option>
+                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Menos Restricciones)</option>
+                                </select>
+                                <p class="text-xs text-textMuted mt-3 leading-relaxed">Este modelo alimentará el procesamiento del Tutor Virtual, RAG y extracción de resúmenes.</p>
+                            </div>
+                        </div>
+
+                        <!-- Manejo de Archivos -->
+                        <div class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors">
+                            <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2">
+                                <i data-lucide="hard-drive" class="w-4 h-4 text-emerald-600"></i> Archivos y Cargas
+                            </h3>
+                            <div>
+                                <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Límite de peso externo (MB)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" id="config-max-audio-mb" class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all" placeholder="Ej. 500" min="10" max="2000">
+                                </div>
+                                <p class="text-xs text-textMuted mt-3 leading-relaxed">Previene la carga accidental de archivos crudos gigantes (ej. .wav). Máximo sugerido: 500 MB.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Columna Derecha -->
+                    <div class="flex flex-col gap-8">
+                        <!-- Ecosistema de Estudio -->
+                        <div class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors h-full">
+                            <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2">
+                                <i data-lucide="blocks" class="w-4 h-4 text-blue-500"></i> Ecosistema e Integraciones
+                            </h3>
+                            
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Ruta del Vault de Obsidian</label>
+                                    <input type="text" id="config-obsidian-path" class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all" placeholder="Ej. C:/Users/Usuario/Documents/MiVault">
+                                    <p class="text-xs text-textMuted mt-3 leading-relaxed">Los resúmenes generados se guardarán automáticamente en esta carpeta local de tu equipo.</p>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-borderGray/60">
+                                    <label class="flex items-center gap-3 cursor-pointer w-fit group">
+                                        <input type="checkbox" id="config-enable-anki" class="w-4 h-4 rounded border-borderGray text-accent focus:ring-accent accent-accent cursor-pointer">
+                                        <span class="text-sm font-bold text-charcoal group-hover:text-accent transition-colors">Generar Tarjetas de Memoria (Anki)</span>
+                                    </label>
+                                    <p class="text-xs text-textMuted mt-2 ml-7 leading-relaxed">Si desactivas esto, la IA no extraerá tarjetas y el resumen tardará menos en procesarse.</p>
+                                </div>
+
+                                <div class="pt-4 border-t border-borderGray/60">
+                                    <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Navegador para extracción de Drive (Bypass)</label>
+                                    <select id="config-browser-cookie" class="w-full rounded-md p-3 text-sm bg-background border border-borderGray cursor-pointer focus:border-charcoal outline-none transition-all">
+                                        <option value="brave">Brave Browser</option>
+                                        <option value="chrome">Google Chrome</option>
+                                        <option value="firefox">Mozilla Firefox</option>
+                                        <option value="chromium">Chromium</option>
+                                        <option value="edge">Microsoft Edge</option>
+                                        <option value="opera">Opera</option>
+                                    </select>
+                                    <p class="text-xs text-textMuted mt-3 leading-relaxed">Selecciona el navegador principal donde mantienes la sesión activa de Google Drive para permitir el Bypass de cookies.</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-
-                <div class="bento-card p-8 mt-6">
-                    <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider">Integraciones</h3>
-                    <div>
-                        <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Ruta del Vault de Obsidian</label>
-                        <div class="flex gap-2">
-                            <input type="text" id="config-obsidian-path" class="flex-1 rounded-md p-3 text-sm bg-surface border border-borderGray" placeholder="Ej. C:/Users/Usuario/Documents/MiVault">
-                        </div>
-                        <p class="text-xs text-textMuted mt-3">Los resúmenes generados se guardarán automáticamente en esta carpeta local de tu equipo.</p>
-                        
-                        <label class="flex items-center gap-3 mt-6 cursor-pointer w-fit">
-                            <input type="checkbox" id="config-enable-anki" class="w-4 h-4 rounded border-borderGray text-accent focus:ring-accent accent-accent cursor-pointer">
-                            <span class="text-sm font-bold text-charcoal">Generar Tarjetas de Memoria (Anki)</span>
-                        </label>
-                        <p class="text-xs text-textMuted mt-1 ml-7">Si desactivas esto, la IA no extraerá tarjetas y el resumen tardará menos.</p>
-                        
-                        <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 mt-6">Navegador para extracción de Drive (Cookies)</label>
-                        <div class="flex gap-2">
-                            <select id="config-browser-cookie" class="w-full rounded-md p-3 text-sm bg-surface border border-borderGray cursor-pointer">
-                                <option value="brave">Brave Browser</option>
-                                <option value="chrome">Google Chrome</option>
-                                <option value="firefox">Mozilla Firefox</option>
-                                <option value="chromium">Chromium</option>
-                                <option value="edge">Microsoft Edge</option>
-                                <option value="opera">Opera</option>
-                            </select>
-                        </div>
-                        <p class="text-xs text-textMuted mt-3">Selecciona el navegador principal donde mantienes la sesión activa de Google Drive para permitir el Bypass.</p>
-                        
-                        <div class="mt-6">
-                            <button onclick="saveAppSettings()" id="btn-save-settings" class="btn-primary px-6 py-2.5 text-sm font-medium transition-all">Guardar Preferencias</button>
-                        </div>
-                    </div>
+            </div>
+            
+            <!-- Floating Save Bar -->
+            <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-background via-background to-transparent pointer-events-none flex justify-center z-20">
+                <div class="pointer-events-auto shadow-2xl rounded-2xl bg-surface border border-borderGray p-3 flex items-center gap-6 pl-8">
+                    <span class="text-sm text-charcoal font-serif italic">Mantén tus ajustes al día</span>
+                    <button onclick="saveAppSettings()" id="btn-save-settings" class="btn-primary px-8 py-3 rounded-xl text-sm font-bold tracking-wide flex items-center gap-2 shadow-sm hover:shadow transition-all">
+                        <i data-lucide="save" class="w-4 h-4"></i> Guardar Preferencias
+                    </button>
                 </div>
             </div>
         </section>
@@ -741,9 +779,15 @@
                 .then(data => {
                     document.getElementById('config-obsidian-path').value = data.obsidian_vault_path || '';
                     document.getElementById('config-enable-anki').checked = data.enable_anki !== false;
+                    document.getElementById('config-max-audio-mb').value = data.max_audio_upload_mb || 500;
                     
                     if (data.browser_cookie_source) {
                         document.getElementById('config-browser-cookie').value = data.browser_cookie_source;
+                    }
+                    if (data.default_model) {
+                        document.getElementById('model-selector').value = data.default_model;
+                        localStorage.setItem('modelo_elegido', data.default_model);
+                        document.getElementById('ui-current-model').innerText = getUiName(data.default_model);
                     }
                 })
                 .catch(e => console.log('Error cargando configuración', e));
@@ -753,6 +797,9 @@
             const path = document.getElementById('config-obsidian-path').value;
             const anki = document.getElementById('config-enable-anki').checked;
             const browserSource = document.getElementById('config-browser-cookie').value;
+            const maxAudioMB = parseInt(document.getElementById('config-max-audio-mb').value) || 500;
+            const selectedModel = document.getElementById('model-selector').value;
+            
             const btn = document.getElementById('btn-save-settings');
             const originalText = btn.innerText;
             btn.innerText = 'Guardando...';
@@ -764,7 +811,9 @@
                 body: JSON.stringify({
                     obsidian_vault_path: path, 
                     enable_anki: anki,
-                    browser_cookie_source: browserSource
+                    browser_cookie_source: browserSource,
+                    max_audio_upload_mb: maxAudioMB,
+                    default_model: selectedModel
                 })
             })
             .then(r => r.json())
@@ -784,6 +833,14 @@
 
         // Tab Switching
         function switchTab(tabId) {
+            // Detener cualquier audio en reproducción para evitar audios fantasmas al destruir el DOM
+            document.querySelectorAll('audio').forEach(audio => {
+                if (!audio.paused) {
+                    audio.pause();
+                    audio.currentTime = 0;
+                }
+            });
+            
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active-nav'));
             
@@ -1078,6 +1135,15 @@
                 .then(r => r.json())
                 .then(data => {
                     const list = document.getElementById('audios-list');
+                    
+                    // Limpiar audios existentes (pausarlos primero por seguridad)
+                    list.querySelectorAll('audio').forEach(a => {
+                        if(!a.paused) {
+                            a.pause();
+                            a.currentTime = 0;
+                        }
+                    });
+                    
                     list.innerHTML = '';
                     if(!data.audios.length) {
                         list.innerHTML = '<div class="bento-card p-12 text-center text-textMuted font-serif italic">El directorio de trabajo está vacío. No hay grabaciones locales.</div>';
@@ -1215,44 +1281,74 @@
             }
         }
         
-        // ====== IMPORTACION DE DRIVE ======
-        function downloadFromDrive() {
-            const urlInput = document.getElementById('drive-url-input');
-            const btn = document.getElementById('btn-drive-download');
-            const url = urlInput.value.trim();
+        // ====== CARGA MANUAL DE RESPALDO ======
+        async function uploadBackupAudio() {
+            const input = document.getElementById('backup-audio-input');
+            const btn = document.getElementById('btn-backup-upload');
             
-            if (!url) {
-                showToast("Por favor, ingresa una URL válida.", "error");
+            if (!input.files || input.files.length === 0) {
+                showToast("Por favor, selecciona un archivo de audio.", "error");
                 return;
             }
             
-            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline"></i> <span>Descargando...</span>';
+            const file = input.files[0];
+            
+            // Validaciones
+            const maxMBStr = document.getElementById('config-max-audio-mb')?.value || 500;
+            const maxMB = parseInt(maxMBStr, 10);
+            if (file.size > maxMB * 1024 * 1024) {
+                showToast(`El archivo pesa ${(file.size/1024/1024).toFixed(1)}MB. El límite es ${maxMB}MB (Ajustable en Preferencias).`, "error");
+                return;
+            }
+            
+            const validExtensions = /\.(webm|mp3|wav|ogg|m4a|mp4|aac)$/i;
+            if (!validExtensions.test(file.name)) {
+                showToast("Formato no óptimo. Se recomiendan .webm, .m4a o .mp3 para mejor desempeño de IA.", "warning");
+            }
+            
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline"></i> <span>Subiendo...</span>';
             lucide.createIcons({root: btn});
             btn.disabled = true;
-            urlInput.disabled = true;
+            input.disabled = true;
             
-            fetch('/api/download-drive', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: url })
-            })
-            .then(res => res.json().then(data => ({ok: res.ok, data})))
-            .then(({ok, data}) => {
-                if (!ok) {
-                    throw new Error(data.detail || "Error al procesar el enlace");
+            try {
+                const formData = new FormData();
+                formData.append('audio', file, file.name);
+                
+                // Intentar extraer custom_name del nombre del archivo backup-NOMBRE-fecha.webm
+                let customName = "";
+                if (file.name.includes("backup-")) {
+                    const parts = file.name.split("-");
+                    if (parts.length >= 3 && parts[1].length > 0) {
+                        customName = parts[1];
+                        formData.append('custom_name', customName);
+                    }
                 }
-                showToast(data.message || "¡Audio extraído y procesando!", "success");
-                urlInput.value = "";
-                loadAudios(); // Por si queremos ver si aparece o si falla
-            })
-            .catch(err => {
-                showToast(err.message, "error");
-            })
-            .finally(() => {
-                btn.innerHTML = 'Extraer y Procesar';
+                
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                showToast(data.message || "Archivo subido correctamente.", "success");
+                
+                input.value = "";
+                loadAudios(); // Refrescar la lista de pendientes
+                
+            } catch (err) {
+                console.error("Error subiendo backup:", err);
+                showToast("Error al subir el archivo.", "error");
+            } finally {
+                btn.innerHTML = originalText;
                 btn.disabled = false;
-                urlInput.disabled = false;
-            });
+                input.disabled = false;
+            }
         }
         
         // ====== CHAT DE ESTUDIO (RAG) ======

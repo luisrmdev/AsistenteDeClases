@@ -25,6 +25,9 @@
           --status-success: #ECFDF5;
           --status-success-text: #059669;
           
+          --status-warning: #FFFBEB;
+          --status-warning-text: #D97706;
+          
           --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
           --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       }
@@ -46,6 +49,9 @@
               --status-recording-text: #FCA5A5;
               --status-success: #064E3B;
               --status-success-text: #6EE7B7;
+              
+              --status-warning: #422006;
+              --status-warning-text: #FCD34D;
           }
       }
 
@@ -175,6 +181,7 @@
           animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
       }
       .status-success { background-color: var(--status-success); color: var(--status-success-text); }
+      .status-warning { background-color: var(--status-warning); color: var(--status-warning-text); }
 
       /* Layout Utilities */
       .hidden { display: none !important; }
@@ -217,9 +224,14 @@
   <div class="container">
     
     <!-- Segmented Control Tabs -->
-    <div class="segmented-control">
-      <button id="tab-btn-audio" class="segment-btn active">Grabar Audio</button>
-      <button id="tab-btn-capture" class="segment-btn">Extraer Tarea</button>
+    <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+        <div class="segmented-control" style="flex: 1; margin-bottom: 0;">
+          <button id="tab-btn-audio" class="segment-btn active">Grabar Audio</button>
+          <button id="tab-btn-capture" class="segment-btn">Extraer Tarea</button>
+        </div>
+        <button id="settingsBtn" class="btn btn-secondary" style="width: auto; padding: 8px;" title="Ajustes">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
     </div>
     
     <!-- ==================
@@ -293,7 +305,28 @@
            </button>
         </div>
         
-        <div id="captureStatus" class="status-badge status-idle hidden mt-4"></div>
+    <div id="captureStatus" class="status-badge status-idle hidden mt-4"></div>
+    </div>
+
+    <!-- ==================
+         TAB SETTINGS
+         ================== -->
+    <div id="tab-settings" class="hidden">
+        <p class="text-sm font-medium mb-4" style="text-align: center;">Configuración de Respaldo</p>
+
+        <div class="input-group">
+            <label class="input-label">Subcarpeta de descargas (Fallback)</label>
+            <input type="text" id="backupSubfolder" placeholder="Ej: Backups_Clases/" class="font-mono">
+        </div>
+        
+        <div class="flex-row justify-between mb-4" style="border-top: 1px solid var(--border-light); padding-top: 12px;">
+            <label class="input-label flex-row" style="margin:0; align-items:center; gap: 8px;">
+                <input type="checkbox" id="backupAskAlways" style="cursor:pointer; width: 16px; height: 16px; margin: 0; accent-color: var(--text-main);">
+                Preguntar siempre dónde guardar el backup
+            </label>
+        </div>
+        
+        <button id="closeSettingsBtn" class="btn btn-secondary mt-4">Volver</button>
     </div>
 
   </div>

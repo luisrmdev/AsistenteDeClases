@@ -21,8 +21,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     cancelRecording(message.tabId);
   } else if (message.type === 'UPDATE_STATE') {
     updateState(message.tabId, message.state);
+  } else if (message.type === 'DOWNLOAD_FALLBACK_CHUNK') {
+    handleFallbackChunk(message);
   }
 });
+
+const fallbackChunks = {};
+
+async function handleFallbackChunk(message) {
+  if (!fallbackChunks[message.fileId]) {
+    fallbackChunks[message.fileId] = new Array(message.total);
+  }
+  
+  fallbackChunks[message.fileId][message.index] = message.chunk;
+  
+  // Revisar si están todos
+  let complete = true;
+  for (let i = 0; i < message.total; i++) {
+    if (fallbackChunks[message.fileId][i] === undefined) {
+      complete = false;
+      break;
+    }
+  }
+  
+  if (complete) {
+    const dataUrl = fallbackChunks[message.fileId].join('');
+    delete fallbackChunks[message.fileId];
+    await executeFallbackDownload(dataUrl, message.customName, message.tabId);
+  }
+}
+
+async function executeFallbackDownload(dataUrl, customName, tabId) {
+  try {
+    const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
+    const subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
+    const askAlways = result.backupAskAlways || false;
+
+    const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+    const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
+    const filename = `${subfolder}backup-${safeCustomName}${dateStr}.webm`;
+    
+    chrome.downloads.download({
+      url: dataUrl,
+      filename: filename,
+      saveAs: askAlways
+    }, (downloadId) => {
+      if (chrome.runtime.lastError) {
+        console.error("Download failed:", chrome.runtime.lastError);
+        updateState(tabId, 'error');
+      } else {
+        updateState(tabId, 'fallback_saved');
+      }
+    });
+  } catch (e) {
+    console.error('Fallback download executed failed', e);
+    updateState(tabId, 'error');
+  }
+}
 
 // Detectar silencio en las pestañas
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -110,8 +165,9 @@ async function startRecording(tabId) {
     
     await setupOffscreenDocument('offscreen.html');
     
-    const ghostRes = await chrome.storage.local.get(['ghostMode']);
-    const isGhost = ghostRes.ghostMode || false;
+    const ghostRes = await chrome.storage.local.get(['ghostModes']);
+    const ghostModes = ghostRes.ghostModes || {};
+    const isGhost = ghostModes[tabId] || false;
 
     chrome.runtime.sendMessage({
       target: 'offscreen',

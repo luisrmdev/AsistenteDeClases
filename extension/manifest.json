@@ -8,7 +8,8 @@
     "tabCapture",
     "offscreen",
     "storage",
-    "alarms"
+    "alarms",
+    "downloads"
   ],
   "host_permissions": [
     "http://localhost:8000/*"

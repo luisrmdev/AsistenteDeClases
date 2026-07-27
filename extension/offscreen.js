@@ -5,14 +5,12 @@ const streams = {};
 const tempNames = {};
 const gainNodes = {};
 const cancelFlags = {};
-let isGhostMode = false;
 
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== 'offscreen') return;
 
   if (message.type === 'START_RECORDING') {
-    isGhostMode = message.ghostMode || false;
-    startRecording(message.streamId, message.tabId);
+    startRecording(message.streamId, message.tabId, message.ghostMode || false);
   } else if (message.type === 'STOP_RECORDING') {
     stopRecording(message.tabId, message.customName);
   } else if (message.type === 'PAUSE_RECORDING') {
@@ -22,12 +20,10 @@ chrome.runtime.onMessage.addListener(async (message) => {
   } else if (message.type === 'CANCEL_RECORDING') {
     cancelRecording(message.tabId);
   } else if (message.type === 'SET_GHOST_MODE') {
-    isGhostMode = message.ghostMode;
-    // Aplicar a todos los gain nodes activos
-    for (const tabId in gainNodes) {
-      if (gainNodes[tabId]) {
-        gainNodes[tabId].gain.value = isGhostMode ? 0 : 1;
-      }
+    const isGhost = message.ghostMode;
+    const targetTabId = message.tabId;
+    if (targetTabId && gainNodes[targetTabId]) {
+      gainNodes[targetTabId].gain.value = isGhost ? 0 : 1;
     }
   }
 });
@@ -57,7 +53,7 @@ function updateState(tabId, state) {
   });
 }
 
-async function startRecording(streamId, tabId) {
+async function startRecording(streamId, tabId, isGhost) {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -73,7 +69,7 @@ async function startRecording(streamId, tabId) {
     
     // Crear nodo de ganancia para controlar el volumen hacia los altavoces
     const gainNode = audioContext.createGain();
-    gainNode.gain.value = isGhostMode ? 0 : 1;
+    gainNode.gain.value = isGhost ? 0 : 1;
     
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
@@ -173,10 +169,40 @@ async function uploadAudio(audioBlob, tabId, customName) {
       updateState(tabId, 'completed');
     } else {
       console.error('Failed to upload audio', response.statusText);
-      updateState(tabId, 'error');
+      await saveAudioLocallyFallback(audioBlob, customName, tabId);
     }
   } catch (error) {
     console.error('Error uploading audio:', error);
+    await saveAudioLocallyFallback(audioBlob, customName, tabId);
+  }
+}
+
+async function saveAudioLocallyFallback(audioBlob, customName, tabId) {
+  try {
+    const reader = new FileReader();
+    reader.readAsDataURL(audioBlob);
+    reader.onloadend = async () => {
+      const base64data = reader.result;
+      const chunkSize = 5 * 1024 * 1024; // 5MB per chunk to be safe with IPC limits
+      const totalChunks = Math.ceil(base64data.length / chunkSize);
+      const fileId = "backup_" + tabId + "_" + Date.now();
+      
+      for (let i = 0; i < totalChunks; i++) {
+        const chunk = base64data.slice(i * chunkSize, (i + 1) * chunkSize);
+        await chrome.runtime.sendMessage({
+          target: 'background',
+          type: 'DOWNLOAD_FALLBACK_CHUNK',
+          fileId: fileId,
+          chunk: chunk,
+          index: i,
+          total: totalChunks,
+          customName: customName,
+          tabId: tabId
+        });
+      }
+    };
+  } catch (e) {
+    console.error('Fallback serialization failed', e);
     updateState(tabId, 'error');
   }
 }

@@ -9,6 +9,7 @@ env/
 # Media and Generated Data
 audios/
 resumenes/
+memoria_ia/
 
 # IDE / OS
 .vscode/
