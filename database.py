@@ -23,6 +23,7 @@ STATS_FILE = "stats.json"
 SETTINGS_FILE = "settings.json"
 META_FILE = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
 TARJETAS_FILE = os.path.join(RESUMENES_DIR, "tarjetas_informativas.json")
+COLA_FILE = os.path.join(RESUMENES_DIR, "cola_tareas.json")
 
 # Crear directorios necesarios al importar
 for _dir in [AUDIOS_DIR, RESUMENES_DIR, PAPELERA_DIR, EXPORTACIONES_DIR, MEMORIA_DIR]:
@@ -52,7 +53,10 @@ class JsonStore:
         """Lee, aplica updater_fn(data) -> new_data, y escribe atómicamente."""
         async with self._lock:
             data = self._read_sync()
-            new_data = updater_fn(data)
+            if asyncio.iscoroutinefunction(updater_fn):
+                new_data = await updater_fn(data)
+            else:
+                new_data = updater_fn(data)
             self._write_sync(new_data)
             return new_data
 
@@ -82,3 +86,4 @@ materias_store = JsonStore(MATERIAS_FILE, default=list)
 stats_store = JsonStore(STATS_FILE, default=dict)
 meta_store = JsonStore(META_FILE, default=dict)
 tarjetas_store = JsonStore(TARJETAS_FILE, default=list)
+cola_store = JsonStore(COLA_FILE, default=list)

@@ -12,7 +12,7 @@ El sistema tiene tres capas:
 2. **Frontend** — `frontend/index.html` (SPA monolítica, un solo archivo de ~74 KB).
 3. **Extensión de Chrome** — carpeta `extension/`. Captura audio de la pestaña y lo sube al backend.
 
-**Stack de dependencias** (`requirements.txt`): `fastapi`, `uvicorn`, `python-multipart`, `google-genai`, `python-dotenv`, `tenacity`, `icalendar`, `yt-dlp`.
+**Stack de dependencias** (`requirements.txt`): `fastapi`, `uvicorn`, `python-multipart`, `google-genai`, `python-dotenv`, `tenacity`, `yt-dlp`.
 
 ---
 
@@ -51,9 +51,10 @@ Clase `JsonStore` con `asyncio.Lock()`. Cada archivo JSON del sistema tiene su p
 | `materias_store` | `materias.json` |
 | `stats_store` | `stats.json` |
 | `meta_store` | `resumenes/resumenes_meta.json` |
-| `tareas_store` | `resumenes/tareas_meta.json` |
+| `tarjetas_store` | `resumenes/tarjetas_informativas.json` |
 
-Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o `store.update(fn)`. Ningún endpoint hace `open('archivo.json', 'w')` directamente.
+Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o `store.update(fn)`. Ningún endpoint hace `open('archivo.json', 'w')` directamente. 
+> **Nota de Resiliencia**: `update(updater_fn)` detecta automáticamente si `updater_fn` es síncrona o asíncrona (`asyncio.iscoroutinefunction`) para evitar errores de serialización (coroutine object not JSON serializable).
 
 ---
 
@@ -101,12 +102,12 @@ Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o 
     2. Extrae tags del Frontmatter YAML con regex
     3. export_service.save_markdown_and_metadata(...) → .md local + meta_store.update()
     4. export_service.save_to_obsidian(...) → copia a bóveda si ruta existe
-    5. Si json_data["calendario"]: export_service.generate_ics_and_save_tasks(...)
-       → .ics en exportaciones/ + tareas_store.update()
+    5. Si json_data["tarjetas_informativas"]: export_service.save_tarjetas_informativas(...)
+       → append a tarjetas_informativas.json via tarjetas_store.update()
     6. Si json_data["nuevas_reglas_profesor"]: export_service.save_teacher_rules(...)
        → append en memoria_ia/reglas_{materia}.md
     7. shutil.move(audio → papelera_audios/) + retención de 10 archivos
-  → Retorna { message, md_filename, anki_file: null, ics_file }
+  → Retorna { message, md_filename, anki_file: null }
 ```
 
 > **Nota:** `anki_file` siempre es `null`. La generación de Anki fue eliminada completamente.
@@ -123,11 +124,10 @@ AsistenteClases/
 ├── resumenes/             CORAZÓN DE DATOS.
 │   ├── *.md               Resúmenes (Markdown con Frontmatter YAML).
 │   ├── resumenes_meta.json Índice central (gestionado por meta_store con Lock).
-│   └── tareas_meta.json   Tareas/eventos (gestionado por tareas_store con Lock).
+│   └── tarjetas_informativas.json Tablón de avisos y tareas (gestionado por tarjetas_store con Lock).
 ├── memoria_ia/            Reglas del profesor por materia.
 │   └── reglas_{materia}.md (append al detectar nuevas_reglas_profesor)
-└── exportaciones/         Archivos descargables.
-    └── *.ics              Calendarios iCalendar.
+└── exportaciones/         Archivos descargables (si los hay).
 ```
 
 ### Formatos internos clave

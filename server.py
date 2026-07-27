@@ -9,6 +9,8 @@ import shutil
 import uuid
 from datetime import datetime
 
+import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -24,13 +26,161 @@ from database import (
     meta_store,
     settings_store,
     tarjetas_store,
+    cola_store,
 )
 from services import audio_service, export_service, llm_service
 
 from dotenv import load_dotenv
 load_dotenv()
 
-app = FastAPI()
+
+# ===========================================================================
+# Worker Task Queue
+# ===========================================================================
+
+async def worker_loop():
+    while True:
+        try:
+            tareas = await cola_store.read()
+            pending = next((t for t in tareas if t.get("estado") == "pending"), None)
+            
+            if not pending:
+                await asyncio.sleep(5)
+                continue
+                
+            task_id = pending["id"]
+            
+            def set_processing(ts):
+                for t in ts:
+                    if t.get("id") == task_id and t.get("estado") == "pending":
+                        t["estado"] = "processing"
+                        return ts
+                return None
+                
+            updated = await cola_store.update(set_processing)
+            if not updated:
+                continue
+                
+            filepath = os.path.join(AUDIOS_DIR, pending["filename"])
+            if not os.path.exists(filepath):
+                def set_missing(ts):
+                    for t in ts:
+                        if t["id"] == task_id:
+                            t["estado"] = "failed"
+                            t["error_msg"] = "Archivo no encontrado"
+                    return ts
+                await cola_store.update(set_missing)
+                continue
+                
+            # Configurar prompt
+            prompt_usar = ""
+            if pending["materia_id"] and pending["materia_id"] != "default":
+                materias = await materias_store.read()
+                m = next((m for m in materias if m["id"] == pending["materia_id"]), None)
+                if m:
+                    prompt_usar = m["prompt_personalizado"]
+                    
+            try:
+                # LLM Call
+                upload_path = audio_service.remove_silences(filepath)
+                try:
+                    texto, stats = await llm_service.generate_summary_from_audio(
+                        upload_path, prompt_usar, pending.get("modelo_elegido", "gemini-3.1-flash-lite")
+                    )
+                finally:
+                    audio_service.cleanup_temp(upload_path, filepath)
+                    
+                # Guardado automático (Pipeline Completo)
+                json_data, texto_limpio = llm_service.extract_json_block(texto)
+                fecha_str = datetime.now().strftime("%Y-%m-%d")
+                
+                md_filename = pending["filename"].replace(".webm", ".md")
+                if md_filename.startswith("meet_"):
+                    mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
+                    md_filename = md_filename.replace("meet_", f"resumen__{mat_id}__meet_")
+                    
+                suggested_filename = json_data.get("filename", md_filename).replace("/", "-")
+                if not suggested_filename.endswith(".md"):
+                    suggested_filename += ".md"
+                suggested_folder = json_data.get("folder", "")
+                
+                tags_match = re.search(r"tags:\s*\[(.*?)\]", texto_limpio, re.IGNORECASE)
+                if not tags_match:
+                    tags_match = re.search(r"tags:\s*(.*)", texto_limpio, re.IGNORECASE)
+                tags = [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(",")] if tags_match else []
+                
+                await export_service.save_markdown_and_metadata(
+                    md_filename, suggested_filename, suggested_folder, texto_limpio, tags, fecha_str
+                )
+                
+                await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
+                
+                if json_data.get("tarjetas_informativas"):
+                    mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
+                    await export_service.save_tarjetas_informativas(
+                        json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str
+                    )
+                    
+                if json_data.get("nuevas_reglas_profesor"):
+                    await export_service.save_teacher_rules(
+                        json_data["nuevas_reglas_profesor"], pending["materia_id"], fecha_str
+                    )
+                    
+                # Marcar completado
+                def set_completed(ts):
+                    for t in ts:
+                        if t["id"] == task_id:
+                            t["estado"] = "completed"
+                            t["error_msg"] = ""
+                    return ts
+                await cola_store.update(set_completed)
+                
+                # Papelera
+                papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
+                shutil.move(filepath, papelera_path)
+                
+                # Cleanup papelera (10 files)
+                papelera_files = sorted(
+                    [os.path.join(PAPELERA_DIR, f) for f in os.listdir(PAPELERA_DIR)
+                     if os.path.isfile(os.path.join(PAPELERA_DIR, f))],
+                    key=os.path.getmtime,
+                    reverse=True,
+                )
+                for old_file in papelera_files[10:]:
+                    try:
+                        os.remove(old_file)
+                    except Exception:
+                        pass
+                
+            except Exception as e:
+                def set_failed(ts):
+                    for t in ts:
+                        if t["id"] == task_id:
+                            t["estado"] = "failed"
+                            t["error_msg"] = str(e)
+                            t["intentos"] = t.get("intentos", 0) + 1
+                    return ts
+                await cola_store.update(set_failed)
+                
+        except Exception as e:
+            print(f"Worker queue error: {e}")
+            await asyncio.sleep(5)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    def revert_processing(ts):
+        for t in ts:
+            if t.get("estado") == "processing":
+                t["estado"] = "pending"
+        return ts
+    await cola_store.update(revert_processing)
+    
+    worker_task = asyncio.create_task(worker_loop())
+    yield
+    worker_task.cancel()
+
+app = FastAPI(lifespan=lifespan)
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -338,124 +488,57 @@ async def chat_estudio(req: ChatRequest):
 
 
 # ===========================================================================
-# Generate (Human-in-the-Loop)
+# Generate Task (Cola)
 # ===========================================================================
 
-@app.post("/api/generate")
-async def generate_summary(req: GenerateRequest):
+@app.post("/api/generate", status_code=202)
+async def queue_generate_task(req: GenerateRequest):
     filepath = os.path.join(AUDIOS_DIR, req.filename)
     if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
+        
+    task_id = str(uuid.uuid4())
+    
+    def enqueue(ts):
+        if any(t["filename"] == req.filename and t["estado"] in ["pending", "processing"] for t in ts):
+            return ts
+        ts.append({
+            "id": task_id,
+            "filename": req.filename,
+            "materia_id": req.materia_id,
+            "modelo_elegido": req.modelo_elegido,
+            "estado": "pending",
+            "intentos": 0,
+            "error_msg": "",
+            "fecha_creacion": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        })
+        return ts
+        
+    await cola_store.update(enqueue)
+    return {"message": "Audio encolado", "task_id": task_id}
 
-    # Obtener prompt de la materia
-    prompt_usar = ""
-    if req.materia_id and req.materia_id != "default":
-        materias = await materias_store.read()
-        materia = next((m for m in materias if m["id"] == req.materia_id), None)
-        if materia:
-            prompt_usar = materia["prompt_personalizado"]
+@app.get("/api/cola")
+async def get_queue():
+    tareas = await cola_store.read()
+    return {"cola": tareas}
 
-    try:
-        print(f"Procesando {filepath} con Gemini...")
+@app.post("/api/cola/{task_id}/retry")
+async def retry_queue_task(task_id: str):
+    def retry(ts):
+        for t in ts:
+            if t["id"] == task_id and t["estado"] == "failed":
+                t["estado"] = "pending"
+                t["error_msg"] = ""
+        return ts
+    await cola_store.update(retry)
+    return {"message": "Reintentando tarea"}
 
-        # Preprocesamiento FFmpeg
-        upload_path = audio_service.remove_silences(filepath)
-
-        try:
-            texto, stats = await llm_service.generate_summary_from_audio(
-                upload_path, prompt_usar, req.modelo_elegido
-            )
-            return {"content": texto, "stats": stats}
-        finally:
-            # FASE 3: Limpieza garantizada
-            audio_service.cleanup_temp(upload_path, filepath)
-
-    except Exception as e:
-        print(f"Error procesando el audio con Gemini: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-# ===========================================================================
-# Save (Human-in-the-Loop: aprobación y persistencia)
-# ===========================================================================
-
-@app.post("/api/save")
-async def save_summary(req: SaveRequest):
-    filepath = os.path.join(AUDIOS_DIR, req.filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
-
-    fecha_str = datetime.now().strftime("%Y-%m-%d")
-
-    # Naming del archivo de resumen
-    md_filename = req.filename.replace(".webm", ".md")
-    if md_filename.startswith("meet_"):
-        mat_id = req.materia_id if (req.materia_id and req.materia_id != "default") else "default"
-        md_filename = md_filename.replace("meet_", f"resumen__{mat_id}__meet_")
-
-    # Extraer JSON embebido de Gemini
-    json_data, texto_limpio = llm_service.extract_json_block(req.content)
-
-    suggested_filename = json_data.get("filename", md_filename).replace("/", "-")
-    if not suggested_filename.endswith(".md"):
-        suggested_filename += ".md"
-    suggested_folder = json_data.get("folder", "")
-
-    # Extraer tags del Frontmatter
-    tags_match = re.search(r"tags:\s*\[(.*?)\]", texto_limpio, re.IGNORECASE)
-    if not tags_match:
-        tags_match = re.search(r"tags:\s*(.*)", texto_limpio, re.IGNORECASE)
-    tags = (
-        [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(",")]
-        if tags_match
-        else []
-    )
-
-    # Guardar Markdown + metadata
-    await export_service.save_markdown_and_metadata(
-        md_filename, suggested_filename, suggested_folder, texto_limpio, tags, fecha_str
-    )
-
-    # Guardar en Obsidian
-    await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
-
-    # Tarjetas Informativas
-    if json_data.get("tarjetas_informativas"):
-        mat_id = req.materia_id if (req.materia_id and req.materia_id != "default") else "default"
-        await export_service.save_tarjetas_informativas(
-            json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str
-        )
-
-    # Reglas del profesor
-    if json_data.get("nuevas_reglas_profesor"):
-        await export_service.save_teacher_rules(
-            json_data["nuevas_reglas_profesor"], req.materia_id, fecha_str
-        )
-
-    # Mover audio a papelera
-    papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
-    shutil.move(filepath, papelera_path)
-
-    # Retención de papelera: máximo 10 archivos
-    papelera_files = sorted(
-        [os.path.join(PAPELERA_DIR, f) for f in os.listdir(PAPELERA_DIR)
-         if os.path.isfile(os.path.join(PAPELERA_DIR, f))],
-        key=os.path.getmtime,
-        reverse=True,
-    )
-    for old_file in papelera_files[10:]:
-        try:
-            os.remove(old_file)
-        except Exception:
-            pass
-
-    return {
-        "message": "Guardado exitoso",
-        "md_filename": md_filename,
-        "anki_file": None,
-        "ics_file": ics_file,
-    }
-
+@app.delete("/api/cola/{task_id}")
+async def delete_queue_task(task_id: str):
+    def remove(ts):
+        return [t for t in ts if t["id"] != task_id]
+    await cola_store.update(remove)
+    return {"message": "Tarea eliminada"}
 
 # ===========================================================================
 # Summaries
