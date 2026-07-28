@@ -1,1088 +1,1607 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Asistente de Clases - Dashboard IA</title>
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&family=Geist+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
-    
+
     <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['Geist', 'system-ui', 'sans-serif'],
-                        serif: ['Newsreader', 'serif'],
-                        mono: ['Geist Mono', 'monospace'],
-                    },
-                    colors: {
-                        background: 'var(--color-bg)',
-                        surface: 'var(--color-surface)',
-                        surfaceHover: 'var(--color-surface-hover)',
-                        borderGray: 'var(--color-border)',
-                        charcoal: 'var(--color-text-main)',
-                        textMuted: 'var(--color-text-muted)',
-                        accent: 'var(--color-accent)',
-                        accentHover: 'var(--color-accent-hover)',
-                        accentText: 'var(--color-accent-text)',
-                        danger: 'var(--color-danger)',
-                        dangerBg: 'var(--color-danger-bg)'
-                    },
-                    boxShadow: {
-                        'glass': '0 4px 30px rgba(0, 0, 0, 0.1)',
-                        'glow': '0 0 20px rgba(var(--color-accent-rgb), 0.15)',
-                    },
-                    animation: {
-                        'fade-in': 'fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-                        'slide-up': 'slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-                        'toast-enter': 'toastEnter 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards',
-                        'toast-leave': 'toastLeave 0.3s ease-in forwards'
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0' },
-                            '100%': { opacity: '1' }
-                        },
-                        slideUp: {
-                            '0%': { opacity: '0', transform: 'translateY(16px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' }
-                        },
-                        toastEnter: {
-                            '0%': { opacity: '0', transform: 'translateY(100%) scale(0.9)' },
-                            '100%': { opacity: '1', transform: 'translateY(0) scale(1)' }
-                        },
-                        toastLeave: {
-                            '0%': { opacity: '1', transform: 'translateY(0) scale(1)' },
-                            '100%': { opacity: '0', transform: 'translateY(100%) scale(0.9)' }
-                        }
-                    }
-                }
-            }
-        }
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Geist", "system-ui", "sans-serif"],
+              serif: ["Newsreader", "serif"],
+              mono: ["Geist Mono", "monospace"],
+            },
+            colors: {
+              background: "var(--color-bg)",
+              surface: "var(--color-surface)",
+              surfaceHover: "var(--color-surface-hover)",
+              borderGray: "var(--color-border)",
+              charcoal: "var(--color-text-main)",
+              textMuted: "var(--color-text-muted)",
+              accent: "var(--color-accent)",
+              accentHover: "var(--color-accent-hover)",
+              accentText: "var(--color-accent-text)",
+              danger: "var(--color-danger)",
+              dangerBg: "var(--color-danger-bg)",
+            },
+            boxShadow: {
+              glass: "0 4px 30px rgba(0, 0, 0, 0.1)",
+              glow: "0 0 20px rgba(var(--color-accent-rgb), 0.15)",
+            },
+            animation: {
+              "fade-in": "fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+              "slide-up": "slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+              "toast-enter":
+                "toastEnter 0.3s cubic-bezier(0.2, 0.9, 0.3, 1.1) forwards",
+              "toast-leave": "toastLeave 0.3s ease-in forwards",
+            },
+            keyframes: {
+              fadeIn: {
+                "0%": { opacity: "0" },
+                "100%": { opacity: "1" },
+              },
+              slideUp: {
+                "0%": { opacity: "0", transform: "translateY(16px)" },
+                "100%": { opacity: "1", transform: "translateY(0)" },
+              },
+              toastEnter: {
+                "0%": {
+                  opacity: "0",
+                  transform: "translateY(100%) scale(0.9)",
+                },
+                "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+              },
+              toastLeave: {
+                "0%": { opacity: "1", transform: "translateY(0) scale(1)" },
+                "100%": {
+                  opacity: "0",
+                  transform: "translateY(100%) scale(0.9)",
+                },
+              },
+            },
+          },
+        },
+      };
     </script>
-    
+
     <style>
-        :root {
-            --color-bg: #FAFAFA;
-            --color-surface: #FFFFFF;
-            --color-surface-hover: #F4F4F5;
-            --color-border: #E4E4E7;
-            --color-text-main: #09090B;
-            --color-text-muted: #71717A;
-            --color-accent: #18181B;
-            --color-accent-hover: #27272A;
-            --color-accent-text: #FAFAFA;
-            --color-accent-rgb: 24, 24, 27;
-            --color-danger: #EF4444;
-            --color-danger-bg: #FEF2F2;
-        }
+      :root {
+        --color-bg: #fafafa;
+        --color-surface: #ffffff;
+        --color-surface-hover: #f4f4f5;
+        --color-border: #e4e4e7;
+        --color-text-main: #09090b;
+        --color-text-muted: #71717a;
+        --color-accent: #18181b;
+        --color-accent-hover: #27272a;
+        --color-accent-text: #fafafa;
+        --color-accent-rgb: 24, 24, 27;
+        --color-danger: #ef4444;
+        --color-danger-bg: #fef2f2;
+      }
 
-        .dark {
-            --color-bg: #09090B;
-            --color-surface: #121214;
-            --color-surface-hover: #1E1E20;
-            --color-border: #27272A;
-            --color-text-main: #FAFAFA;
-            --color-text-muted: #A1A1AA;
-            --color-accent: #FAFAFA;
-            --color-accent-hover: #E4E4E7;
-            --color-accent-text: #09090B;
-            --color-accent-rgb: 250, 250, 250;
-            --color-danger: #F87171;
-            --color-danger-bg: #450A0A;
-        }
+      .dark {
+        --color-bg: #09090b;
+        --color-surface: #121214;
+        --color-surface-hover: #1e1e20;
+        --color-border: #27272a;
+        --color-text-main: #fafafa;
+        --color-text-muted: #a1a1aa;
+        --color-accent: #fafafa;
+        --color-accent-hover: #e4e4e7;
+        --color-accent-text: #09090b;
+        --color-accent-rgb: 250, 250, 250;
+        --color-danger: #f87171;
+        --color-danger-bg: #450a0a;
+      }
 
-        body { 
-            font-family: 'Geist', sans-serif; 
-            background-color: var(--color-bg); 
-            color: var(--color-text-main); 
-            line-height: 1.6;
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-        
-        .nav-btn { 
-            color: var(--color-text-muted); 
-            position: relative;
-            transition: all 0.2s ease;
-        }
-        .nav-btn:hover { 
-            background-color: var(--color-surface-hover); 
-            color: var(--color-text-main); 
-        }
-        .nav-btn.active-nav { 
-            background-color: var(--color-surface-hover); 
-            color: var(--color-text-main); 
-            font-weight: 500;
-        }
-        .nav-btn.active-nav::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 20%;
-            height: 60%;
-            width: 3px;
-            background-color: var(--color-text-main);
-            border-radius: 0 4px 4px 0;
-        }
-        
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
-        
-        .fade-in { animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .slide-up { animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        
-        .bento-card {
-            border: 1px solid var(--color-border);
-            border-radius: 12px;
-            background: var(--color-surface);
-            box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        }
-        .bento-card:hover {
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            border-color: var(--color-text-muted);
-        }
-        
-        input, textarea, select {
-            border: 1px solid var(--color-border);
-            background-color: var(--color-bg);
-            color: var(--color-text-main);
-            transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.02) inset;
-        }
-        input:focus, textarea:focus, select:focus {
-            border-color: var(--color-text-main);
-            outline: none;
-            box-shadow: 0 0 0 1px var(--color-text-main);
-        }
-        
-        .btn-primary {
-            background-color: var(--color-accent);
-            color: var(--color-accent-text);
-            border-radius: 8px;
-            transition: all 0.2s ease;
-            font-weight: 500;
-        }
-        .btn-primary:hover {
-            background-color: var(--color-accent-hover);
-            transform: translateY(-1px);
-        }
-        .btn-primary:active { transform: translateY(0) scale(0.98); }
-        
-        .btn-secondary {
-            border: 1px solid var(--color-border);
-            background-color: var(--color-surface);
-            color: var(--color-text-main);
-            border-radius: 8px;
-            transition: all 0.2s ease;
-            font-weight: 500;
-        }
-        .btn-secondary:hover {
-            background-color: var(--color-surface-hover);
-            border-color: var(--color-text-muted);
-        }
-        .btn-secondary:active { transform: scale(0.98); }
+      body {
+        font-family: "Geist", sans-serif;
+        background-color: var(--color-bg);
+        color: var(--color-text-main);
+        line-height: 1.6;
+        transition:
+          background-color 0.3s ease,
+          color 0.3s ease;
+      }
 
-        .chat-user {
-            background-color: var(--color-surface);
-            color: var(--color-text-main);
-            align-self: flex-end;
-            border: 1px solid var(--color-border);
-            border-radius: 12px 12px 0 12px;
-        }
-        .chat-ai {
-            background-color: transparent;
-            color: var(--color-text-main);
-            align-self: flex-start;
-            border-radius: 12px 12px 12px 0;
-        }
-        .chat-bubble { max-width: 85%; }
-        
-        .prose h1, .prose h2, .prose h3, .prose h4, .prose strong, .prose { color: var(--color-text-main); }
-        .prose h1, .prose h2, .prose h3 { font-family: 'Geist', sans-serif; letter-spacing: -0.02em; font-weight: 600; }
-        .prose code { 
-            font-family: 'Geist Mono', monospace; 
-            background-color: var(--color-surface); 
-            padding: 3px 6px; 
-            border-radius: 6px; 
-            border: 1px solid var(--color-border); 
-            font-size: 0.85em; 
-            color: var(--color-text-main); 
-        }
-        .prose pre code {
-            background-color: transparent;
-            border: none;
-            padding: 0;
-        }
-        .prose pre {
-            background-color: var(--color-surface);
-            border: 1px solid var(--color-border);
-            border-radius: 8px;
-            padding: 16px;
-        }
-        
-        .modal-overlay { 
-            background-color: rgba(0, 0, 0, 0.4); 
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-        }
-        .dark .modal-overlay { 
-            background-color: rgba(0, 0, 0, 0.7); 
-        }
+      .nav-btn {
+        color: var(--color-text-muted);
+        position: relative;
+        transition: all 0.2s ease;
+      }
+      .nav-btn:hover {
+        background-color: var(--color-surface-hover);
+        color: var(--color-text-main);
+      }
+      .nav-btn.active-nav {
+        background-color: var(--color-surface-hover);
+        color: var(--color-text-main);
+        font-weight: 500;
+      }
+      .nav-btn.active-nav::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 20%;
+        height: 60%;
+        width: 3px;
+        background-color: var(--color-text-main);
+        border-radius: 0 4px 4px 0;
+      }
 
-        /* Image Carousel */
-        .img-carousel-wrapper {
-            position: relative;
-            margin-top: 1rem;
-        }
-        .img-carousel-track {
-            display: flex;
-            gap: 0.5rem;
-            overflow-x: auto;
-            scroll-behavior: smooth;
-            scroll-snap-type: x mandatory;
-            padding-bottom: 0.5rem;
-            scrollbar-width: none;
-            -ms-overflow-style: none;
-        }
-        .img-carousel-track::-webkit-scrollbar { display: none; }
-        .img-carousel-track > div {
-            scroll-snap-align: start;
-            flex-shrink: 0;
-        }
-        .img-carousel-arrow {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 10;
-            width: 28px;
-            height: 28px;
-            border-radius: 50%;
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            color: var(--color-text);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            opacity: 0;
-            transition: opacity 0.2s ease;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-        }
-        .img-carousel-wrapper:hover .img-carousel-arrow { opacity: 1; }
-        .img-carousel-arrow:hover { background: var(--color-bg); }
-        .img-carousel-arrow.left { left: -10px; }
-        .img-carousel-arrow.right { right: -10px; }
-        .img-carousel-thumb {
-            cursor: pointer;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-            border-radius: 6px;
-            overflow: hidden;
-        }
-        .img-carousel-thumb:hover {
-            transform: scale(1.05);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: var(--color-border);
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: var(--color-text-muted);
+      }
 
-        /* Image Preview Modal */
-        #image-preview-modal {
-            position: fixed;
-            inset: 0;
-            z-index: 9998;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            opacity: 0;
-            transition: opacity 0.25s ease;
-            cursor: zoom-out;
-        }
-        #image-preview-modal.active { opacity: 1; }
-        #image-preview-modal img {
-            max-width: 90vw;
-            max-height: 85vh;
-            object-fit: contain;
-            border-radius: 8px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-            transform: scale(0.92);
-            transition: transform 0.25s ease;
-        }
-        #image-preview-modal.active img { transform: scale(1); }
-        #image-preview-modal .modal-close-btn {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        #image-preview-modal .modal-close-btn:hover { background: rgba(255,255,255,0.25); }
-        #image-preview-modal .modal-caption {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255,255,255,0.7);
-            font-size: 12px;
-            font-family: var(--font-mono, monospace);
-            background: rgba(0,0,0,0.4);
-            padding: 4px 14px;
-            border-radius: 99px;
-        }
-        #image-preview-modal .modal-nav {
-            position: absolute;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        #image-preview-modal .modal-nav:hover { background: rgba(255,255,255,0.25); }
-        #image-preview-modal .modal-nav.prev { left: 20px; }
-        #image-preview-modal .modal-nav.next { right: 20px; }
-        
-        /* Custom Toasts */
-        #toast-container {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 9999;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-        .toast {
-            background: var(--color-surface);
-            border: 1px solid var(--color-border);
-            color: var(--color-text-main);
-            padding: 16px 20px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.1);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            min-width: 300px;
-        }
+      .fade-in {
+        animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+      .slide-up {
+        animation: slideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      .bento-card {
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        background: var(--color-surface);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+        transition:
+          transform 0.2s ease,
+          box-shadow 0.2s ease,
+          border-color 0.2s ease;
+      }
+      .bento-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        border-color: var(--color-text-muted);
+      }
+
+      input,
+      textarea,
+      select {
+        border: 1px solid var(--color-border);
+        background-color: var(--color-bg);
+        color: var(--color-text-main);
+        transition: all 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) inset;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: var(--color-text-main);
+        outline: none;
+        box-shadow: 0 0 0 1px var(--color-text-main);
+      }
+
+      .btn-primary {
+        background-color: var(--color-accent);
+        color: var(--color-accent-text);
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        font-weight: 500;
+      }
+      .btn-primary:hover {
+        background-color: var(--color-accent-hover);
+        transform: translateY(-1px);
+      }
+      .btn-primary:active {
+        transform: translateY(0) scale(0.98);
+      }
+
+      .btn-secondary {
+        border: 1px solid var(--color-border);
+        background-color: var(--color-surface);
+        color: var(--color-text-main);
+        border-radius: 8px;
+        transition: all 0.2s ease;
+        font-weight: 500;
+      }
+      .btn-secondary:hover {
+        background-color: var(--color-surface-hover);
+        border-color: var(--color-text-muted);
+      }
+      .btn-secondary:active {
+        transform: scale(0.98);
+      }
+
+      .chat-user {
+        background-color: var(--color-surface);
+        color: var(--color-text-main);
+        align-self: flex-end;
+        border: 1px solid var(--color-border);
+        border-radius: 12px 12px 0 12px;
+      }
+      .chat-ai {
+        background-color: transparent;
+        color: var(--color-text-main);
+        align-self: flex-start;
+        border-radius: 12px 12px 12px 0;
+      }
+      .chat-bubble {
+        max-width: 85%;
+      }
+
+      .prose h1,
+      .prose h2,
+      .prose h3,
+      .prose h4,
+      .prose strong,
+      .prose {
+        color: var(--color-text-main);
+      }
+      .prose h1,
+      .prose h2,
+      .prose h3 {
+        font-family: "Geist", sans-serif;
+        letter-spacing: -0.02em;
+        font-weight: 600;
+      }
+      .prose code {
+        font-family: "Geist Mono", monospace;
+        background-color: var(--color-surface);
+        padding: 3px 6px;
+        border-radius: 6px;
+        border: 1px solid var(--color-border);
+        font-size: 0.85em;
+        color: var(--color-text-main);
+      }
+      .prose pre code {
+        background-color: transparent;
+        border: none;
+        padding: 0;
+      }
+      .prose pre {
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 16px;
+      }
+
+      .modal-overlay {
+        background-color: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+      .dark .modal-overlay {
+        background-color: rgba(0, 0, 0, 0.7);
+      }
+
+      /* Image Carousel */
+      .img-carousel-wrapper {
+        position: relative;
+        margin-top: 1rem;
+      }
+      .img-carousel-track {
+        display: flex;
+        gap: 0.5rem;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        scroll-snap-type: x mandatory;
+        padding-bottom: 0.5rem;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      .img-carousel-track::-webkit-scrollbar {
+        display: none;
+      }
+      .img-carousel-track > div {
+        scroll-snap-align: start;
+        flex-shrink: 0;
+      }
+      .img-carousel-arrow {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        color: var(--color-text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+      }
+      .img-carousel-wrapper:hover .img-carousel-arrow {
+        opacity: 1;
+      }
+      .img-carousel-arrow:hover {
+        background: var(--color-bg);
+      }
+      .img-carousel-arrow.left {
+        left: -10px;
+      }
+      .img-carousel-arrow.right {
+        right: -10px;
+      }
+      .img-carousel-thumb {
+        cursor: pointer;
+        transition:
+          transform 0.15s ease,
+          box-shadow 0.15s ease;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .img-carousel-thumb:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      }
+
+      /* Image Preview Modal */
+      #image-preview-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 9998;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        opacity: 0;
+        transition: opacity 0.25s ease;
+        pointer-events: none;
+        cursor: zoom-out;
+      }
+      #image-preview-modal.active {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      #image-preview-modal img {
+        max-width: 90vw;
+        max-height: 85vh;
+        object-fit: contain;
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        transform: scale(0.92);
+        transition: transform 0.25s ease;
+      }
+      #image-preview-modal.active img {
+        transform: scale(1);
+      }
+      #image-preview-modal .modal-close-btn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      #image-preview-modal .modal-close-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+      }
+      #image-preview-modal .modal-caption {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 12px;
+        font-family: var(--font-mono, monospace);
+        background: rgba(0, 0, 0, 0.4);
+        padding: 4px 14px;
+        border-radius: 99px;
+      }
+      #image-preview-modal .modal-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      #image-preview-modal .modal-nav:hover {
+        background: rgba(255, 255, 255, 0.25);
+      }
+      #image-preview-modal .modal-nav.prev {
+        left: 20px;
+      }
+      #image-preview-modal .modal-nav.next {
+        right: 20px;
+      }
+
+      /* Custom Toasts */
+      #toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .toast {
+        background: var(--color-surface);
+        border: 1px solid var(--color-border);
+        color: var(--color-text-main);
+        padding: 16px 20px;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 300px;
+      }
     </style>
     <script>
-        // Check theme instantly to prevent FOUC
-        if (localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-            document.documentElement.classList.add('dark');
-        } else {
-            document.documentElement.classList.remove('dark');
-        }
+      // Check theme instantly to prevent FOUC
+      if (
+        localStorage.getItem("theme") === "dark" ||
+        (!("theme" in localStorage) &&
+          window.matchMedia("(prefers-color-scheme: dark)").matches)
+      ) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
     </script>
-</head>
-<body class="flex h-screen overflow-hidden bg-background">
+  </head>
+  <body class="flex h-screen overflow-hidden bg-background">
+    <aside
+      class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0"
+    >
+      <div
+        class="p-6 border-b border-borderGray flex justify-between items-center"
+      >
+        <h1
+          class="text-lg font-serif tracking-tight flex items-center gap-2 text-charcoal"
+        >
+          <i data-lucide="layers" class="w-5 h-5"></i>
+          Asistente IA
+        </h1>
+        <button
+          id="theme-toggle"
+          class="text-textMuted hover:text-charcoal transition p-1.5 border border-borderGray rounded bg-background"
+          aria-label="Toggle Theme"
+        >
+          <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
+          <i data-lucide="sun" class="w-4 h-4 block dark:hidden"></i>
+        </button>
+      </div>
 
-    <aside class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0">
-        <div class="p-6 border-b border-borderGray flex justify-between items-center">
-            <h1 class="text-lg font-serif tracking-tight flex items-center gap-2 text-charcoal">
-                <i data-lucide="layers" class="w-5 h-5"></i>
-                Asistente IA
-            </h1>
-            <button id="theme-toggle" class="text-textMuted hover:text-charcoal transition p-1.5 border border-borderGray rounded bg-background" aria-label="Toggle Theme">
-                <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
-                <i data-lucide="sun" class="w-4 h-4 block dark:hidden"></i>
-            </button>
+      <div class="flex-1 py-4 text-sm font-medium">
+        <button
+          onclick="switchTab('resumenes')"
+          id="nav-resumenes"
+          class="w-full text-left px-6 py-2.5 transition-colors nav-btn active-nav flex items-center gap-3"
+        >
+          <i data-lucide="file-text" class="w-4 h-4 opacity-70"></i> Documentos
+        </button>
+        <button
+          onclick="switchTab('audios')"
+          id="nav-audios"
+          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
+        >
+          <i data-lucide="mic" class="w-4 h-4 opacity-70"></i> Por Procesar
+        </button>
+        <button
+          onclick="switchTab('chat')"
+          id="nav-chat"
+          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
+        >
+          <i data-lucide="message-square" class="w-4 h-4 opacity-70"></i> Tutor
+          Virtual
+        </button>
+        <button
+          onclick="switchTab('tarjetas')"
+          id="nav-tarjetas"
+          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
+        >
+          <i data-lucide="clipboard-list" class="w-4 h-4 opacity-70"></i> Tablón
+          de Avisos
+        </button>
+        <button
+          onclick="switchTab('tutor')"
+          id="nav-tutor"
+          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1 border-t border-borderGray pt-3"
+        >
+          <i
+            data-lucide="graduation-cap"
+            class="w-4 h-4 opacity-70 text-emerald-500"
+          ></i>
+          Sala de Estudio
+        </button>
+
+        <div class="px-6 mt-8 mb-2">
+          <h4
+            class="text-[10px] font-bold uppercase tracking-wider text-textMuted"
+          >
+            Ajustes
+          </h4>
         </div>
-        
-        <div class="flex-1 py-4 text-sm font-medium">
-            <button onclick="switchTab('resumenes')" id="nav-resumenes" class="w-full text-left px-6 py-2.5 transition-colors nav-btn active-nav flex items-center gap-3">
-                <i data-lucide="file-text" class="w-4 h-4 opacity-70"></i> Documentos
-            </button>
-            <button onclick="switchTab('audios')" id="nav-audios" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <i data-lucide="mic" class="w-4 h-4 opacity-70"></i> Por Procesar
-            </button>
-            <button onclick="switchTab('chat')" id="nav-chat" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <i data-lucide="message-square" class="w-4 h-4 opacity-70"></i> Tutor Virtual
-            </button>
-            <button onclick="switchTab('tarjetas')" id="nav-tarjetas" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <i data-lucide="clipboard-list" class="w-4 h-4 opacity-70"></i> Tablón de Avisos
-            </button>
-            <button onclick="switchTab('tutor')" id="nav-tutor" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1 border-t border-borderGray pt-3">
-                <i data-lucide="graduation-cap" class="w-4 h-4 opacity-70 text-emerald-500"></i> Sala de Estudio
-            </button>
-            
-            <div class="px-6 mt-8 mb-2">
-                <h4 class="text-[10px] font-bold uppercase tracking-wider text-textMuted">Ajustes</h4>
-            </div>
-            
-            <button onclick="switchTab('materias')" id="nav-materias" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3">
-                <i data-lucide="book-open" class="w-4 h-4 opacity-70"></i> Asignaturas
-            </button>
-            <button onclick="switchTab('config')" id="nav-config" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
-                <i data-lucide="settings" class="w-4 h-4 opacity-70"></i> Preferencias
-            </button>
+
+        <button
+          onclick="switchTab('materias')"
+          id="nav-materias"
+          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3"
+        >
+          <i data-lucide="book-open" class="w-4 h-4 opacity-70"></i> Asignaturas
+        </button>
+        <button
+          onclick="switchTab('config')"
+          id="nav-config"
+          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
+        >
+          <i data-lucide="settings" class="w-4 h-4 opacity-70"></i> Preferencias
+        </button>
+      </div>
+
+      <div class="p-6 border-t border-borderGray mt-auto">
+        <h3
+          class="text-[10px] font-bold text-textMuted uppercase tracking-[0.05em] mb-3"
+        >
+          Monitor de Recursos
+        </h3>
+
+        <div class="flex flex-col gap-2">
+          <div
+            class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5"
+          >
+            <span class="text-[10px] font-medium text-textMuted"
+              >Red neuronal</span
+            >
+            <span
+              id="ui-current-model"
+              class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full uppercase tracking-wider font-bold"
+              >Flash 3.5</span
+            >
+          </div>
+          <div
+            class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5"
+          >
+            <span class="text-[10px] font-medium text-textMuted"
+              >Llamadas (Hoy)</span
+            >
+            <span
+              id="ui-peticiones"
+              class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold"
+              >0</span
+            >
+          </div>
+          <div
+            class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5"
+          >
+            <span class="text-[10px] font-medium text-textMuted"
+              >Tokens Inyectados</span
+            >
+            <span
+              id="ui-tokens"
+              class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold"
+              >0</span
+            >
+          </div>
         </div>
-        
-        <div class="p-6 border-t border-borderGray mt-auto">
-            <h3 class="text-[10px] font-bold text-textMuted uppercase tracking-[0.05em] mb-3">Monitor de Recursos</h3>
-            
-            <div class="flex flex-col gap-2">
-                <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
-                    <span class="text-[10px] font-medium text-textMuted">Red neuronal</span>
-                    <span id="ui-current-model" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Flash 3.5</span>
-                </div>
-                <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
-                    <span class="text-[10px] font-medium text-textMuted">Llamadas (Hoy)</span>
-                    <span id="ui-peticiones" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
-                </div>
-                <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
-                    <span class="text-[10px] font-medium text-textMuted">Tokens Inyectados</span>
-                    <span id="ui-tokens" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
-                </div>
-            </div>
-        </div>
+      </div>
     </aside>
 
     <main class="flex-1 h-full overflow-hidden relative bg-background">
-        
-        <!-- =======================
+      <!-- =======================
              TAB: RESUMENES
         ======================== -->
-        <section id="tab-resumenes" class="tab-content flex h-full fade-in">
-            <div class="w-72 border-r border-borderGray bg-surface flex flex-col h-full">
-                <div class="p-4 text-[10px] font-bold text-textMuted uppercase tracking-wider border-b border-borderGray">Biblioteca de Apuntes</div>
-                <div id="summaries-list" class="flex-1 overflow-y-auto px-3 py-3 space-y-1 text-sm"></div>
-            </div>
-            <div class="flex-1 overflow-y-auto px-16 py-20 flex flex-col">
-                <div id="content-header" class="flex justify-end mb-8 hidden">
-                    <button id="btn-edit-summary" class="text-xs btn-secondary px-4 py-2 font-medium">Editar Texto</button>
-                    <button id="btn-save-summary" class="text-xs btn-primary px-4 py-2 font-medium hidden ml-2">Guardar Cambios</button>
-                </div>
-                <div id="content-area" class="prose max-w-4xl mx-auto flex-1 text-charcoal">
-                    <p class="text-textMuted text-center mt-32 font-serif italic text-lg">Selecciona un documento del panel izquierdo para comenzar a leer.</p>
-                </div>
-                <textarea id="edit-area" class="max-w-4xl mx-auto flex-1 w-full p-6 font-mono text-sm resize-none bg-surface hidden rounded-lg"></textarea>
-            </div>
-        </section>
+      <section id="tab-resumenes" class="tab-content flex h-full fade-in">
+        <div
+          class="w-72 border-r border-borderGray bg-surface flex flex-col h-full"
+        >
+          <div
+            class="p-4 text-[10px] font-bold text-textMuted uppercase tracking-wider border-b border-borderGray"
+          >
+            Biblioteca de Apuntes
+          </div>
+          <div
+            id="summaries-list"
+            class="flex-1 overflow-y-auto px-3 py-3 space-y-1 text-sm"
+          ></div>
+        </div>
+        <div class="flex-1 overflow-y-auto px-16 py-20 flex flex-col">
+          <div id="content-header" class="flex justify-end mb-8 hidden">
+            <button
+              id="btn-edit-summary"
+              class="text-xs btn-secondary px-4 py-2 font-medium"
+            >
+              Editar Texto
+            </button>
+            <button
+              id="btn-save-summary"
+              class="text-xs btn-primary px-4 py-2 font-medium hidden ml-2"
+            >
+              Guardar Cambios
+            </button>
+          </div>
+          <div
+            id="content-area"
+            class="prose max-w-4xl mx-auto flex-1 text-charcoal"
+          >
+            <p
+              class="text-textMuted text-center mt-32 font-serif italic text-lg"
+            >
+              Selecciona un documento del panel izquierdo para comenzar a leer.
+            </p>
+          </div>
+          <textarea
+            id="edit-area"
+            class="max-w-4xl mx-auto flex-1 w-full p-6 font-mono text-sm resize-none bg-surface hidden rounded-lg"
+          ></textarea>
+        </div>
+      </section>
 
-        <!-- =======================
+      <!-- =======================
              TAB: AUDIOS PENDIENTES
         ======================== -->
-        <section id="tab-audios" class="tab-content hidden h-full flex-col fade-in">
-            <div class="px-16 py-12 border-b border-borderGray">
-                <h2 class="text-4xl font-serif tracking-tight text-charcoal">Pendientes de Procesar</h2>
-                <p class="text-textMuted mt-3 text-sm">Convierte tus grabaciones locales en documentos estructurados.</p>
+      <section
+        id="tab-audios"
+        class="tab-content hidden h-full flex-col fade-in"
+      >
+        <div class="px-16 py-12 border-b border-borderGray">
+          <h2 class="text-4xl font-serif tracking-tight text-charcoal">
+            Pendientes de Procesar
+          </h2>
+          <p class="text-textMuted mt-3 text-sm">
+            Convierte tus grabaciones locales en documentos estructurados.
+          </p>
+        </div>
+        <div class="flex-1 overflow-y-auto px-16 py-12">
+          <!-- CARGAR RESPALDO MANUAL -->
+          <div
+            class="bento-card p-8 mb-8 max-w-5xl mx-auto bg-surface/50 border border-borderGray"
+          >
+            <h3
+              class="text-sm font-bold text-charcoal mb-2 uppercase tracking-wider flex items-center gap-2"
+            >
+              <i
+                data-lucide="upload-cloud"
+                class="w-4 h-4 text-emerald-500"
+              ></i>
+              Cargar Audio de Respaldo
+            </h3>
+            <p class="text-xs text-textMuted mb-4">
+              Sube un archivo de audio (.webm, .ogg, .mp4, etc.) guardado
+              localmente cuando el servidor estuvo desconectado.
+            </p>
+
+            <div class="flex gap-2">
+              <input
+                type="file"
+                id="backup-audio-input"
+                accept="audio/*,video/*"
+                class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray"
+              />
+              <button
+                onclick="uploadBackupAudio()"
+                id="btn-backup-upload"
+                class="btn-primary px-6 text-sm font-medium transition-all"
+              >
+                Subir y Encolar
+              </button>
             </div>
-            <div class="flex-1 overflow-y-auto px-16 py-12">
-                <!-- CARGAR RESPALDO MANUAL -->
-                <div class="bento-card p-8 mb-8 max-w-5xl mx-auto bg-surface/50 border border-borderGray">
-                    <h3 class="text-sm font-bold text-charcoal mb-2 uppercase tracking-wider flex items-center gap-2">
-                        <i data-lucide="upload-cloud" class="w-4 h-4 text-emerald-500"></i> Cargar Audio de Respaldo
-                    </h3>
-                    <p class="text-xs text-textMuted mb-4">Sube un archivo de audio (.webm, .ogg, .mp4, etc.) guardado localmente cuando el servidor estuvo desconectado.</p>
-                    
-                    <div class="flex gap-2">
-                        <input type="file" id="backup-audio-input" accept="audio/*,video/*" class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray">
-                        <button onclick="uploadBackupAudio()" id="btn-backup-upload" class="btn-primary px-6 text-sm font-medium transition-all">Subir y Encolar</button>
-                    </div>
-                </div>
+          </div>
 
-                <div id="cola-list" class="flex flex-col gap-4 max-w-5xl mx-auto mb-8"></div>
+          <div
+            id="cola-list"
+            class="flex flex-col gap-4 max-w-5xl mx-auto mb-8"
+          ></div>
 
-                <div id="audios-list" class="grid gap-6 max-w-5xl mx-auto"></div>
-            </div>
-        </section>
+          <div id="audios-list" class="grid gap-6 max-w-5xl mx-auto"></div>
+        </div>
+      </section>
 
-        <!-- =======================
+      <!-- =======================
              TAB: CHAT DE ESTUDIO
         ======================== -->
-        <section id="tab-chat" class="tab-content hidden h-full flex-col fade-in">
-            <div class="px-12 py-8 border-b border-borderGray flex justify-between items-end bg-surface">
-                <div>
-                    <h2 class="text-3xl font-serif tracking-tight text-charcoal">Tutor Virtual</h2>
-                    <p class="text-textMuted text-sm mt-2">Interactúa de forma aislada con tus propios apuntes de clase.</p>
-                </div>
-                <div>
-                    <select id="chat-context-select" class="bg-surface text-xs rounded-md px-3 py-1.5 border border-borderGray font-medium">
-                        <option value="todas">Todo el Semestre</option>
-                        <option value="default">Materia General</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div id="chat-history" class="flex-1 overflow-y-auto px-12 py-8 flex flex-col gap-6 bg-background max-w-4xl mx-auto w-full">
-                <div class="chat-bubble chat-ai p-5 text-sm">
-                    Escribe tu pregunta y analizaré tu base de conocimiento para responderte.
-                </div>
-            </div>
-            
-            <div class="p-6 border-t border-borderGray flex justify-center bg-surface">
-                <form id="chat-form" class="flex gap-3 w-full max-w-4xl">
-                    <input type="text" id="chat-input" class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray" placeholder="Ej. Resume los 3 puntos clave de la biología molecular...">
-                    <button type="submit" class="btn-primary px-8 text-sm font-medium" id="chat-send-btn">Consultar</button>
-                </form>
-            </div>
-        </section>
+      <section id="tab-chat" class="tab-content hidden h-full flex-col fade-in">
+        <div
+          class="px-12 py-8 border-b border-borderGray flex justify-between items-end bg-surface"
+        >
+          <div>
+            <h2 class="text-3xl font-serif tracking-tight text-charcoal">
+              Tutor Virtual
+            </h2>
+            <p class="text-textMuted text-sm mt-2">
+              Interactúa de forma aislada con tus propios apuntes de clase.
+            </p>
+          </div>
+          <div>
+            <select
+              id="chat-context-select"
+              class="bg-surface text-xs rounded-md px-3 py-1.5 border border-borderGray font-medium"
+            >
+              <option value="todas">Todo el Semestre</option>
+              <option value="default">Materia General</option>
+            </select>
+          </div>
+        </div>
 
-        <!-- =======================
+        <div
+          id="chat-history"
+          class="flex-1 overflow-y-auto px-12 py-8 flex flex-col gap-6 bg-background max-w-4xl mx-auto w-full"
+        >
+          <div class="chat-bubble chat-ai p-5 text-sm">
+            Escribe tu pregunta y analizaré tu base de conocimiento para
+            responderte.
+          </div>
+        </div>
+
+        <div
+          class="p-6 border-t border-borderGray flex justify-center bg-surface"
+        >
+          <form id="chat-form" class="flex gap-3 w-full max-w-4xl">
+            <input
+              type="text"
+              id="chat-input"
+              class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray"
+              placeholder="Ej. Resume los 3 puntos clave de la biología molecular..."
+            />
+            <button
+              type="submit"
+              class="btn-primary px-8 text-sm font-medium"
+              id="chat-send-btn"
+            >
+              Consultar
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- =======================
              TAB: TARJETAS INFORMATIVAS
         ======================== -->
-        <section id="tab-tarjetas" class="tab-content hidden h-full flex-col fade-in">
-            <div class="px-16 py-12 border-b border-borderGray flex justify-between items-end">
-                <div>
-                    <h2 class="text-4xl font-serif tracking-tight text-charcoal">Tablón de Avisos</h2>
-                    <p class="text-textMuted mt-3 text-sm">Anuncios importantes, exámenes, tareas y logística de tus clases.</p>
-                </div>
-                <div>
-                    <select id="tarjetas-materia-filter" onchange="loadTarjetas()" class="px-4 py-2 border border-borderGray rounded bg-surface text-sm focus:outline-none">
-                        <option value="todas">Todas las materias</option>
-                    </select>
-                </div>
-            </div>
-            <div class="flex-1 overflow-y-auto px-16 py-12 max-w-5xl mx-auto w-full">
-                <div id="tarjetas-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Cards de tarjetas se insertarán aquí -->
-                </div>
-            </div>
-        </section>
+      <section
+        id="tab-tarjetas"
+        class="tab-content hidden h-full flex-col fade-in"
+      >
+        <div
+          class="px-16 py-12 border-b border-borderGray flex justify-between items-end"
+        >
+          <div>
+            <h2 class="text-4xl font-serif tracking-tight text-charcoal">
+              Tablón de Avisos
+            </h2>
+            <p class="text-textMuted mt-3 text-sm">
+              Anuncios importantes, exámenes, tareas y logística de tus clases.
+            </p>
+          </div>
+          <div>
+            <select
+              id="tarjetas-materia-filter"
+              onchange="loadTarjetas()"
+              class="px-4 py-2 border border-borderGray rounded bg-surface text-sm focus:outline-none"
+            >
+              <option value="todas">Todas las materias</option>
+            </select>
+          </div>
+        </div>
+        <div
+          class="flex-1 overflow-y-auto px-16 py-12 max-w-5xl mx-auto w-full"
+        >
+          <div
+            id="tarjetas-grid"
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          >
+            <!-- Cards de tarjetas se insertarán aquí -->
+          </div>
+        </div>
+      </section>
 
-        <!-- =======================
+      <!-- =======================
              TAB: TUTOR SOCRÁTICO
         ======================== -->
-        <section id="tab-tutor" class="tab-content hidden h-full flex-col fade-in">
-            <div class="px-12 py-8 border-b border-borderGray flex justify-between items-end bg-surface">
-                <div>
-                    <h2 class="text-3xl font-serif tracking-tight text-charcoal">Sala de Estudio</h2>
-                    <p class="text-textMuted text-sm mt-2">Simulación de tutoría socrática para evaluación oral de tus conocimientos.</p>
-                </div>
-                <div class="flex gap-2 items-center">
-                    <select id="tutor-materia-select" class="bg-surface text-xs rounded-md px-3 py-2 border border-borderGray font-medium">
-                        <option value="todas">Todas las materias</option>
-                    </select>
-                    <button id="btn-iniciar-tutor" onclick="iniciarSimulacionTutor()" class="btn-primary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow">
-                        <i data-lucide="play" class="w-3 h-3"></i> Iniciar Simulación
-                    </button>
-                </div>
-            </div>
-            
-            <div id="tutor-history" class="flex-1 overflow-y-auto px-12 py-8 flex flex-col gap-6 bg-background max-w-4xl mx-auto w-full">
-                <div class="chat-bubble chat-ai p-5 text-sm italic text-center mx-auto text-textMuted border border-transparent">
-                    Selecciona una asignatura y haz clic en "Iniciar Simulación" para que el profesor virtual te evalúe en base a tus apuntes.
-                </div>
-            </div>
-            
-            <div class="p-6 border-t border-borderGray flex justify-center bg-surface">
-                <form id="tutor-form" class="flex gap-3 w-full max-w-4xl">
-                    <input type="text" id="tutor-input" disabled class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray opacity-60 cursor-not-allowed" placeholder="Inicia la simulación para responder...">
-                    <button type="submit" id="tutor-send-btn" disabled class="btn-primary px-8 text-sm font-medium opacity-60 cursor-not-allowed">Enviar</button>
-                </form>
-            </div>
-        </section>
+      <section
+        id="tab-tutor"
+        class="tab-content hidden h-full flex-col fade-in"
+      >
+        <div
+          class="px-12 py-8 border-b border-borderGray flex justify-between items-end bg-surface"
+        >
+          <div>
+            <h2 class="text-3xl font-serif tracking-tight text-charcoal">
+              Sala de Estudio
+            </h2>
+            <p class="text-textMuted text-sm mt-2">
+              Simulación de tutoría socrática para evaluación oral de tus
+              conocimientos.
+            </p>
+          </div>
+          <div class="flex gap-2 items-center">
+            <select
+              id="tutor-materia-select"
+              class="bg-surface text-xs rounded-md px-3 py-2 border border-borderGray font-medium"
+            >
+              <option value="todas">Todas las materias</option>
+            </select>
+            <button
+              id="btn-iniciar-tutor"
+              onclick="iniciarSimulacionTutor()"
+              class="btn-primary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow"
+            >
+              <i data-lucide="play" class="w-3 h-3"></i> Iniciar Simulación
+            </button>
+          </div>
+        </div>
 
-        <!-- =======================
+        <div
+          id="tutor-history"
+          class="flex-1 overflow-y-auto px-12 py-8 flex flex-col gap-6 bg-background max-w-4xl mx-auto w-full"
+        >
+          <div
+            class="chat-bubble chat-ai p-5 text-sm italic text-center mx-auto text-textMuted border border-transparent"
+          >
+            Selecciona una asignatura y haz clic en "Iniciar Simulación" para
+            que el profesor virtual te evalúe en base a tus apuntes.
+          </div>
+        </div>
+
+        <div
+          class="p-6 border-t border-borderGray flex justify-center bg-surface"
+        >
+          <form id="tutor-form" class="flex gap-3 w-full max-w-4xl">
+            <input
+              type="text"
+              id="tutor-input"
+              disabled
+              class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray opacity-60 cursor-not-allowed"
+              placeholder="Inicia la simulación para responder..."
+            />
+            <button
+              type="submit"
+              id="tutor-send-btn"
+              disabled
+              class="btn-primary px-8 text-sm font-medium opacity-60 cursor-not-allowed"
+            >
+              Enviar
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- =======================
              TAB: MATERIAS
         ======================== -->
-        <section id="tab-materias" class="tab-content hidden h-full flex-col fade-in">
-            <div class="px-16 py-12 border-b border-borderGray flex justify-between items-end">
-                <div>
-                    <h2 class="text-4xl font-serif tracking-tight text-charcoal">Asignaturas</h2>
-                    <p class="text-textMuted mt-3 text-sm">Define el contexto y comportamiento de transcripción por clase.</p>
-                </div>
-                <button onclick="openMateriaModal()" class="btn-primary text-sm font-medium py-3 px-6 flex items-center gap-2 shadow-sm hover:shadow transition-all">
-                    <i data-lucide="plus" class="w-4 h-4"></i>
-                    Crear Nueva Asignatura
+      <section
+        id="tab-materias"
+        class="tab-content hidden h-full flex-col fade-in"
+      >
+        <div
+          class="px-16 py-12 border-b border-borderGray flex justify-between items-end"
+        >
+          <div>
+            <h2 class="text-4xl font-serif tracking-tight text-charcoal">
+              Asignaturas
+            </h2>
+            <p class="text-textMuted mt-3 text-sm">
+              Define el contexto y comportamiento de transcripción por clase.
+            </p>
+          </div>
+          <button
+            onclick="openMateriaModal()"
+            class="btn-primary text-sm font-medium py-3 px-6 flex items-center gap-2 shadow-sm hover:shadow transition-all"
+          >
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Crear Nueva Asignatura
+          </button>
+        </div>
+
+        <div
+          class="flex-1 overflow-y-auto px-16 py-12 max-w-[1200px] mx-auto w-full"
+        >
+          <h3
+            class="text-[11px] font-bold uppercase tracking-[0.2em] text-textMuted mb-6 border-b border-borderGray pb-3"
+          >
+            Asignaturas Registradas
+          </h3>
+          <div
+            id="materias-list"
+            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+          ></div>
+        </div>
+
+        <!-- MODAL: ASIGNATURA -->
+        <div
+          id="materia-modal"
+          class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 transition-opacity duration-300"
+        >
+          <div
+            class="bg-background rounded-xl shadow-2xl border border-borderGray w-full max-w-[460px] max-h-[90vh] overflow-y-auto transform scale-95 transition-transform duration-300 p-8"
+            id="materia-modal-content"
+          >
+            <div class="flex justify-between items-center mb-6">
+              <h3
+                class="text-lg font-serif font-bold text-charcoal"
+                id="mat-form-title"
+              >
+                Nueva Asignatura
+              </h3>
+              <button
+                onclick="closeMateriaModal()"
+                class="text-textMuted hover:text-charcoal transition-colors"
+              >
+                <i data-lucide="x" class="w-5 h-5"></i>
+              </button>
+            </div>
+
+            <div class="space-y-6">
+              <div>
+                <label
+                  class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2"
+                  >Nombre de la Clase</label
+                >
+                <input
+                  type="text"
+                  id="mat-nombre"
+                  class="w-full rounded-md p-3 text-sm bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all"
+                  placeholder="Ej. Biología Celular Avanzada"
+                />
+              </div>
+
+              <div
+                class="p-5 bg-surface rounded-xl border border-borderGray relative"
+              >
+                <label
+                  class="block text-[10px] font-bold text-charcoal uppercase tracking-wider mb-2"
+                >
+                  Ingeniería de Prompt Automática
+                </label>
+                <p class="text-xs text-textMuted mb-4 leading-relaxed">
+                  Describe brevemente cómo quieres que actúe la IA en esta
+                  clase.
+                </p>
+                <textarea
+                  id="mat-natural"
+                  rows="2"
+                  class="w-full rounded-md p-3 text-sm border border-borderGray bg-background mb-4 focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all resize-none"
+                  placeholder="Ej. Actúa como un experto y extrae solo las definiciones..."
+                ></textarea>
+                <button
+                  onclick="generatePrompt()"
+                  id="btn-gen-prompt"
+                  class="btn-secondary w-full text-xs font-bold py-2.5 flex justify-center items-center gap-2 hover:bg-borderGray transition-colors"
+                >
+                  <i data-lucide="sparkles" class="w-4 h-4"></i>
+                  <span>Traducir a Prompt Técnico</span>
                 </button>
-            </div>
-            
-            <div class="flex-1 overflow-y-auto px-16 py-12 max-w-[1200px] mx-auto w-full">
-                <h3 class="text-[11px] font-bold uppercase tracking-[0.2em] text-textMuted mb-6 border-b border-borderGray pb-3">Asignaturas Registradas</h3>
-                <div id="materias-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
-            </div>
+              </div>
 
-            <!-- MODAL: ASIGNATURA -->
-            <div id="materia-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 transition-opacity duration-300">
-                <div class="bg-background rounded-xl shadow-2xl border border-borderGray w-full max-w-[460px] max-h-[90vh] overflow-y-auto transform scale-95 transition-transform duration-300 p-8" id="materia-modal-content">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 class="text-lg font-serif font-bold text-charcoal" id="mat-form-title">Nueva Asignatura</h3>
-                        <button onclick="closeMateriaModal()" class="text-textMuted hover:text-charcoal transition-colors">
-                            <i data-lucide="x" class="w-5 h-5"></i>
-                        </button>
-                    </div>
-                    
-                    <div class="space-y-6">
-                        <div>
-                            <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2">Nombre de la Clase</label>
-                            <input type="text" id="mat-nombre" class="w-full rounded-md p-3 text-sm bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all" placeholder="Ej. Biología Celular Avanzada">
-                        </div>
-                        
-                        <div class="p-5 bg-surface rounded-xl border border-borderGray relative">
-                            <label class="block text-[10px] font-bold text-charcoal uppercase tracking-wider mb-2">
-                                Ingeniería de Prompt Automática
-                            </label>
-                            <p class="text-xs text-textMuted mb-4 leading-relaxed">Describe brevemente cómo quieres que actúe la IA en esta clase.</p>
-                            <textarea id="mat-natural" rows="2" class="w-full rounded-md p-3 text-sm border border-borderGray bg-background mb-4 focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all resize-none" placeholder="Ej. Actúa como un experto y extrae solo las definiciones..."></textarea>
-                            <button onclick="generatePrompt()" id="btn-gen-prompt" class="btn-secondary w-full text-xs font-bold py-2.5 flex justify-center items-center gap-2 hover:bg-borderGray transition-colors">
-                                <i data-lucide="sparkles" class="w-4 h-4"></i> <span>Traducir a Prompt Técnico</span>
-                            </button>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2">Contexto Técnico Final</label>
-                            <textarea id="mat-prompt" rows="6" class="w-full rounded-md p-3 text-[11px] font-mono bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all leading-relaxed resize-none text-textMuted focus:text-charcoal" placeholder="Eres un asistente experto..."></textarea>
-                        </div>
-                        
-                        <div class="flex gap-3 pt-2">
-                            <button onclick="closeMateriaModal()" class="btn-secondary flex-1 py-3 text-sm font-medium transition-all">
-                                Cancelar
-                            </button>
-                            <button id="btn-save-materia" onclick="saveMateria()" class="btn-primary flex-1 py-3 text-sm font-medium shadow-sm hover:shadow transition-all">
-                                Guardar
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
+              <div>
+                <label
+                  class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2"
+                  >Contexto Técnico Final</label
+                >
+                <textarea
+                  id="mat-prompt"
+                  rows="6"
+                  class="w-full rounded-md p-3 text-[11px] font-mono bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all leading-relaxed resize-none text-textMuted focus:text-charcoal"
+                  placeholder="Eres un asistente experto..."
+                ></textarea>
+              </div>
 
-        <!-- =======================
+              <div class="flex gap-3 pt-2">
+                <button
+                  onclick="closeMateriaModal()"
+                  class="btn-secondary flex-1 py-3 text-sm font-medium transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  id="btn-save-materia"
+                  onclick="saveMateria()"
+                  class="btn-primary flex-1 py-3 text-sm font-medium shadow-sm hover:shadow transition-all"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =======================
              TAB: CONFIGURACION
         ======================== -->
-        <section id="tab-config" class="tab-content hidden h-full flex-col fade-in relative">
-            <div class="px-16 py-12 border-b border-borderGray shrink-0 bg-background z-10">
-                <h2 class="text-4xl font-serif tracking-tight text-charcoal">Preferencias</h2>
-                <p class="text-textMuted mt-3 text-sm">Ajustes a nivel de sistema y ecosistema local.</p>
-            </div>
-            <div class="flex-1 overflow-y-auto px-16 py-12 w-full pb-32">
-                <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    
-                    <!-- Columna Izquierda -->
-                    <div class="flex flex-col gap-8">
-                        <!-- Módulo de Inteligencia -->
-                        <div class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors">
-                            <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2">
-                                <i data-lucide="brain" class="w-4 h-4 text-accent"></i> Módulo de Inteligencia
-                            </h3>
-                            <div>
-                                <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Red de Inferencia Predeterminada</label>
-                                <select id="model-selector" class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all">
-                                    <option value="gemini-3.5-flash">Gemini 3.5 Flash (Más Rápido, Limitado)</option>
-                                    <option value="gemini-3.1-flash-lite">Gemini 3.1 Flash Lite (Menos Restricciones)</option>
-                                </select>
-                                <p class="text-xs text-textMuted mt-3 leading-relaxed">Este modelo alimentará el procesamiento del Tutor Virtual, RAG y extracción de resúmenes.</p>
-                            </div>
-                        </div>
-
-                        <!-- Manejo de Archivos -->
-                        <div class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors">
-                            <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2">
-                                <i data-lucide="hard-drive" class="w-4 h-4 text-emerald-600"></i> Archivos y Cargas
-                            </h3>
-                            <div>
-                                <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Límite de peso externo (MB)</label>
-                                <div class="flex gap-2">
-                                    <input type="number" id="config-max-audio-mb" class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all" placeholder="Ej. 500" min="10" max="2000">
-                                </div>
-                                <p class="text-xs text-textMuted mt-3 leading-relaxed mb-6">Previene la carga accidental de archivos crudos gigantes (ej. .wav). Máximo sugerido: 500 MB.</p>
-                                
-                                <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 border-t border-borderGray/60 pt-6">Memoria RAG (Documentos Máximos)</label>
-                                <div class="flex gap-2">
-                                    <input type="number" id="config-rag-max-docs" class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all" placeholder="Ej. 8" min="1" max="20">
-                                </div>
-                                <p class="text-xs text-textMuted mt-3 leading-relaxed">Número máximo de clases pasadas que la IA puede leer al mismo tiempo durante un chat (default: 8).</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Columna Derecha -->
-                    <div class="flex flex-col gap-8">
-                        <!-- Ecosistema de Estudio -->
-                        <div class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors h-full">
-                            <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2">
-                                <i data-lucide="blocks" class="w-4 h-4 text-blue-500"></i> Ecosistema e Integraciones
-                            </h3>
-                            
-                            <div class="space-y-6">
-                                <div>
-                                    <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Ruta del Vault de Obsidian</label>
-                                    <input type="text" id="config-obsidian-path" class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all" placeholder="Ej. C:/Users/Usuario/Documents/MiVault">
-                                    <p class="text-xs text-textMuted mt-3 leading-relaxed">Los resúmenes generados se guardarán automáticamente en esta carpeta local de tu equipo.</p>
-                                </div>
-                                
-
-
-                                <div class="pt-4 border-t border-borderGray/60">
-                                    <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Navegador para extracción de Drive (Bypass)</label>
-                                    <select id="config-browser-cookie" class="w-full rounded-md p-3 text-sm bg-background border border-borderGray cursor-pointer focus:border-charcoal outline-none transition-all">
-                                        <option value="brave">Brave Browser</option>
-                                        <option value="chrome">Google Chrome</option>
-                                        <option value="firefox">Mozilla Firefox</option>
-                                        <option value="chromium">Chromium</option>
-                                        <option value="edge">Microsoft Edge</option>
-                                        <option value="opera">Opera</option>
-                                    </select>
-                                    <p class="text-xs text-textMuted mt-3 leading-relaxed">Selecciona el navegador principal donde mantienes la sesión activa de Google Drive para permitir el Bypass de cookies.</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+      <section
+        id="tab-config"
+        class="tab-content hidden h-full flex-col fade-in relative"
+      >
+        <div
+          class="px-16 py-12 border-b border-borderGray shrink-0 bg-background z-10"
+        >
+          <h2 class="text-4xl font-serif tracking-tight text-charcoal">
+            Preferencias
+          </h2>
+          <p class="text-textMuted mt-3 text-sm">
+            Ajustes a nivel de sistema y ecosistema local.
+          </p>
+        </div>
+        <div class="flex-1 overflow-y-auto px-16 py-12 w-full pb-32">
+          <div class="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Columna Izquierda -->
+            <div class="flex flex-col gap-8">
+              <!-- Módulo de Inteligencia -->
+              <div
+                class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors"
+              >
+                <h3
+                  class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2"
+                >
+                  <i data-lucide="brain" class="w-4 h-4 text-accent"></i> Módulo
+                  de Inteligencia
+                </h3>
+                <div>
+                  <label
+                    class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2"
+                    >Red de Inferencia Predeterminada</label
+                  >
+                  <select
+                    id="model-selector"
+                    class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all"
+                  >
+                    <option value="gemini-3.5-flash">
+                      Gemini 3.5 Flash (Más Rápido, Limitado)
+                    </option>
+                    <option value="gemini-3.1-flash-lite">
+                      Gemini 3.1 Flash Lite (Menos Restricciones)
+                    </option>
+                  </select>
+                  <p class="text-xs text-textMuted mt-3 leading-relaxed">
+                    Este modelo alimentará el procesamiento del Tutor Virtual,
+                    RAG y extracción de resúmenes.
+                  </p>
                 </div>
-            </div>
-            
-            <!-- Floating Save Bar -->
-            <div class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-background via-background to-transparent pointer-events-none flex justify-center z-20">
-                <div class="pointer-events-auto shadow-2xl rounded-2xl bg-surface border border-borderGray p-3 flex items-center gap-6 pl-8">
-                    <span class="text-sm text-charcoal font-serif italic">Mantén tus ajustes al día</span>
-                    <button onclick="saveAppSettings()" id="btn-save-settings" class="btn-primary px-8 py-3 rounded-xl text-sm font-bold tracking-wide flex items-center gap-2 shadow-sm hover:shadow transition-all">
-                        <i data-lucide="save" class="w-4 h-4"></i> Guardar Preferencias
-                    </button>
+              </div>
+
+              <!-- Manejo de Archivos -->
+              <div
+                class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors"
+              >
+                <h3
+                  class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2"
+                >
+                  <i
+                    data-lucide="hard-drive"
+                    class="w-4 h-4 text-emerald-600"
+                  ></i>
+                  Archivos y Cargas
+                </h3>
+                <div>
+                  <label
+                    class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2"
+                    >Límite de peso externo (MB)</label
+                  >
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      id="config-max-audio-mb"
+                      class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
+                      placeholder="Ej. 500"
+                      min="10"
+                      max="2000"
+                    />
+                  </div>
+                  <p class="text-xs text-textMuted mt-3 leading-relaxed mb-6">
+                    Previene la carga accidental de archivos crudos gigantes
+                    (ej. .wav). Máximo sugerido: 500 MB.
+                  </p>
+
+                  <label
+                    class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 border-t border-borderGray/60 pt-6"
+                    >Memoria RAG (Documentos Máximos)</label
+                  >
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      id="config-rag-max-docs"
+                      class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
+                      placeholder="Ej. 8"
+                      min="1"
+                      max="20"
+                    />
+                  </div>
+                  <p class="text-xs text-textMuted mt-3 leading-relaxed">
+                    Número máximo de clases pasadas que la IA puede leer al
+                    mismo tiempo durante un chat (default: 8).
+                  </p>
                 </div>
+              </div>
             </div>
-        </section>
 
+            <!-- Columna Derecha -->
+            <div class="flex flex-col gap-8">
+              <!-- Ecosistema de Estudio -->
+              <div
+                class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors h-full"
+              >
+                <h3
+                  class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2"
+                >
+                  <i data-lucide="blocks" class="w-4 h-4 text-blue-500"></i>
+                  Ecosistema e Integraciones
+                </h3>
 
+                <div class="space-y-6">
+                  <div>
+                    <label
+                      class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2"
+                      >Ruta del Vault de Obsidian</label
+                    >
+                    <input
+                      type="text"
+                      id="config-obsidian-path"
+                      class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
+                      placeholder="Ej. C:/Users/Usuario/Documents/MiVault"
+                    />
+                    <p class="text-xs text-textMuted mt-3 leading-relaxed">
+                      Los resúmenes generados se guardarán automáticamente en
+                      esta carpeta local de tu equipo.
+                    </p>
+                  </div>
 
+                  <div class="pt-4 border-t border-borderGray/60">
+                    <label
+                      class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2"
+                      >Navegador para extracción de Drive (Bypass)</label
+                    >
+                    <select
+                      id="config-browser-cookie"
+                      class="w-full rounded-md p-3 text-sm bg-background border border-borderGray cursor-pointer focus:border-charcoal outline-none transition-all"
+                    >
+                      <option value="brave">Brave Browser</option>
+                      <option value="chrome">Google Chrome</option>
+                      <option value="firefox">Mozilla Firefox</option>
+                      <option value="chromium">Chromium</option>
+                      <option value="edge">Microsoft Edge</option>
+                      <option value="opera">Opera</option>
+                    </select>
+                    <p class="text-xs text-textMuted mt-3 leading-relaxed">
+                      Selecciona el navegador principal donde mantienes la
+                      sesión activa de Google Drive para permitir el Bypass de
+                      cookies.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Floating Save Bar -->
+        <div
+          class="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-background via-background to-transparent pointer-events-none flex justify-center z-20"
+        >
+          <div
+            class="pointer-events-auto shadow-2xl rounded-2xl bg-surface border border-borderGray p-3 flex items-center gap-6 pl-8"
+          >
+            <span class="text-sm text-charcoal font-serif italic"
+              >Mantén tus ajustes al día</span
+            >
+            <button
+              onclick="saveAppSettings()"
+              id="btn-save-settings"
+              class="btn-primary px-8 py-3 rounded-xl text-sm font-bold tracking-wide flex items-center gap-2 shadow-sm hover:shadow transition-all"
+            >
+              <i data-lucide="save" class="w-4 h-4"></i> Guardar Preferencias
+            </button>
+          </div>
+        </div>
+      </section>
     </main>
 
     <div id="toast-container"></div>
     <script>
-        // Theme logic
-        const themeBtn = document.getElementById('theme-toggle');
-        
-        function setTheme(isDark) {
-            if (isDark) {
-                document.documentElement.classList.add('dark');
-                localStorage.setItem('theme', 'dark');
-            } else {
-                document.documentElement.classList.remove('dark');
-                localStorage.setItem('theme', 'light');
-            }
+      // Theme logic
+      const themeBtn = document.getElementById("theme-toggle");
+
+      function setTheme(isDark) {
+        if (isDark) {
+          document.documentElement.classList.add("dark");
+          localStorage.setItem("theme", "dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+          localStorage.setItem("theme", "light");
         }
-        
-        themeBtn.addEventListener('click', () => {
-            const isDark = document.documentElement.classList.contains('dark');
-            setTheme(!isDark);
-        });
+      }
 
-        // Toast System
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = 'toast fade-in';
-            
-            let icon = '<i data-lucide="info" class="w-5 h-5 text-blue-500"></i>';
-            if (type === 'success') icon = '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
-            if (type === 'error') icon = '<i data-lucide="alert-circle" class="w-5 h-5 text-red-500"></i>';
-            
-            toast.innerHTML = `<span class="flex-shrink-0">${icon}</span> <span class="text-sm font-medium flex-1">${message}</span>`;
-            
-            container.appendChild(toast);
-            lucide.createIcons({root: toast});
-            
-            setTimeout(() => {
-                toast.classList.remove('fade-in');
-                toast.style.animation = 'toastLeave 0.3s ease-in forwards';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+      themeBtn.addEventListener("click", () => {
+        const isDark = document.documentElement.classList.contains("dark");
+        setTheme(!isDark);
+      });
+
+      // Toast System
+      function showToast(message, type = "info") {
+        const container = document.getElementById("toast-container");
+        const toast = document.createElement("div");
+        toast.className = "toast fade-in";
+
+        let icon = '<i data-lucide="info" class="w-5 h-5 text-blue-500"></i>';
+        if (type === "success")
+          icon =
+            '<i data-lucide="check-circle-2" class="w-5 h-5 text-green-500"></i>';
+        if (type === "error")
+          icon =
+            '<i data-lucide="alert-circle" class="w-5 h-5 text-red-500"></i>';
+
+        toast.innerHTML = `<span class="flex-shrink-0">${icon}</span> <span class="text-sm font-medium flex-1">${message}</span>`;
+
+        container.appendChild(toast);
+        lucide.createIcons({ root: toast });
+
+        setTimeout(() => {
+          toast.classList.remove("fade-in");
+          toast.style.animation = "toastLeave 0.3s ease-in forwards";
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      }
+
+      // State
+      let materias = [];
+      let currentAudioFile = "";
+      let currentMateriaId = "";
+      let editingMateriaId = null;
+      let tutorHistoryState = [];
+
+      // Init
+      document.addEventListener("DOMContentLoaded", () => {
+        loadSummaries();
+        loadMaterias();
+        loadAudios();
+        loadAppSettings();
+
+        // Model Selector Init
+        function getUiName(val) {
+          if (val.includes("3.5-flash")) return "Flash 3.5";
+          if (val.includes("lite")) return "Flash Lite";
+          if (val.includes("pro")) return "Pro";
+          return val.split("-")[1] || val; // simple fallback
         }
 
-        // State
-        let materias = [];
-        let currentAudioFile = "";
-        let currentMateriaId = "";
-        let editingMateriaId = null;
-        let tutorHistoryState = [];
-
-        
-        // Init
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSummaries();
-            loadMaterias();
-            loadAudios();
-            loadAppSettings();
-            
-            // Model Selector Init
-            function getUiName(val) {
-                if(val.includes('3.5-flash')) return 'Flash 3.5';
-                if(val.includes('lite')) return 'Flash Lite';
-                if(val.includes('pro')) return 'Pro';
-                return val.split('-')[1] || val; // simple fallback
-            }
-
-            fetch('/api/models')
-                .then(r => r.json())
-                .then(data => {
-                    const modelSelector = document.getElementById('model-selector');
-                    modelSelector.innerHTML = ''; 
-                    data.models.forEach(m => {
-                        const option = document.createElement('option');
-                        option.value = m.id;
-                        option.textContent = `${m.name} - ${m.description.substring(0, 50)}${m.description.length > 50 ? '...' : ''}`;
-                        modelSelector.appendChild(option);
-                    });
-                    
-                    let savedModel = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
-                    const exists = data.models.find(x => x.id === savedModel);
-                    if (!exists && data.models.length > 0) {
-                        savedModel = data.models[0].id;
-                    }
-                    
-                    modelSelector.value = savedModel;
-                    localStorage.setItem('modelo_elegido', savedModel);
-                    document.getElementById('ui-current-model').innerText = getUiName(savedModel);
-                    loadStats();
-                })
-                .catch(e => console.error("Error cargando modelos:", e));
-            
-            const modelSelector = document.getElementById('model-selector');
-            modelSelector.addEventListener('change', (e) => {
-                localStorage.setItem('modelo_elegido', e.target.value);
-                document.getElementById('ui-current-model').innerText = getUiName(e.target.value);
-                loadStats();
+        fetch("/api/models")
+          .then((r) => r.json())
+          .then((data) => {
+            const modelSelector = document.getElementById("model-selector");
+            modelSelector.innerHTML = "";
+            data.models.forEach((m) => {
+              const option = document.createElement("option");
+              option.value = m.id;
+              option.textContent = `${m.name} - ${m.description.substring(0, 50)}${m.description.length > 50 ? "..." : ""}`;
+              modelSelector.appendChild(option);
             });
-            
+
+            let savedModel =
+              localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+            const exists = data.models.find((x) => x.id === savedModel);
+            if (!exists && data.models.length > 0) {
+              savedModel = data.models[0].id;
+            }
+
+            modelSelector.value = savedModel;
+            localStorage.setItem("modelo_elegido", savedModel);
+            document.getElementById("ui-current-model").innerText =
+              getUiName(savedModel);
             loadStats();
-            
-            // Chat form submission
-            document.getElementById('chat-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                handleChatSubmit();
-            });
+          })
+          .catch((e) => console.error("Error cargando modelos:", e));
 
-            // Tutor form submission
-            document.getElementById('tutor-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                handleTutorSubmit();
-            });
-            
-            // Render icons
-            lucide.createIcons();
+        const modelSelector = document.getElementById("model-selector");
+        modelSelector.addEventListener("change", (e) => {
+          localStorage.setItem("modelo_elegido", e.target.value);
+          document.getElementById("ui-current-model").innerText = getUiName(
+            e.target.value,
+          );
+          loadStats();
         });
-        
-        function updateStatsUI(stats) {
-            const currentModel = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
-            const modelData = stats[currentModel];
-            if(modelData) {
-                document.getElementById('ui-peticiones').innerText = `${modelData.peticiones}`;
-                document.getElementById('ui-tokens').innerText = `${modelData.tokens.toLocaleString()}`;
-            } else {
-                document.getElementById('ui-peticiones').innerText = `0`;
-                document.getElementById('ui-tokens').innerText = `0`;
+
+        loadStats();
+
+        // Chat form submission
+        document.getElementById("chat-form").addEventListener("submit", (e) => {
+          e.preventDefault();
+          handleChatSubmit();
+        });
+
+        // Tutor form submission
+        document
+          .getElementById("tutor-form")
+          .addEventListener("submit", (e) => {
+            e.preventDefault();
+            handleTutorSubmit();
+          });
+
+        // Render icons
+        lucide.createIcons();
+      });
+
+      function updateStatsUI(stats) {
+        const currentModel =
+          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+        const modelData = stats[currentModel];
+        if (modelData) {
+          document.getElementById("ui-peticiones").innerText =
+            `${modelData.peticiones}`;
+          document.getElementById("ui-tokens").innerText =
+            `${modelData.tokens.toLocaleString()}`;
+        } else {
+          document.getElementById("ui-peticiones").innerText = `0`;
+          document.getElementById("ui-tokens").innerText = `0`;
+        }
+      }
+
+      function loadStats() {
+        fetch("/api/stats")
+          .then((r) => r.json())
+          .then((data) => updateStatsUI(data));
+      }
+
+      // Settings config logic
+      function loadAppSettings() {
+        fetch("/api/settings")
+          .then((r) => r.json())
+          .then((data) => {
+            document.getElementById("config-obsidian-path").value =
+              data.obsidian_vault_path || "";
+
+            document.getElementById("config-max-audio-mb").value =
+              data.max_audio_upload_mb || 500;
+            document.getElementById("config-rag-max-docs").value =
+              data.rag_max_docs || 8;
+
+            if (data.browser_cookie_source) {
+              document.getElementById("config-browser-cookie").value =
+                data.browser_cookie_source;
             }
-        }
-        
-        function loadStats() {
-            fetch('/api/stats')
-            .then(r => r.json())
-            .then(data => updateStatsUI(data));
-        }
+            if (data.default_model) {
+              document.getElementById("model-selector").value =
+                data.default_model;
+              localStorage.setItem("modelo_elegido", data.default_model);
+              document.getElementById("ui-current-model").innerText = getUiName(
+                data.default_model,
+              );
+            }
+          })
+          .catch((e) => console.log("Error cargando configuración", e));
+      }
 
-        // Settings config logic
-        function loadAppSettings() {
-            fetch('/api/settings')
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('config-obsidian-path').value = data.obsidian_vault_path || '';
+      function saveAppSettings() {
+        const path = document.getElementById("config-obsidian-path").value;
+        const browserSource = document.getElementById(
+          "config-browser-cookie",
+        ).value;
+        const maxAudioMB =
+          parseInt(document.getElementById("config-max-audio-mb").value) || 500;
+        const ragMaxDocs =
+          parseInt(document.getElementById("config-rag-max-docs").value) || 8;
+        const selectedModel = document.getElementById("model-selector").value;
 
-                    document.getElementById('config-max-audio-mb').value = data.max_audio_upload_mb || 500;
-                    document.getElementById('config-rag-max-docs').value = data.rag_max_docs || 8;
-                    
-                    if (data.browser_cookie_source) {
-                        document.getElementById('config-browser-cookie').value = data.browser_cookie_source;
-                    }
-                    if (data.default_model) {
-                        document.getElementById('model-selector').value = data.default_model;
-                        localStorage.setItem('modelo_elegido', data.default_model);
-                        document.getElementById('ui-current-model').innerText = getUiName(data.default_model);
-                    }
-                })
-                .catch(e => console.log('Error cargando configuración', e));
-        }
-        
-        function saveAppSettings() {
-            const path = document.getElementById('config-obsidian-path').value;
-            const browserSource = document.getElementById('config-browser-cookie').value;
-            const maxAudioMB = parseInt(document.getElementById('config-max-audio-mb').value) || 500;
-            const ragMaxDocs = parseInt(document.getElementById('config-rag-max-docs').value) || 8;
-            const selectedModel = document.getElementById('model-selector').value;
-            
-            const btn = document.getElementById('btn-save-settings');
-            const originalText = btn.innerText;
-            btn.innerText = 'Guardando...';
-            btn.disabled = true;
-            
-            fetch('/api/settings', {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    obsidian_vault_path: path,
-                    browser_cookie_source: browserSource,
-                    max_audio_upload_mb: maxAudioMB,
-                    rag_max_docs: ragMaxDocs,
-                    default_model: selectedModel
-                })
-            })
-            .then(r => r.json())
-            .then(() => {
-                btn.innerText = '¡Guardado!';
-                setTimeout(() => {
-                    btn.innerText = originalText;
-                    btn.disabled = false;
-                }, 2000);
-            })
-            .catch(e => {
-                showToast('Error al guardar: ' + e.message, 'error');
-                btn.innerText = originalText;
-                btn.disabled = false;
-            });
-        }
+        const btn = document.getElementById("btn-save-settings");
+        const originalText = btn.innerText;
+        btn.innerText = "Guardando...";
+        btn.disabled = true;
 
-        // Tab Switching
-        function switchTab(tabId) {
-            // Detener cualquier audio en reproducción para evitar audios fantasmas al destruir el DOM
-            document.querySelectorAll('audio').forEach(audio => {
-                if (!audio.paused) {
-                    audio.pause();
-                    audio.currentTime = 0;
+        fetch("/api/settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            obsidian_vault_path: path,
+            browser_cookie_source: browserSource,
+            max_audio_upload_mb: maxAudioMB,
+            rag_max_docs: ragMaxDocs,
+            default_model: selectedModel,
+          }),
+        })
+          .then((r) => r.json())
+          .then(() => {
+            btn.innerText = "¡Guardado!";
+            setTimeout(() => {
+              btn.innerText = originalText;
+              btn.disabled = false;
+            }, 2000);
+          })
+          .catch((e) => {
+            showToast("Error al guardar: " + e.message, "error");
+            btn.innerText = originalText;
+            btn.disabled = false;
+          });
+      }
+
+      // Tab Switching
+      function switchTab(tabId) {
+        // Detener cualquier audio en reproducción para evitar audios fantasmas al destruir el DOM
+        document.querySelectorAll("audio").forEach((audio) => {
+          if (!audio.paused) {
+            audio.pause();
+            audio.currentTime = 0;
+          }
+        });
+
+        document
+          .querySelectorAll(".tab-content")
+          .forEach((el) => el.classList.add("hidden"));
+        document
+          .querySelectorAll(".nav-btn")
+          .forEach((el) => el.classList.remove("active-nav"));
+
+        const target = document.getElementById(`tab-${tabId}`);
+        target.classList.remove("hidden");
+        if (tabId === "resumenes") target.classList.add("flex");
+        else target.classList.add("flex");
+
+        document.getElementById(`nav-${tabId}`).classList.add("active-nav");
+
+        if (tabId === "audios") {
+          loadAudios();
+          loadCola();
+        }
+        if (tabId === "config") loadMaterias();
+        if (tabId === "resumenes") loadSummaries();
+        if (tabId === "tarjetas") loadTarjetas();
+      }
+
+      // ====== TAB: RESUMENES ======
+      function loadSummaries() {
+        fetch("/api/summaries")
+          .then((r) => r.json())
+          .then((data) => {
+            const list = document.getElementById("summaries-list");
+            list.innerHTML = "";
+            if (!data.summaries.length) {
+              list.innerHTML =
+                '<p class="text-xs text-textMuted p-2 font-mono">/sin_documentos</p>';
+              return;
+            }
+            data.summaries.forEach((s) => {
+              const div = document.createElement("div");
+              div.className =
+                "p-2 rounded-md hover:bg-background cursor-pointer text-charcoal flex justify-between items-center group transition-colors border border-transparent hover:border-borderGray";
+
+              const titleSpan = document.createElement("span");
+              titleSpan.className = "flex-1 overflow-hidden pr-2";
+              titleSpan.innerHTML = `<div class="truncate font-medium text-charcoal">[ DOC ] ${s.display_name}</div><div class="text-[9px] text-textMuted font-mono mt-0.5 opacity-80">${s.created_at}</div>`;
+
+              const delBtn = document.createElement("button");
+              delBtn.innerHTML =
+                '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i>';
+              delBtn.className =
+                "opacity-0 group-hover:opacity-100 bg-paleRed text-paleRedText p-1 rounded transition";
+              delBtn.onclick = (e) => {
+                e.stopPropagation();
+                if (
+                  confirm(
+                    "¿Eliminar este documento de la base de conocimiento?",
+                  )
+                ) {
+                  fetch(`/api/summaries/${s.filename}`, {
+                    method: "DELETE",
+                  }).then(() => loadSummaries());
                 }
+              };
+
+              div.appendChild(titleSpan);
+              div.appendChild(delBtn);
+
+              div.onclick = () => {
+                document
+                  .querySelectorAll("#summaries-list div")
+                  .forEach((d) => {
+                    d.style.backgroundColor = "transparent";
+                    d.style.borderColor = "transparent";
+                  });
+                div.style.backgroundColor = "var(--color-bg)";
+                div.style.borderColor = "var(--color-border)";
+                fetch(`/api/summaries/${s.filename}`)
+                  .then((r) => r.json())
+                  .then((d) => {
+                    document.getElementById("content-area").innerHTML =
+                      marked.parse(d.content);
+                    document
+                      .getElementById("content-area")
+                      .classList.remove("hidden");
+                    document
+                      .getElementById("edit-area")
+                      .classList.add("hidden");
+                    document.getElementById("edit-area").value = d.content;
+
+                    const header = document.getElementById("content-header");
+                    header.classList.remove("hidden");
+
+                    const btnEdit = document.getElementById("btn-edit-summary");
+                    const btnSave = document.getElementById("btn-save-summary");
+                    btnEdit.classList.remove("hidden");
+                    btnSave.classList.add("hidden");
+
+                    btnEdit.onclick = () => {
+                      document
+                        .getElementById("content-area")
+                        .classList.add("hidden");
+                      document
+                        .getElementById("edit-area")
+                        .classList.remove("hidden");
+                      btnEdit.classList.add("hidden");
+                      btnSave.classList.remove("hidden");
+                    };
+
+                    btnSave.onclick = () => {
+                      const newContent =
+                        document.getElementById("edit-area").value;
+                      fetch(`/api/summaries/${s.filename}`, {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ content: newContent }),
+                      }).then(() => {
+                        document.getElementById("content-area").innerHTML =
+                          marked.parse(newContent);
+                        document
+                          .getElementById("content-area")
+                          .classList.remove("hidden");
+                        document
+                          .getElementById("edit-area")
+                          .classList.add("hidden");
+                        btnEdit.classList.remove("hidden");
+                        btnSave.classList.add("hidden");
+                      });
+                    };
+                  });
+              };
+              list.appendChild(div);
             });
-            
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active-nav'));
-            
-            const target = document.getElementById(`tab-${tabId}`);
-            target.classList.remove('hidden');
-            if(tabId === 'resumenes') target.classList.add('flex');
-            else target.classList.add('flex'); 
-            
-            document.getElementById(`nav-${tabId}`).classList.add('active-nav');
-            
-            if(tabId === 'audios') {
-                loadAudios();
-                loadCola();
-            }
-            if(tabId === 'config') loadMaterias();
-            if(tabId === 'resumenes') loadSummaries();
-            if(tabId === 'tarjetas') loadTarjetas();
-        }
+            lucide.createIcons({ root: list });
+          });
+      }
 
-        // ====== TAB: RESUMENES ======
-        function loadSummaries() {
-            fetch('/api/summaries')
-                .then(r => r.json())
-                .then(data => {
-                    const list = document.getElementById('summaries-list');
-                    list.innerHTML = '';
-                    if(!data.summaries.length) {
-                        list.innerHTML = '<p class="text-xs text-textMuted p-2 font-mono">/sin_documentos</p>';
-                        return;
-                    }
-                    data.summaries.forEach(s => {
-                        const div = document.createElement('div');
-                        div.className = 'p-2 rounded-md hover:bg-background cursor-pointer text-charcoal flex justify-between items-center group transition-colors border border-transparent hover:border-borderGray';
-                        
-                        const titleSpan = document.createElement('span');
-                        titleSpan.className = 'flex-1 overflow-hidden pr-2';
-                        titleSpan.innerHTML = `<div class="truncate font-medium text-charcoal">[ DOC ] ${s.display_name}</div><div class="text-[9px] text-textMuted font-mono mt-0.5 opacity-80">${s.created_at}</div>`;
-                        
-                        const delBtn = document.createElement('button');
-                        delBtn.innerHTML = '<i data-lucide="trash-2" class="w-3.5 h-3.5"></i>';
-                        delBtn.className = 'opacity-0 group-hover:opacity-100 bg-paleRed text-paleRedText p-1 rounded transition';
-                        delBtn.onclick = (e) => {
-                            e.stopPropagation();
-                            if(confirm('¿Eliminar este documento de la base de conocimiento?')) {
-                                fetch(`/api/summaries/${s.filename}`, {method:'DELETE'}).then(()=>loadSummaries());
-                            }
-                        };
-                        
-                        div.appendChild(titleSpan);
-                        div.appendChild(delBtn);
-                        
-                        div.onclick = () => {
-                            document.querySelectorAll('#summaries-list div').forEach(d => {
-                                d.style.backgroundColor = 'transparent';
-                                d.style.borderColor = 'transparent';
-                            });
-                            div.style.backgroundColor = 'var(--color-bg)';
-                            div.style.borderColor = 'var(--color-border)';
-                            fetch(`/api/summaries/${s.filename}`)
-                                .then(r => r.json())
-                                .then(d => {
-                                    document.getElementById('content-area').innerHTML = marked.parse(d.content);
-                                    document.getElementById('content-area').classList.remove('hidden');
-                                    document.getElementById('edit-area').classList.add('hidden');
-                                    document.getElementById('edit-area').value = d.content;
-                                    
-                                    const header = document.getElementById('content-header');
-                                    header.classList.remove('hidden');
-                                    
-                                    const btnEdit = document.getElementById('btn-edit-summary');
-                                    const btnSave = document.getElementById('btn-save-summary');
-                                    btnEdit.classList.remove('hidden');
-                                    btnSave.classList.add('hidden');
-                                    
-                                    btnEdit.onclick = () => {
-                                        document.getElementById('content-area').classList.add('hidden');
-                                        document.getElementById('edit-area').classList.remove('hidden');
-                                        btnEdit.classList.add('hidden');
-                                        btnSave.classList.remove('hidden');
-                                    };
-                                    
-                                    btnSave.onclick = () => {
-                                        const newContent = document.getElementById('edit-area').value;
-                                        fetch(`/api/summaries/${s.filename}`, {
-                                            method: 'PUT',
-                                            headers: {'Content-Type': 'application/json'},
-                                            body: JSON.stringify({content: newContent})
-                                        }).then(() => {
-                                            document.getElementById('content-area').innerHTML = marked.parse(newContent);
-                                            document.getElementById('content-area').classList.remove('hidden');
-                                            document.getElementById('edit-area').classList.add('hidden');
-                                            btnEdit.classList.remove('hidden');
-                                            btnSave.classList.add('hidden');
-                                        });
-                                    };
-                                });
-                        };
-                        list.appendChild(div);
-                    });
-                    lucide.createIcons({root: list});
-                });
-        }
+      // ====== TAB: CONFIGURACION ======
+      function loadMaterias() {
+        fetch("/api/materias")
+          .then((r) => r.json())
+          .then((data) => {
+            materias = data;
 
-        // ====== TAB: CONFIGURACION ======
-        function loadMaterias() {
-            fetch('/api/materias')
-                .then(r => r.json())
-                .then(data => {
-                    materias = data;
-                    
-                    // Render List
-                    const list = document.getElementById('materias-list');
-                    list.innerHTML = '';
-                    data.forEach(m => {
-                        const safePrompt = m.prompt_personalizado.replace(/"/g, '&quot;');
-                        list.innerHTML += `
+            // Render List
+            const list = document.getElementById("materias-list");
+            list.innerHTML = "";
+            data.forEach((m) => {
+              const safePrompt = m.prompt_personalizado.replace(/"/g, "&quot;");
+              list.innerHTML += `
                             <div class="bento-card p-6 flex flex-col justify-between group hover:border-charcoal/30 transition-colors duration-300 min-h-[160px]">
                                 <div class="mb-5">
                                     <h4 class="font-serif text-lg text-charcoal mb-3 truncate" title="${m.nombre}">${m.nombre}</h4>
@@ -1100,148 +1619,185 @@
                                 </div>
                             </div>
                         `;
-                    });
-                    lucide.createIcons({root: list});
-                    
-                    // Update Chat Select Options
-                    const chatSelect = document.getElementById('chat-context-select');
-                    const tarjetasSelect = document.getElementById('tarjetas-materia-filter');
-                    const tutorSelect = document.getElementById('tutor-materia-select');
-                    
-                    chatSelect.innerHTML = '<option value="todas">Todo el Semestre</option><option value="default">Materia General</option>';
-                    if(tarjetasSelect) tarjetasSelect.innerHTML = '<option value="todas">Todas las materias</option>';
-                    if(tutorSelect) tutorSelect.innerHTML = '<option value="todas">Todas las materias</option>';
-                    
-                    data.forEach(m => {
-                        chatSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
-                        if(tarjetasSelect) tarjetasSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
-                        if(tutorSelect) tutorSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
-                    });
-                });
-        }
-        
-        function generatePrompt() {
-            const btn = document.getElementById('btn-gen-prompt');
-            const input = document.getElementById('mat-natural').value;
-            if(!input.trim()) return showToast("Escribe qué quieres que haga la IA primero.", 'error');
-            
-            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Procesando...</span>';
-            lucide.createIcons({root: btn});
-            btn.disabled = true;
-            
-            const modelStr = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
-            fetch('/api/generate-prompt', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({descripcion: input, modelo_elegido: modelStr})
-            })
-            .then(r => r.json())
-            .then(d => {
-                document.getElementById('mat-prompt').value = d.prompt_generado;
-                if(d.stats) updateStatsUI(d.stats);
-            })
-            .catch(e => showToast("Error generando prompt: " + e.message, 'error'))
-            .finally(() => {
-                btn.innerHTML = '<span>Traducir a Prompt Técnico</span>';
-                btn.disabled = false;
             });
-        }
+            lucide.createIcons({ root: list });
 
-        function openMateriaModal(isEdit = false) {
-            const modal = document.getElementById('materia-modal');
-            const content = document.getElementById('materia-modal-content');
-            modal.classList.remove('hidden');
-            // Timeout to allow display:block to apply before animating opacity
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                content.classList.remove('scale-95');
-            }, 10);
-            
-            document.getElementById('mat-form-title').innerText = isEdit ? 'Editar Asignatura' : 'Nueva Asignatura';
-            document.getElementById('btn-save-materia').innerText = isEdit ? 'Actualizar' : 'Guardar';
-            if(!isEdit) {
-                editingMateriaId = null;
-                document.getElementById('mat-nombre').value = '';
-                document.getElementById('mat-natural').value = '';
-                document.getElementById('mat-prompt').value = '';
+            // Update Chat Select Options
+            const chatSelect = document.getElementById("chat-context-select");
+            const tarjetasSelect = document.getElementById(
+              "tarjetas-materia-filter",
+            );
+            const tutorSelect = document.getElementById("tutor-materia-select");
+
+            chatSelect.innerHTML =
+              '<option value="todas">Todo el Semestre</option><option value="default">Materia General</option>';
+            if (tarjetasSelect)
+              tarjetasSelect.innerHTML =
+                '<option value="todas">Todas las materias</option>';
+            if (tutorSelect)
+              tutorSelect.innerHTML =
+                '<option value="todas">Todas las materias</option>';
+
+            data.forEach((m) => {
+              chatSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+              if (tarjetasSelect)
+                tarjetasSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+              if (tutorSelect)
+                tutorSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+            });
+          });
+      }
+
+      function generatePrompt() {
+        const btn = document.getElementById("btn-gen-prompt");
+        const input = document.getElementById("mat-natural").value;
+        if (!input.trim())
+          return showToast(
+            "Escribe qué quieres que haga la IA primero.",
+            "error",
+          );
+
+        btn.innerHTML =
+          '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i> <span>Procesando...</span>';
+        lucide.createIcons({ root: btn });
+        btn.disabled = true;
+
+        const modelStr =
+          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+        fetch("/api/generate-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            descripcion: input,
+            modelo_elegido: modelStr,
+          }),
+        })
+          .then((r) => r.json())
+          .then((d) => {
+            document.getElementById("mat-prompt").value = d.prompt_generado;
+            if (d.stats) updateStatsUI(d.stats);
+          })
+          .catch((e) =>
+            showToast("Error generando prompt: " + e.message, "error"),
+          )
+          .finally(() => {
+            btn.innerHTML = "<span>Traducir a Prompt Técnico</span>";
+            btn.disabled = false;
+          });
+      }
+
+      function openMateriaModal(isEdit = false) {
+        const modal = document.getElementById("materia-modal");
+        const content = document.getElementById("materia-modal-content");
+        modal.classList.remove("hidden");
+        // Timeout to allow display:block to apply before animating opacity
+        setTimeout(() => {
+          modal.classList.remove("opacity-0");
+          content.classList.remove("scale-95");
+        }, 10);
+
+        document.getElementById("mat-form-title").innerText = isEdit
+          ? "Editar Asignatura"
+          : "Nueva Asignatura";
+        document.getElementById("btn-save-materia").innerText = isEdit
+          ? "Actualizar"
+          : "Guardar";
+        if (!isEdit) {
+          editingMateriaId = null;
+          document.getElementById("mat-nombre").value = "";
+          document.getElementById("mat-natural").value = "";
+          document.getElementById("mat-prompt").value = "";
+        }
+      }
+
+      function closeMateriaModal() {
+        const modal = document.getElementById("materia-modal");
+        const content = document.getElementById("materia-modal-content");
+        modal.classList.add("opacity-0");
+        content.classList.add("scale-95");
+        setTimeout(() => {
+          modal.classList.add("hidden");
+          editingMateriaId = null;
+        }, 300);
+      }
+
+      function editMateria(id) {
+        const m = materias.find((x) => x.id === id);
+        if (!m) return;
+        editingMateriaId = id;
+        document.getElementById("mat-nombre").value = m.nombre;
+        document.getElementById("mat-prompt").value = m.prompt_personalizado;
+        openMateriaModal(true);
+      }
+
+      function saveMateria() {
+        const nombre = document.getElementById("mat-nombre").value;
+        const prompt = document.getElementById("mat-prompt").value;
+        if (!nombre || !prompt)
+          return showToast(
+            "El Nombre y el Prompt Final son obligatorios.",
+            "error",
+          );
+
+        if (editingMateriaId) {
+          fetch(`/api/materias/${editingMateriaId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nombre, prompt_personalizado: prompt }),
+          }).then(() => {
+            editingMateriaId = null;
+            closeMateriaModal();
+            loadMaterias();
+          });
+        } else {
+          fetch("/api/materias", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nombre, prompt_personalizado: prompt }),
+          }).then(() => {
+            closeMateriaModal();
+            loadMaterias();
+          });
+        }
+      }
+
+      function deleteMateria(id) {
+        if (confirm("¿Eliminar asignatura de forma permanente?")) {
+          fetch(`/api/materias/${id}`, { method: "DELETE" }).then(() =>
+            loadMaterias(),
+          );
+        }
+      }
+
+      // ====== TAB: TARJETAS ======
+      function loadTarjetas() {
+        const materiaId = document.getElementById(
+          "tarjetas-materia-filter",
+        ).value;
+        fetch(`/api/tarjetas?materia_id=${materiaId}`)
+          .then((r) => r.json())
+          .then((data) => {
+            const grid = document.getElementById("tarjetas-grid");
+            grid.innerHTML = "";
+            if (!data.tarjetas || data.tarjetas.length === 0) {
+              grid.innerHTML =
+                '<div class="col-span-full text-center text-textMuted font-serif italic py-8">No hay avisos pendientes.</div>';
+              return;
             }
-        }
-        
-        function closeMateriaModal() {
-            const modal = document.getElementById('materia-modal');
-            const content = document.getElementById('materia-modal-content');
-            modal.classList.add('opacity-0');
-            content.classList.add('scale-95');
-            setTimeout(() => {
-                modal.classList.add('hidden');
-                editingMateriaId = null;
-            }, 300);
-        }
+            data.tarjetas.forEach((t) => {
+              const card = document.createElement("div");
+              card.className =
+                "bento-card p-6 flex flex-col gap-4 relative group hover:border-textMuted transition-colors";
 
-        function editMateria(id) {
-            const m = materias.find(x => x.id === id);
-            if (!m) return;
-            editingMateriaId = id;
-            document.getElementById('mat-nombre').value = m.nombre;
-            document.getElementById('mat-prompt').value = m.prompt_personalizado;
-            openMateriaModal(true);
-        }
+              let badgeColor = "bg-gray-100 text-gray-700 border-gray-200";
+              if (t.tipo === "tarea")
+                badgeColor = "bg-blue-50 text-blue-700 border-blue-200";
+              if (t.tipo === "examen")
+                badgeColor = "bg-red-50 text-red-700 border-red-200";
+              if (t.tipo === "aviso")
+                badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
 
-        function saveMateria() {
-            const nombre = document.getElementById('mat-nombre').value;
-            const prompt = document.getElementById('mat-prompt').value;
-            if(!nombre || !prompt) return showToast('El Nombre y el Prompt Final son obligatorios.', 'error');
-            
-            if (editingMateriaId) {
-                fetch(`/api/materias/${editingMateriaId}`, {
-                    method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({nombre, prompt_personalizado: prompt})
-                }).then(() => {
-                    editingMateriaId = null;
-                    closeMateriaModal();
-                    loadMaterias();
-                });
-            } else {
-                fetch('/api/materias', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({nombre, prompt_personalizado: prompt})
-                }).then(() => {
-                    closeMateriaModal();
-                    loadMaterias();
-                });
-            }
-        }
-
-        function deleteMateria(id) {
-            if(confirm('¿Eliminar asignatura de forma permanente?')) {
-                fetch(`/api/materias/${id}`, { method: 'DELETE' }).then(() => loadMaterias());
-            }
-        }
-
-        // ====== TAB: TARJETAS ======
-        function loadTarjetas() {
-            const materiaId = document.getElementById('tarjetas-materia-filter').value;
-            fetch(`/api/tarjetas?materia_id=${materiaId}`)
-                .then(r => r.json())
-                .then(data => {
-                    const grid = document.getElementById('tarjetas-grid');
-                    grid.innerHTML = '';
-                    if (!data.tarjetas || data.tarjetas.length === 0) {
-                        grid.innerHTML = '<div class="col-span-full text-center text-textMuted font-serif italic py-8">No hay avisos pendientes.</div>';
-                        return;
-                    }
-                    data.tarjetas.forEach(t => {
-                        const card = document.createElement('div');
-                        card.className = "bento-card p-6 flex flex-col gap-4 relative group hover:border-textMuted transition-colors";
-                        
-                        let badgeColor = "bg-gray-100 text-gray-700 border-gray-200";
-                        if (t.tipo === 'tarea') badgeColor = "bg-blue-50 text-blue-700 border-blue-200";
-                        if (t.tipo === 'examen') badgeColor = "bg-red-50 text-red-700 border-red-200";
-                        if (t.tipo === 'aviso') badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
-                        
-                        card.innerHTML = `
+              card.innerHTML = `
                             <button onclick="deleteTarjeta('${t.id}')" class="absolute top-4 right-4 text-textMuted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar aviso">
                                 <i data-lucide="trash-2" class="w-4 h-4"></i>
                             </button>
@@ -1258,91 +1814,102 @@
                             </div>
                             <div class="text-xs text-textMuted flex items-center gap-1.5 border-b border-borderGray pb-4">
                                 <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-                                Para: <span class="font-bold">${t.referencia_temporal || 'Sin especificar'}</span>
+                                Para: <span class="font-bold">${t.referencia_temporal || "Sin especificar"}</span>
                             </div>
                             
                             <div class="mt-auto pt-2">
                                 <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-1">Mis Notas</label>
-                                <textarea id="nota-${t.id}" class="w-full text-xs p-2 rounded bg-surface border border-borderGray focus:border-charcoal outline-none resize-none" rows="2" placeholder="Añade una nota...">${t.nota_personal || ''}</textarea>
+                                <textarea id="nota-${t.id}" class="w-full text-xs p-2 rounded bg-surface border border-borderGray focus:border-charcoal outline-none resize-none" rows="2" placeholder="Añade una nota...">${t.nota_personal || ""}</textarea>
                                 <button onclick="updateNotaPersonal('${t.id}')" class="text-[10px] uppercase font-bold tracking-wider text-charcoal hover:text-accent mt-1 flex items-center gap-1">
                                     <i data-lucide="save" class="w-3 h-3"></i> Guardar
                                 </button>
                             </div>
                         `;
-                        grid.appendChild(card);
-                    });
-                    lucide.createIcons();
-                });
-        }
-        
-        function deleteTarjeta(id) {
-            if(confirm('¿Eliminar aviso?')) {
-                fetch(`/api/tarjetas/${id}`, { method: 'DELETE' }).then(() => loadTarjetas());
-            }
-        }
-
-        function updateNotaPersonal(id) {
-            const nota = document.getElementById(`nota-${id}`).value;
-            fetch(`/api/tarjetas/${id}`, {
-                method: 'PUT',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({nota_personal: nota})
-            }).then(() => {
-                const btn = document.querySelector(`#nota-${id}`).nextElementSibling;
-                const originalText = btn.innerHTML;
-                btn.innerHTML = '<i data-lucide="check" class="w-3 h-3 text-emerald-500"></i> Guardado';
-                lucide.createIcons();
-                setTimeout(() => {
-                    btn.innerHTML = originalText;
-                }, 2000);
+              grid.appendChild(card);
             });
+            lucide.createIcons();
+          });
+      }
+
+      function deleteTarjeta(id) {
+        if (confirm("¿Eliminar aviso?")) {
+          fetch(`/api/tarjetas/${id}`, { method: "DELETE" }).then(() =>
+            loadTarjetas(),
+          );
         }
+      }
 
-        // ====== TAB: AUDIOS PENDIENTES ======
-        function loadAudios() {
-            fetch('/api/audios')
-                .then(r => r.json())
-                .then(data => {
-                    const list = document.getElementById('audios-list');
-                    
-                    // Limpiar audios existentes (pausarlos primero por seguridad)
-                    list.querySelectorAll('audio').forEach(a => {
-                        if(!a.paused) {
-                            a.pause();
-                            a.currentTime = 0;
-                        }
-                    });
-                    
-                    list.innerHTML = '';
-                    if(!data.audios.length) {
-                        list.innerHTML = '<div class="bento-card p-12 text-center text-textMuted font-serif italic">El directorio de trabajo está vacío. No hay grabaciones locales.</div>';
-                        return;
-                    }
-                    
-                    let options = '<option value="default">Materia General</option>';
-                    materias.forEach(m => options += `<option value="${m.id}">${m.nombre}</option>`);
+      function updateNotaPersonal(id) {
+        const nota = document.getElementById(`nota-${id}`).value;
+        fetch(`/api/tarjetas/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nota_personal: nota }),
+        }).then(() => {
+          const btn = document.querySelector(`#nota-${id}`).nextElementSibling;
+          const originalText = btn.innerHTML;
+          btn.innerHTML =
+            '<i data-lucide="check" class="w-3 h-3 text-emerald-500"></i> Guardado';
+          lucide.createIcons();
+          setTimeout(() => {
+            btn.innerHTML = originalText;
+          }, 2000);
+        });
+      }
 
-                    window.audiosMap = {};
-                    data.audios.forEach(a => {
-                        window.audiosMap[a.filename] = a;
-                        
-                        let mediaSrc = `/media/${a.filename}`;
-                        let imagesHtml = '';
-                        if (a.session_dir) {
-                            // Extract just the session_xxxxx folder name
-                            const sessionFolderName = a.session_dir.split('/').pop();
-                            mediaSrc = `/media/${sessionFolderName}/${a.filename}`;
-                            
-                            if (a.image_filenames && a.image_filenames.length > 0) {
-                                const carouselId = `carousel-${a.filename.replace(/[^a-zA-Z0-9]/g, '_')}`;
-                                const imgListJson = JSON.stringify(a.image_filenames.map(img => `/media/${sessionFolderName}/${img}`)).replace(/"/g, '&quot;');
-                                imagesHtml = `<div class="img-carousel-wrapper">`;
-                                imagesHtml += `<button class="img-carousel-arrow left" onclick="scrollCarousel('${carouselId}', -1)" title="Anterior"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>`;
-                                imagesHtml += `<button class="img-carousel-arrow right" onclick="scrollCarousel('${carouselId}', 1)" title="Siguiente"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>`;
-                                imagesHtml += `<div class="img-carousel-track" id="${carouselId}">`;
-                                a.image_filenames.forEach((img, idx) => {
-                                    const imgSrc = `/media/${sessionFolderName}/${img}`;
-                                    imagesHtml += `
+      // ====== TAB: AUDIOS PENDIENTES ======
+      function loadAudios() {
+        fetch("/api/audios")
+          .then((r) => r.json())
+          .then((data) => {
+            const list = document.getElementById("audios-list");
+
+            // Limpiar audios existentes (pausarlos primero por seguridad)
+            list.querySelectorAll("audio").forEach((a) => {
+              if (!a.paused) {
+                a.pause();
+                a.currentTime = 0;
+              }
+            });
+
+            list.innerHTML = "";
+            if (!data.audios.length) {
+              list.innerHTML =
+                '<div class="bento-card p-12 text-center text-textMuted font-serif italic">El directorio de trabajo está vacío. No hay grabaciones locales.</div>';
+              return;
+            }
+
+            let options = '<option value="default">Materia General</option>';
+            materias.forEach(
+              (m) =>
+                (options += `<option value="${m.id}">${m.nombre}</option>`),
+            );
+
+            window.audiosMap = {};
+            data.audios.forEach((a) => {
+              window.audiosMap[a.filename] = a;
+
+              let mediaSrc = `/media/${a.filename}`;
+              let imagesHtml = "";
+              if (a.session_dir) {
+                // Extract just the session_xxxxx folder name
+                const sessionFolderName = a.session_dir.split("/").pop();
+                mediaSrc = `/media/${sessionFolderName}/${a.filename}`;
+
+                if (a.image_filenames && a.image_filenames.length > 0) {
+                  const carouselId = `carousel-${a.filename.replace(/[^a-zA-Z0-9]/g, "_")}`;
+                  const imgListJson = JSON.stringify(
+                    a.image_filenames.map(
+                      (img) => `/media/${sessionFolderName}/${img}`,
+                    ),
+                  ).replace(/"/g, "&quot;");
+                  imagesHtml = `<div class="img-carousel-wrapper">`;
+                  imagesHtml += `<button class="img-carousel-arrow left" onclick="scrollCarousel('${carouselId}', -1)" title="Anterior"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>`;
+                  imagesHtml += `<button class="img-carousel-arrow right" onclick="scrollCarousel('${carouselId}', 1)" title="Siguiente"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>`;
+                  imagesHtml += `<div class="img-carousel-track" id="${carouselId}">`;
+                  a.image_filenames.forEach((img, idx) => {
+                    const imgSrc = `/media/${sessionFolderName}/${img}`;
+                    imagesHtml += `
                                         <div class="relative group img-carousel-thumb" id="img-container-${img}">
                                             <img src="${imgSrc}" class="h-20 w-32 object-cover rounded border border-borderGray" title="${img}" onclick="openImagePreview('${imgSrc}', '${img}', ${idx}, ${imgListJson})">
                                             <button onclick="event.stopPropagation(); deleteImage('${a.filename}', '${img}')" class="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity z-10" title="Eliminar imagen">
@@ -1350,14 +1917,14 @@
                                             </button>
                                         </div>
                                     `;
-                                });
-                                imagesHtml += '</div>';
-                                imagesHtml += `<div class="text-[10px] text-textMuted font-mono mt-1 text-right">${a.image_filenames.length} captura${a.image_filenames.length !== 1 ? 's' : ''}</div>`;
-                                imagesHtml += '</div>';
-                            }
-                        }
-                        
-                        list.innerHTML += `
+                  });
+                  imagesHtml += "</div>";
+                  imagesHtml += `<div class="text-[10px] text-textMuted font-mono mt-1 text-right">${a.image_filenames.length} captura${a.image_filenames.length !== 1 ? "s" : ""}</div>`;
+                  imagesHtml += "</div>";
+                }
+              }
+
+              list.innerHTML += `
                             <div class="bento-card p-6 flex flex-col md:flex-row gap-6">
                                 <div class="flex-1 w-full md:border-r border-borderGray pr-0 md:pr-6">
                                     <h4 class="font-bold text-sm text-charcoal mb-3 truncate font-mono">${a.display_name}</h4>
@@ -1382,108 +1949,124 @@
                                 </div>
                             </div>
                         `;
-                    });
-                    lucide.createIcons({root: list});
-                });
+            });
+            lucide.createIcons({ root: list });
+          });
+      }
+
+      function deleteAudio(filename) {
+        if (confirm("¿Descartar esta sesión permanentemente?")) {
+          const a = window.audiosMap[filename];
+          let pathToDelete = filename;
+          if (a && a.session_dir) {
+            const sessionFolderName = a.session_dir.split("/").pop();
+            pathToDelete = `${sessionFolderName}/${filename}`;
+          }
+          fetch(`/api/audios/${pathToDelete}`, { method: "DELETE" }).then(() =>
+            loadAudios(),
+          );
         }
+      }
 
-        function deleteAudio(filename) {
-            if(confirm('¿Descartar esta sesión permanentemente?')) {
-                const a = window.audiosMap[filename];
-                let pathToDelete = filename;
-                if (a && a.session_dir) {
-                    const sessionFolderName = a.session_dir.split('/').pop();
-                    pathToDelete = `${sessionFolderName}/${filename}`;
-                }
-                fetch(`/api/audios/${pathToDelete}`, { method: 'DELETE' }).then(() => loadAudios());
-            }
+      function deleteImage(filename, imgFilename) {
+        const a = window.audiosMap[filename];
+        if (a && a.image_filenames && a.image_filenames.length <= 1) {
+          showToast(
+            "No puedes eliminar la única imagen. El flujo requiere al menos una.",
+            "error",
+          );
+          return;
         }
-
-        function deleteImage(filename, imgFilename) {
-            const a = window.audiosMap[filename];
-            if (a && a.image_filenames && a.image_filenames.length <= 1) {
-                showToast('No puedes eliminar la única imagen. El flujo requiere al menos una.', 'error');
-                return;
-            }
-            if (confirm('¿Eliminar esta imagen de la sesión?')) {
-                let pathToDelete = imgFilename;
-                if (a && a.session_dir) {
-                    const sessionFolderName = a.session_dir.split('/').pop();
-                    pathToDelete = `${sessionFolderName}/${imgFilename}`;
-                }
-                fetch(`/api/audios/${pathToDelete}`, { method: 'DELETE' }).then(res => {
-                    if (res.ok) {
-                        loadAudios();
-                    } else {
-                        res.json().then(data => showToast(data.detail, 'error'));
-                    }
-                });
-            }
+        if (confirm("¿Eliminar esta imagen de la sesión?")) {
+          let pathToDelete = imgFilename;
+          if (a && a.session_dir) {
+            const sessionFolderName = a.session_dir.split("/").pop();
+            pathToDelete = `${sessionFolderName}/${imgFilename}`;
+          }
+          fetch(`/api/audios/${pathToDelete}`, { method: "DELETE" }).then(
+            (res) => {
+              if (res.ok) {
+                loadAudios();
+              } else {
+                res.json().then((data) => showToast(data.detail, "error"));
+              }
+            },
+          );
         }
+      }
 
-        let colaInterval = null;
+      let colaInterval = null;
 
-        function startColaPolling() {
-            if(!colaInterval) {
-                colaInterval = setInterval(loadCola, 3000);
-            }
+      function startColaPolling() {
+        if (!colaInterval) {
+          colaInterval = setInterval(loadCola, 3000);
         }
-        
-        function stopColaPolling() {
-            if(colaInterval) {
-                clearInterval(colaInterval);
-                colaInterval = null;
-            }
+      }
+
+      function stopColaPolling() {
+        if (colaInterval) {
+          clearInterval(colaInterval);
+          colaInterval = null;
         }
+      }
 
-        function loadCola() {
-            fetch('/api/cola')
-                .then(r => r.json())
-                .then(data => {
-                    const list = document.getElementById('cola-list');
-                    list.innerHTML = '';
-                    
-                    if (data.cola && data.cola.length > 0) {
-                        const hasProcessingOrPending = data.cola.some(t => t.estado === 'pending' || t.estado === 'processing');
-                        if (hasProcessingOrPending) {
-                            startColaPolling();
-                        } else {
-                            stopColaPolling();
-                            loadAudios(); // Actualizar listado cuando todo acabe
-                        }
+      function loadCola() {
+        fetch("/api/cola")
+          .then((r) => r.json())
+          .then((data) => {
+            const list = document.getElementById("cola-list");
+            list.innerHTML = "";
 
-                        data.cola.forEach(t => {
-                            let icon = '';
-                            let stateClass = '';
-                            let actions = '';
-                            
-                            if(t.estado === 'pending') {
-                                icon = '<i data-lucide="clock" class="w-4 h-4 text-textMuted"></i>';
-                                stateClass = 'bg-surface';
-                            } else if(t.estado === 'processing') {
-                                icon = '<i data-lucide="loader-2" class="w-4 h-4 text-emerald-500 animate-spin"></i>';
-                                stateClass = 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800/50';
-                            } else if(t.estado === 'failed') {
-                                icon = '<i data-lucide="alert-circle" class="w-4 h-4 text-red-500"></i>';
-                                stateClass = 'bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800/50';
-                                actions = `
+            if (data.cola && data.cola.length > 0) {
+              const hasProcessingOrPending = data.cola.some(
+                (t) => t.estado === "pending" || t.estado === "processing",
+              );
+              if (hasProcessingOrPending) {
+                startColaPolling();
+              } else {
+                stopColaPolling();
+                loadAudios(); // Actualizar listado cuando todo acabe
+              }
+
+              data.cola.forEach((t) => {
+                let icon = "";
+                let stateClass = "";
+                let actions = "";
+
+                if (t.estado === "pending") {
+                  icon =
+                    '<i data-lucide="clock" class="w-4 h-4 text-textMuted"></i>';
+                  stateClass = "bg-surface";
+                } else if (t.estado === "processing") {
+                  icon =
+                    '<i data-lucide="loader-2" class="w-4 h-4 text-emerald-500 animate-spin"></i>';
+                  stateClass =
+                    "bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800/50";
+                } else if (t.estado === "failed") {
+                  icon =
+                    '<i data-lucide="alert-circle" class="w-4 h-4 text-red-500"></i>';
+                  stateClass =
+                    "bg-red-50 border-red-100 dark:bg-red-900/20 dark:border-red-800/50";
+                  actions = `
                                     <button onclick="retryTask('${t.id}')" class="text-[10px] uppercase font-bold tracking-wider text-charcoal hover:text-accent flex items-center gap-1">
                                         <i data-lucide="refresh-cw" class="w-3 h-3"></i> Reintentar
                                     </button>
                                 `;
-                            } else if(t.estado === 'completed') {
-                                icon = '<i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>';
-                                stateClass = 'bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800/50 opacity-60';
-                            }
-                            
-                            const card = document.createElement('div');
-                            card.className = `p-4 border border-borderGray rounded flex justify-between items-center transition-colors ${stateClass}`;
-                            card.innerHTML = `
+                } else if (t.estado === "completed") {
+                  icon =
+                    '<i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>';
+                  stateClass =
+                    "bg-emerald-50 border-emerald-100 dark:bg-emerald-900/20 dark:border-emerald-800/50 opacity-60";
+                }
+
+                const card = document.createElement("div");
+                card.className = `p-4 border border-borderGray rounded flex justify-between items-center transition-colors ${stateClass}`;
+                card.innerHTML = `
                                 <div class="flex items-center gap-4">
                                     ${icon}
                                     <div>
                                         <div class="text-sm font-bold text-charcoal">${t.filename}</div>
-                                        <div class="text-xs text-textMuted font-mono mt-1">Estado: ${t.estado.toUpperCase()} ${t.error_msg ? '| Error: ' + t.error_msg : ''}</div>
+                                        <div class="text-xs text-textMuted font-mono mt-1">Estado: ${t.estado.toUpperCase()} ${t.error_msg ? "| Error: " + t.error_msg : ""}</div>
                                     </div>
                                 </div>
                                 <div class="flex items-center gap-3">
@@ -1491,349 +2074,439 @@
                                     <button onclick="deleteTask('${t.id}')" class="text-textMuted hover:text-red-500 p-1"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                 </div>
                             `;
-                            list.appendChild(card);
-                        });
-                        lucide.createIcons();
-                    } else {
-                        stopColaPolling();
-                    }
-                });
-        }
-
-        function retryTask(id) {
-            fetch(`/api/cola/${id}/retry`, { method: 'POST' }).then(() => loadCola());
-        }
-
-        function deleteTask(id) {
-            fetch(`/api/cola/${id}`, { method: 'DELETE' }).then(() => loadCola());
-        }
-
-        // ====== HUMAN IN THE LOOP ======
-        function processAudio(filename) {
-            const select = document.getElementById(`sel-${filename}`);
-            const a = window.audiosMap[filename];
-            
-            const payload = {
-                filename: filename,
-                materia_id: select.value,
-                modelo_elegido: localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite',
-                session_dir: a ? a.session_dir : null,
-                image_filenames: a ? (a.image_filenames || []) : []
-            };
-
-            fetch('/api/generate', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(payload)
-            })
-            .then(r => r.json())
-            .then(data => {
-                if(data.detail) throw new Error(data.detail);
-                showToast("Añadido a la cola de procesamiento", "success");
-                loadCola();
-                loadAudios();
-            })
-            .catch(e => {
-                showToast('Fallo al encolar: ' + e.message, 'error');
-            });
-        }
-        
-        // ====== CARGA MANUAL DE RESPALDO ======
-        async function uploadBackupAudio() {
-            const input = document.getElementById('backup-audio-input');
-            const btn = document.getElementById('btn-backup-upload');
-            
-            if (!input.files || input.files.length === 0) {
-                showToast("Por favor, selecciona un archivo de audio.", "error");
-                return;
-            }
-            
-            const file = input.files[0];
-            
-            // Validaciones
-            const maxMBStr = document.getElementById('config-max-audio-mb')?.value || 500;
-            const maxMB = parseInt(maxMBStr, 10);
-            if (file.size > maxMB * 1024 * 1024) {
-                showToast(`El archivo pesa ${(file.size/1024/1024).toFixed(1)}MB. El límite es ${maxMB}MB (Ajustable en Preferencias).`, "error");
-                return;
-            }
-            
-            const validExtensions = /\.(webm|mp3|wav|ogg|m4a|mp4|aac)$/i;
-            if (!validExtensions.test(file.name)) {
-                showToast("Formato no óptimo. Se recomiendan .webm, .m4a o .mp3 para mejor desempeño de IA.", "warning");
-            }
-            
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline"></i> <span>Subiendo...</span>';
-            lucide.createIcons({root: btn});
-            btn.disabled = true;
-            input.disabled = true;
-            
-            try {
-                const formData = new FormData();
-                formData.append('audio', file, file.name);
-                
-                // Intentar extraer custom_name del nombre del archivo backup-NOMBRE-fecha.webm
-                let customName = "";
-                if (file.name.includes("backup-")) {
-                    const parts = file.name.split("-");
-                    if (parts.length >= 3 && parts[1].length > 0) {
-                        customName = parts[1];
-                        formData.append('custom_name', customName);
-                    }
-                }
-                
-                const response = await fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`Error HTTP: ${response.status}`);
-                }
-                
-                const data = await response.json();
-                showToast(data.message || "Archivo subido correctamente.", "success");
-                
-                input.value = "";
-                loadAudios(); // Refrescar la lista de pendientes
-                
-            } catch (err) {
-                console.error("Error subiendo backup:", err);
-                showToast("Error al subir el archivo.", "error");
-            } finally {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-                input.disabled = false;
-            }
-        }
-        
-        // ====== CHAT DE ESTUDIO (RAG) ======
-        function handleChatSubmit() {
-            const input = document.getElementById('chat-input');
-            const msg = input.value.trim();
-            if(!msg) return;
-            
-            const context = document.getElementById('chat-context-select').value;
-            input.value = '';
-            
-            addChatBubble(msg, 'user');
-            
-            // Temporary loading bubble
-            const chatHistory = document.getElementById('chat-history');
-            const loadingBubble = document.createElement('div');
-            loadingBubble.className = 'chat-bubble chat-ai p-5 text-sm italic text-textMuted border border-borderGray rounded-lg font-serif';
-            loadingBubble.innerText = 'Indexando documentos...';
-            chatHistory.appendChild(loadingBubble);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            
-            const modelStr = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
-            fetch('/api/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({mensaje: msg, materia_id: context, modelo_elegido: modelStr})
-            })
-            .then(r => r.json())
-            .then(data => {
-                chatHistory.removeChild(loadingBubble);
-                addChatBubble(data.respuesta, 'ai');
-                if(data.stats) updateStatsUI(data.stats);
-            })
-            .catch(e => {
-                chatHistory.removeChild(loadingBubble);
-                addChatBubble('Error del motor de inferencia: ' + e.message, 'ai');
-            });
-        }
-        
-        function addChatBubble(text, type) {
-            const chatHistory = document.getElementById('chat-history');
-            const bubble = document.createElement('div');
-            bubble.className = `chat-bubble p-5 text-sm prose ${type === 'user' ? 'chat-user' : 'chat-ai'}`;
-            
-            if (type === 'ai') {
-                bubble.innerHTML = marked.parse(text);
+                list.appendChild(card);
+              });
+              lucide.createIcons();
             } else {
-                bubble.innerText = text;
+              stopColaPolling();
             }
-            
-            chatHistory.appendChild(bubble);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
+          });
+      }
+
+      function retryTask(id) {
+        fetch(`/api/cola/${id}/retry`, { method: "POST" }).then(() =>
+          loadCola(),
+        );
+      }
+
+      function deleteTask(id) {
+        fetch(`/api/cola/${id}`, { method: "DELETE" }).then(() => loadCola());
+      }
+
+      // ====== HUMAN IN THE LOOP ======
+      function processAudio(filename) {
+        const select = document.getElementById(`sel-${filename}`);
+        const a = window.audiosMap[filename];
+
+        const payload = {
+          filename: filename,
+          materia_id: select.value,
+          modelo_elegido:
+            localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite",
+          session_dir: a ? a.session_dir : null,
+          image_filenames: a ? a.image_filenames || [] : [],
+        };
+
+        fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.detail) throw new Error(data.detail);
+            showToast("Añadido a la cola de procesamiento", "success");
+            loadCola();
+            loadAudios();
+          })
+          .catch((e) => {
+            showToast("Fallo al encolar: " + e.message, "error");
+          });
+      }
+
+      // ====== CARGA MANUAL DE RESPALDO ======
+      async function uploadBackupAudio() {
+        const input = document.getElementById("backup-audio-input");
+        const btn = document.getElementById("btn-backup-upload");
+
+        if (!input.files || input.files.length === 0) {
+          showToast("Por favor, selecciona un archivo de audio.", "error");
+          return;
         }
-        // ====== TAB: TUTOR SOCRÁTICO ======
-        function iniciarSimulacionTutor() {
-            tutorHistoryState = [];
-            const historyDiv = document.getElementById('tutor-history');
-            historyDiv.innerHTML = '';
-            
-            const input = document.getElementById('tutor-input');
-            const btn = document.getElementById('tutor-send-btn');
-            
-            input.disabled = false;
-            input.classList.remove('opacity-60', 'cursor-not-allowed');
-            input.placeholder = "Responde al profesor...";
-            
-            btn.disabled = false;
-            btn.classList.remove('opacity-60', 'cursor-not-allowed');
-            
-            const select = document.getElementById('tutor-materia-select');
-            const matName = select.options[select.selectedIndex].text;
-            
-            const inicioText = `¡Hola! Soy tu tutor virtual. He analizado tus apuntes de la materia **${matName}**. ¿Estás listo para comenzar con la primera pregunta de razonamiento para evaluar tus conocimientos?`;
-            appendTutorMessage(inicioText, false);
-            
-            tutorHistoryState.push({
-                role: 'model',
-                text: inicioText
-            });
-            
-            input.focus();
+
+        const file = input.files[0];
+
+        // Validaciones
+        const maxMBStr =
+          document.getElementById("config-max-audio-mb")?.value || 500;
+        const maxMB = parseInt(maxMBStr, 10);
+        if (file.size > maxMB * 1024 * 1024) {
+          showToast(
+            `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)}MB. El límite es ${maxMB}MB (Ajustable en Preferencias).`,
+            "error",
+          );
+          return;
         }
-        
-        function appendTutorMessage(text, isUser = false) {
-            const historyDiv = document.getElementById('tutor-history');
-            const bubble = document.createElement('div');
-            
-            if(isUser) {
-                bubble.className = `chat-bubble chat-user p-5 text-sm prose dark:prose-invert max-w-none shadow-sm`;
-                bubble.innerHTML = escapeHTML(text);
-            } else {
-                bubble.className = `chat-bubble chat-ai border border-borderGray p-5 text-sm prose dark:prose-invert max-w-none`;
-                bubble.innerHTML = marked.parse(text);
+
+        const validExtensions = /\.(webm|mp3|wav|ogg|m4a|mp4|aac)$/i;
+        if (!validExtensions.test(file.name)) {
+          showToast(
+            "Formato no óptimo. Se recomiendan .webm, .m4a o .mp3 para mejor desempeño de IA.",
+            "warning",
+          );
+        }
+
+        const originalText = btn.innerHTML;
+        btn.innerHTML =
+          '<i data-lucide="loader-2" class="w-4 h-4 animate-spin inline"></i> <span>Subiendo...</span>';
+        lucide.createIcons({ root: btn });
+        btn.disabled = true;
+        input.disabled = true;
+
+        try {
+          const formData = new FormData();
+          formData.append("audio", file, file.name);
+
+          // Intentar extraer custom_name del nombre del archivo backup-NOMBRE-fecha.webm
+          let customName = "";
+          if (file.name.includes("backup-")) {
+            const parts = file.name.split("-");
+            if (parts.length >= 3 && parts[1].length > 0) {
+              customName = parts[1];
+              formData.append("custom_name", customName);
             }
-            
-            historyDiv.appendChild(bubble);
-            historyDiv.scrollTop = historyDiv.scrollHeight;
+          }
+
+          const response = await fetch("/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!response.ok) {
+            throw new Error(`Error HTTP: ${response.status}`);
+          }
+
+          const data = await response.json();
+          showToast(data.message || "Archivo subido correctamente.", "success");
+
+          input.value = "";
+          loadAudios(); // Refrescar la lista de pendientes
+        } catch (err) {
+          console.error("Error subiendo backup:", err);
+          showToast("Error al subir el archivo.", "error");
+        } finally {
+          btn.innerHTML = originalText;
+          btn.disabled = false;
+          input.disabled = false;
+        }
+      }
+
+      // ====== CHAT DE ESTUDIO (RAG) ======
+      function handleChatSubmit() {
+        const input = document.getElementById("chat-input");
+        const msg = input.value.trim();
+        if (!msg) return;
+
+        const context = document.getElementById("chat-context-select").value;
+        input.value = "";
+
+        addChatBubble(msg, "user");
+
+        // Temporary loading bubble
+        const chatHistory = document.getElementById("chat-history");
+        const loadingBubble = document.createElement("div");
+        loadingBubble.className =
+          "chat-bubble chat-ai p-5 text-sm italic text-textMuted border border-borderGray rounded-lg font-serif";
+        loadingBubble.innerText = "Indexando documentos...";
+        chatHistory.appendChild(loadingBubble);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+
+        const modelStr =
+          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+        fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mensaje: msg,
+            materia_id: context,
+            modelo_elegido: modelStr,
+          }),
+        })
+          .then((r) => r.json())
+          .then((data) => {
+            chatHistory.removeChild(loadingBubble);
+            addChatBubble(data.respuesta, "ai");
+            if (data.stats) updateStatsUI(data.stats);
+          })
+          .catch((e) => {
+            chatHistory.removeChild(loadingBubble);
+            addChatBubble("Error del motor de inferencia: " + e.message, "ai");
+          });
+      }
+
+      function addChatBubble(text, type) {
+        const chatHistory = document.getElementById("chat-history");
+        const bubble = document.createElement("div");
+        bubble.className = `chat-bubble p-5 text-sm prose ${type === "user" ? "chat-user" : "chat-ai"}`;
+
+        if (type === "ai") {
+          bubble.innerHTML = marked.parse(text);
+        } else {
+          bubble.innerText = text;
         }
 
-        async function handleTutorSubmit() {
-            const input = document.getElementById('tutor-input');
-            const btn = document.getElementById('tutor-send-btn');
-            const text = input.value.trim();
-            if(!text) return;
-            
-            const materiaId = document.getElementById('tutor-materia-select').value;
-            const model = localStorage.getItem('modelo_elegido') || 'gemini-3.1-flash-lite';
-            
-            appendTutorMessage(text, true);
-            input.value = '';
-            input.disabled = true;
-            btn.disabled = true;
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
-            lucide.createIcons({root: btn});
-            
-            try {
-                const response = await fetch('/api/tutor/chat', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        materia_id: materiaId,
-                        historial: tutorHistoryState,
-                        pregunta: text,
-                        modelo_elegido: model
-                    })
-                });
-                
-                const data = await response.json();
-                
-                if(!response.ok) throw new Error(data.detail || 'Error en la conexión del tutor');
-                
-                tutorHistoryState.push({ role: 'user', text: text });
-                tutorHistoryState.push({ role: 'model', text: data.respuesta });
-                
-                appendTutorMessage(data.respuesta, false);
-                if(data.stats) updateStatsUI(data.stats);
-                
-            } catch (error) {
-                console.error(error);
-                appendTutorMessage("⚠️ Error de conexión con el modelo. Por favor, intenta de nuevo.", false);
-            } finally {
-                input.disabled = false;
-                btn.disabled = false;
-                btn.innerHTML = 'Enviar';
-                input.focus();
-            }
-        }
+        chatHistory.appendChild(bubble);
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+      }
+      // ====== TAB: TUTOR SOCRÁTICO ======
+      function iniciarSimulacionTutor() {
+        tutorHistoryState = [];
+        const historyDiv = document.getElementById("tutor-history");
+        historyDiv.innerHTML = "";
 
-        // ====== IMAGE CAROUSEL & PREVIEW ======
-        function scrollCarousel(carouselId, direction) {
-            const track = document.getElementById(carouselId);
-            if (!track) return;
-            const scrollAmount = 160;
-            track.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
-        }
+        const input = document.getElementById("tutor-input");
+        const btn = document.getElementById("tutor-send-btn");
 
-        let currentPreviewImages = [];
-        let currentPreviewIndex = 0;
+        input.disabled = false;
+        input.classList.remove("opacity-60", "cursor-not-allowed");
+        input.placeholder = "Responde al profesor...";
 
-        function openImagePreview(src, caption, index, allImages) {
-            currentPreviewImages = allImages || [src];
-            currentPreviewIndex = index || 0;
+        btn.disabled = false;
+        btn.classList.remove("opacity-60", "cursor-not-allowed");
 
-            const modal = document.getElementById('image-preview-modal');
-            const img = document.getElementById('image-preview-img');
-            const cap = document.getElementById('image-preview-caption');
-            const prevBtn = document.getElementById('image-preview-prev');
-            const nextBtn = document.getElementById('image-preview-next');
+        const select = document.getElementById("tutor-materia-select");
+        const matName = select.options[select.selectedIndex].text;
 
-            img.src = src;
-            cap.textContent = caption || '';
+        const inicioText = `¡Hola! Soy tu tutor virtual. He analizado tus apuntes de la materia **${matName}**. ¿Estás listo para comenzar con la primera pregunta de razonamiento para evaluar tus conocimientos?`;
+        appendTutorMessage(inicioText, false);
 
-            // Show/hide nav arrows
-            if (currentPreviewImages.length > 1) {
-                prevBtn.style.display = currentPreviewIndex > 0 ? 'flex' : 'none';
-                nextBtn.style.display = currentPreviewIndex < currentPreviewImages.length - 1 ? 'flex' : 'none';
-            } else {
-                prevBtn.style.display = 'none';
-                nextBtn.style.display = 'none';
-            }
-
-            modal.classList.remove('hidden');
-            requestAnimationFrame(() => modal.classList.add('active'));
-        }
-
-        function navigatePreview(direction) {
-            const newIndex = currentPreviewIndex + direction;
-            if (newIndex < 0 || newIndex >= currentPreviewImages.length) return;
-            currentPreviewIndex = newIndex;
-            const src = currentPreviewImages[currentPreviewIndex];
-            const caption = src.split('/').pop();
-            document.getElementById('image-preview-img').src = src;
-            document.getElementById('image-preview-caption').textContent = caption;
-            document.getElementById('image-preview-prev').style.display = currentPreviewIndex > 0 ? 'flex' : 'none';
-            document.getElementById('image-preview-next').style.display = currentPreviewIndex < currentPreviewImages.length - 1 ? 'flex' : 'none';
-        }
-
-        function closeImagePreview() {
-            const modal = document.getElementById('image-preview-modal');
-            modal.classList.remove('active');
-            setTimeout(() => modal.classList.add('hidden'), 250);
-        }
-
-        // Keyboard navigation for image preview
-        document.addEventListener('keydown', (e) => {
-            const modal = document.getElementById('image-preview-modal');
-            if (modal.classList.contains('hidden')) return;
-            if (e.key === 'Escape') closeImagePreview();
-            if (e.key === 'ArrowLeft') navigatePreview(-1);
-            if (e.key === 'ArrowRight') navigatePreview(1);
+        tutorHistoryState.push({
+          role: "model",
+          text: inicioText,
         });
+
+        input.focus();
+      }
+
+      function appendTutorMessage(text, isUser = false) {
+        const historyDiv = document.getElementById("tutor-history");
+        const bubble = document.createElement("div");
+
+        if (isUser) {
+          bubble.className = `chat-bubble chat-user p-5 text-sm prose dark:prose-invert max-w-none shadow-sm`;
+          bubble.innerHTML = escapeHTML(text);
+        } else {
+          bubble.className = `chat-bubble chat-ai border border-borderGray p-5 text-sm prose dark:prose-invert max-w-none`;
+          bubble.innerHTML = marked.parse(text);
+        }
+
+        historyDiv.appendChild(bubble);
+        historyDiv.scrollTop = historyDiv.scrollHeight;
+      }
+
+      async function handleTutorSubmit() {
+        const input = document.getElementById("tutor-input");
+        const btn = document.getElementById("tutor-send-btn");
+        const text = input.value.trim();
+        if (!text) return;
+
+        const materiaId = document.getElementById("tutor-materia-select").value;
+        const model =
+          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+
+        appendTutorMessage(text, true);
+        input.value = "";
+        input.disabled = true;
+        btn.disabled = true;
+        const originalText = btn.innerHTML;
+        btn.innerHTML =
+          '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+        lucide.createIcons({ root: btn });
+
+        try {
+          const response = await fetch("/api/tutor/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              materia_id: materiaId,
+              historial: tutorHistoryState,
+              pregunta: text,
+              modelo_elegido: model,
+            }),
+          });
+
+          const data = await response.json();
+
+          if (!response.ok)
+            throw new Error(data.detail || "Error en la conexión del tutor");
+
+          tutorHistoryState.push({ role: "user", text: text });
+          tutorHistoryState.push({ role: "model", text: data.respuesta });
+
+          appendTutorMessage(data.respuesta, false);
+          if (data.stats) updateStatsUI(data.stats);
+        } catch (error) {
+          console.error(error);
+          appendTutorMessage(
+            "⚠️ Error de conexión con el modelo. Por favor, intenta de nuevo.",
+            false,
+          );
+        } finally {
+          input.disabled = false;
+          btn.disabled = false;
+          btn.innerHTML = "Enviar";
+          input.focus();
+        }
+      }
+
+      // ====== IMAGE CAROUSEL & PREVIEW ======
+      function scrollCarousel(carouselId, direction) {
+        const track = document.getElementById(carouselId);
+        if (!track) return;
+        const scrollAmount = 160;
+        track.scrollBy({ left: direction * scrollAmount, behavior: "smooth" });
+      }
+
+      let currentPreviewImages = [];
+      let currentPreviewIndex = 0;
+
+      function openImagePreview(src, caption, index, allImages) {
+        currentPreviewImages = allImages || [src];
+        currentPreviewIndex = index || 0;
+
+        const modal = document.getElementById("image-preview-modal");
+        const img = document.getElementById("image-preview-img");
+        const cap = document.getElementById("image-preview-caption");
+        const prevBtn = document.getElementById("image-preview-prev");
+        const nextBtn = document.getElementById("image-preview-next");
+
+        img.src = src;
+        cap.textContent = caption || "";
+
+        // Show/hide nav arrows
+        if (currentPreviewImages.length > 1) {
+          prevBtn.style.display = currentPreviewIndex > 0 ? "flex" : "none";
+          nextBtn.style.display =
+            currentPreviewIndex < currentPreviewImages.length - 1
+              ? "flex"
+              : "none";
+        } else {
+          prevBtn.style.display = "none";
+          nextBtn.style.display = "none";
+        }
+
+        modal.classList.remove("hidden");
+        requestAnimationFrame(() => modal.classList.add("active"));
+      }
+
+      function navigatePreview(direction) {
+        const newIndex = currentPreviewIndex + direction;
+        if (newIndex < 0 || newIndex >= currentPreviewImages.length) return;
+        currentPreviewIndex = newIndex;
+        const src = currentPreviewImages[currentPreviewIndex];
+        const caption = src.split("/").pop();
+        document.getElementById("image-preview-img").src = src;
+        document.getElementById("image-preview-caption").textContent = caption;
+        document.getElementById("image-preview-prev").style.display =
+          currentPreviewIndex > 0 ? "flex" : "none";
+        document.getElementById("image-preview-next").style.display =
+          currentPreviewIndex < currentPreviewImages.length - 1
+            ? "flex"
+            : "none";
+      }
+
+      function closeImagePreview() {
+        const modal = document.getElementById("image-preview-modal");
+        modal.classList.remove("active");
+        setTimeout(() => modal.classList.add("hidden"), 250);
+      }
+
+      // Keyboard navigation for image preview
+      document.addEventListener("keydown", (e) => {
+        const modal = document.getElementById("image-preview-modal");
+        if (modal.classList.contains("hidden")) return;
+        if (e.key === "Escape") closeImagePreview();
+        if (e.key === "ArrowLeft") navigatePreview(-1);
+        if (e.key === "ArrowRight") navigatePreview(1);
+      });
     </script>
 
     <!-- Image Preview Modal -->
-    <div id="image-preview-modal" class="hidden" onclick="if(event.target === this) closeImagePreview()">
-        <button class="modal-close-btn" onclick="closeImagePreview()" title="Cerrar (Esc)">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-        <button class="modal-nav prev" onclick="event.stopPropagation(); navigatePreview(-1)" id="image-preview-prev" title="Anterior (←)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-        </button>
-        <button class="modal-nav next" onclick="event.stopPropagation(); navigatePreview(1)" id="image-preview-next" title="Siguiente (→)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-        </button>
-        <img id="image-preview-img" src="" alt="Preview" onclick="event.stopPropagation()">
-        <div class="modal-caption" id="image-preview-caption"></div>
+    <div
+      id="image-preview-modal"
+      class="hidden"
+      onclick="if (event.target === this) closeImagePreview();"
+    >
+      <button
+        class="modal-close-btn"
+        onclick="closeImagePreview()"
+        title="Cerrar (Esc)"
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+      <button
+        class="modal-nav prev"
+        onclick="
+          event.stopPropagation();
+          navigatePreview(-1);
+        "
+        id="image-preview-prev"
+        title="Anterior (←)"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+      <button
+        class="modal-nav next"
+        onclick="
+          event.stopPropagation();
+          navigatePreview(1);
+        "
+        id="image-preview-next"
+        title="Siguiente (→)"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+      <img
+        id="image-preview-img"
+        src=""
+        alt="Preview"
+        onclick="event.stopPropagation()"
+      />
+      <div class="modal-caption" id="image-preview-caption"></div>
     </div>
-
-</body>
+  </body>
 </html>
