@@ -1,3 +1,7 @@
+// ---------------------------------------------------------------------------
+// Background Service Worker — Meet Audio Recorder Extension v1.2
+// ---------------------------------------------------------------------------
+
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.set({ recordingStates: {}, silenceTimeoutMin: 5, silenceAlarms: {}, recordingTimers: {} });
 });
@@ -26,11 +30,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.type === 'DOWNLOAD_FALLBACK_JSON') {
     handleFallbackJson(message);
   } else if (message.type === 'CAPTURE_SCREENSHOT') {
-    // Capture the tab and return dataUrl to the caller (offscreen)
     captureTabScreenshot(message.tabId, sendResponse);
-    return true; // keep channel open for async response
+    return true;
   } else if (message.type === 'MANUAL_SCREENSHOT_FROM_POPUP') {
-    // Forward manual screenshot request to offscreen
     chrome.runtime.sendMessage({
       target: 'offscreen',
       type: 'MANUAL_SCREENSHOT',
@@ -42,7 +44,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // --- Screenshot capture ---
 async function captureTabScreenshot(tabId, sendResponse) {
   try {
-    // Get the window that contains this tab
     const tab = await chrome.tabs.get(tabId);
     const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 75 });
     sendResponse({ dataUrl });
@@ -58,18 +59,13 @@ async function handleFallbackUrl(message) {
     const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
     const subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
     const askAlways = result.backupAskAlways || false;
-
     const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
     const safeCustomName = message.customName ? message.customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
-
-    // Support both .zip and .webm
     const ext = message.filename ? message.filename.split('.').pop() : 'webm';
     const filename = `${subfolder}backup-${safeCustomName}${dateStr}.${ext}`;
 
     chrome.downloads.download({
-      url: message.url,
-      filename: filename,
-      saveAs: askAlways
+      url: message.url, filename: filename, saveAs: askAlways
     }, (downloadId) => {
       if (chrome.runtime.lastError) {
         console.error("Download failed:", chrome.runtime.lastError);
@@ -90,16 +86,10 @@ async function handleFallbackJson(message) {
     const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
     const subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
     const askAlways = result.backupAskAlways || false;
-
     const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
     const safeCustomName = message.customName ? message.customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
     const filename = `${subfolder}backup-capturas-${safeCustomName}${dateStr}.json`;
-
-    chrome.downloads.download({
-      url: message.url,
-      filename: filename,
-      saveAs: askAlways
-    });
+    chrome.downloads.download({ url: message.url, filename: filename, saveAs: askAlways });
   } catch (e) {
     console.error('Fallback JSON download failed:', e);
   }
@@ -113,30 +103,25 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
       const timeoutMin = result.silenceTimeoutMin || 5;
       const alarms = result.silenceAlarms || {};
       const alarmName = `silence_${tabId}`;
-
       if (states[tabId] === 'recording') {
         if (changeInfo.audible === false) {
           chrome.alarms.create(alarmName, { delayInMinutes: timeoutMin });
           const endTimestamp = Date.now() + (timeoutMin * 60000);
           alarms[tabId] = endTimestamp;
           chrome.storage.local.set({ silenceAlarms: alarms });
-          console.log(`Pestaña ${tabId} en silencio. Alarma configurada para ${timeoutMin} min.`);
         } else if (changeInfo.audible === true) {
           chrome.alarms.clear(alarmName);
           delete alarms[tabId];
           chrome.storage.local.set({ silenceAlarms: alarms });
-          console.log(`Pestaña ${tabId} sonando. Alarma cancelada.`);
         }
       }
     });
   }
 });
 
-// Manejar el auto-apagado por silencio
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith('silence_')) {
     const tabId = parseInt(alarm.name.replace('silence_', ''));
-    console.log(`Silencio prolongado en pestaña ${tabId}. Deteniendo grabación...`);
     stopRecording(tabId);
   }
 });
@@ -144,32 +129,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 async function updateState(tabId, state) {
   const result = await chrome.storage.local.get(['recordingStates']);
   const states = result.recordingStates || {};
-
-  if (state === 'idle') {
-    delete states[tabId];
-  } else {
-    states[tabId] = state;
-  }
-
+  if (state === 'idle') { delete states[tabId]; } else { states[tabId] = state; }
   await chrome.storage.local.set({ recordingStates: states });
 
   if (state === 'idle' || state === 'error' || state === 'completed') {
     const tResult = await chrome.storage.local.get(['recordingTimers']);
     const timers = tResult.recordingTimers || {};
-    if (timers[tabId]) {
-      delete timers[tabId];
-      await chrome.storage.local.set({ recordingTimers: timers });
-    }
+    if (timers[tabId]) { delete timers[tabId]; await chrome.storage.local.set({ recordingTimers: timers }); }
   }
-
   if (state === 'idle' || state === 'error' || state === 'completed') {
     const activeStates = Object.values(states);
     const hasActive = activeStates.some(s => s === 'recording' || s === 'paused' || s === 'uploading');
-    if (!hasActive) {
-      try {
-        await chrome.offscreen.closeDocument();
-      } catch (err) {}
-    }
+    if (!hasActive) { try { await chrome.offscreen.closeDocument(); } catch (err) {} }
   }
 }
 
@@ -179,203 +150,87 @@ async function startRecording(tabId) {
   if (states[tabId] === 'recording' || states[tabId] === 'paused') return;
 
   chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, async (streamId) => {
-    if (chrome.runtime.lastError) {
-      console.error(chrome.runtime.lastError.message);
-      return;
-    }
-
+    if (chrome.runtime.lastError) { console.error(chrome.runtime.lastError.message); return; }
     await setupOffscreenDocument('offscreen.html');
-
     const ghostRes = await chrome.storage.local.get(['ghostModes']);
     const ghostModes = ghostRes.ghostModes || {};
     const isGhost = ghostModes[tabId] || false;
 
-    chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: 'START_RECORDING',
-      streamId: streamId,
-      tabId: tabId,
-      ghostMode: isGhost
-    });
-
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'START_RECORDING', streamId, tabId, ghostMode: isGhost });
     updateState(tabId, 'recording');
     clearSilenceAlarm(tabId);
 
-    // Iniciar timer
     const timerRes = await chrome.storage.local.get(['recordingTimers']);
     const timers = timerRes.recordingTimers || {};
     timers[tabId] = { startTime: Date.now(), elapsed: 0, paused: false };
     await chrome.storage.local.set({ recordingTimers: timers });
 
-    // FASE 2: Inyectar protección de pestaña (beforeunload)
     try {
       chrome.scripting.executeScript({
-        target: { tabId: tabId },
+        target: { tabId },
         func: () => {
-          window._asistenteBeforeUnload = (e) => {
-            e.preventDefault();
-            e.returnValue = "¿Seguro que quieres salir? Se detendrá la grabación.";
-            return e.returnValue;
-          };
+          window._asistenteBeforeUnload = (e) => { e.preventDefault(); e.returnValue = "¿Seguro que quieres salir? Se detendrá la grabación."; return e.returnValue; };
           window.addEventListener('beforeunload', window._asistenteBeforeUnload);
         }
       });
-    } catch(err) {
-      console.warn("No se pudo inyectar protección en pestaña:", err);
-    }
+    } catch(err) { console.warn("No se pudo inyectar protección en pestaña:", err); }
   });
 }
 
 async function pauseRecording(tabId) {
   clearSilenceAlarm(tabId);
-
   const timerRes = await chrome.storage.local.get(['recordingTimers']);
   const timers = timerRes.recordingTimers || {};
   const t = timers[tabId];
-  if (t && !t.paused) {
-    t.elapsed += (Date.now() - t.startTime);
-    t.paused = true;
-    await chrome.storage.local.set({ recordingTimers: timers });
-  }
-
-  try {
-    await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: 'PAUSE_RECORDING',
-      tabId: tabId
-    });
-  } catch (err) {
-    console.warn("Error enviando pausa al offscreen", err);
-  }
+  if (t && !t.paused) { t.elapsed += (Date.now() - t.startTime); t.paused = true; await chrome.storage.local.set({ recordingTimers: timers }); }
+  try { await chrome.runtime.sendMessage({ target: 'offscreen', type: 'PAUSE_RECORDING', tabId }); } catch (err) { console.warn("Error enviando pausa al offscreen", err); }
 }
 
 async function resumeRecording(tabId) {
   const timerRes = await chrome.storage.local.get(['recordingTimers']);
   const timers = timerRes.recordingTimers || {};
   const t = timers[tabId];
-  if (t && t.paused) {
-    t.startTime = Date.now();
-    t.paused = false;
-    await chrome.storage.local.set({ recordingTimers: timers });
-  }
-
-  try {
-    await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: 'RESUME_RECORDING',
-      tabId: tabId
-    });
-  } catch (err) {
-    console.warn("Error enviando reanudar al offscreen", err);
-  }
+  if (t && t.paused) { t.startTime = Date.now(); t.paused = false; await chrome.storage.local.set({ recordingTimers: timers }); }
+  try { await chrome.runtime.sendMessage({ target: 'offscreen', type: 'RESUME_RECORDING', tabId }); } catch (err) { console.warn("Error enviando reanudar al offscreen", err); }
 }
 
 async function stopRecording(tabId) {
   try {
     clearSilenceAlarm(tabId);
-
     const result = await chrome.storage.local.get(['customNames', 'recordingTimers']);
-    const names = result.customNames || {};
-    const customName = names[tabId] || '';
-
+    const customName = (result.customNames || {})[tabId] || '';
     const timers = result.recordingTimers || {};
-    if (timers[tabId]) {
-      delete timers[tabId];
-      await chrome.storage.local.set({ recordingTimers: timers });
-    }
-
-    await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: 'STOP_RECORDING',
-      tabId: tabId,
-      customName: customName
-    });
-
-    // FASE 2: Remover protección de pestaña
-    try {
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: () => {
-          if (window._asistenteBeforeUnload) {
-            window.removeEventListener('beforeunload', window._asistenteBeforeUnload);
-            delete window._asistenteBeforeUnload;
-          }
-        }
-      });
-    } catch(err) {}
-
-  } catch (err) {
-    console.warn("No se pudo contactar al offscreen. Reiniciando estado.");
-    updateState(tabId, 'idle');
-  }
+    if (timers[tabId]) { delete timers[tabId]; await chrome.storage.local.set({ recordingTimers: timers }); }
+    await chrome.runtime.sendMessage({ target: 'offscreen', type: 'STOP_RECORDING', tabId, customName });
+    try { chrome.scripting.executeScript({ target: { tabId }, func: () => { if (window._asistenteBeforeUnload) { window.removeEventListener('beforeunload', window._asistenteBeforeUnload); delete window._asistenteBeforeUnload; } } }); } catch(err) {}
+  } catch (err) { console.warn("No se pudo contactar al offscreen. Reiniciando estado."); updateState(tabId, 'idle'); }
 }
 
 async function cancelRecording(tabId) {
   try {
     clearSilenceAlarm(tabId);
-
     const result = await chrome.storage.local.get(['recordingTimers']);
     const timers = result.recordingTimers || {};
-    if (timers[tabId]) {
-      delete timers[tabId];
-      await chrome.storage.local.set({ recordingTimers: timers });
-    }
-
-    await chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: 'CANCEL_RECORDING',
-      tabId: tabId
-    });
-
-    try {
-      chrome.scripting.executeScript({
-        target: { tabId: tabId },
-        func: () => {
-          if (window._asistenteBeforeUnload) {
-            window.removeEventListener('beforeunload', window._asistenteBeforeUnload);
-            delete window._asistenteBeforeUnload;
-          }
-        }
-      });
-    } catch(err) {}
-
+    if (timers[tabId]) { delete timers[tabId]; await chrome.storage.local.set({ recordingTimers: timers }); }
+    await chrome.runtime.sendMessage({ target: 'offscreen', type: 'CANCEL_RECORDING', tabId });
+    try { chrome.scripting.executeScript({ target: { tabId }, func: () => { if (window._asistenteBeforeUnload) { window.removeEventListener('beforeunload', window._asistenteBeforeUnload); delete window._asistenteBeforeUnload; } } }); } catch(err) {}
     updateState(tabId, 'idle');
-  } catch (err) {
-    console.warn("Error enviando cancelación al offscreen");
-    updateState(tabId, 'idle');
-  }
+  } catch (err) { console.warn("Error enviando cancelación al offscreen"); updateState(tabId, 'idle'); }
 }
 
 async function clearSilenceAlarm(tabId) {
   chrome.alarms.clear(`silence_${tabId}`);
   const result = await chrome.storage.local.get(['silenceAlarms']);
   const alarms = result.silenceAlarms || {};
-  if (alarms[tabId]) {
-    delete alarms[tabId];
-    await chrome.storage.local.set({ silenceAlarms: alarms });
-  }
+  if (alarms[tabId]) { delete alarms[tabId]; await chrome.storage.local.set({ silenceAlarms: alarms }); }
 }
 
 async function setupOffscreenDocument(path) {
-  const existingContexts = await chrome.runtime.getContexts({
-    contextTypes: ['OFFSCREEN_DOCUMENT'],
-    documentUrls: [chrome.runtime.getURL(path)]
-  });
-
-  if (existingContexts.length > 0) {
-    return;
-  }
-
-  if (creating) {
-    await creating;
-  } else {
-    creating = chrome.offscreen.createDocument({
-      url: path,
-      reasons: ['USER_MEDIA'],
-      justification: 'Recording tab audio'
-    });
-    await creating;
-    creating = null;
+  const existingContexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'], documentUrls: [chrome.runtime.getURL(path)] });
+  if (existingContexts.length > 0) return;
+  if (creating) { await creating; } else {
+    creating = chrome.offscreen.createDocument({ url: path, reasons: ['USER_MEDIA'], justification: 'Recording tab audio' });
+    await creating; creating = null;
   }
 }
-let creating; // A global promise to avoid race conditions
+let creating;

@@ -244,7 +244,59 @@
           margin-top: 6px;
           animation: fadeIn 0.2s ease;
       }
+
       @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+      /* Drive Guide Styles */
+      .guide-step {
+          display: flex;
+          gap: 10px;
+          padding: 10px 0;
+          border-bottom: 1px solid var(--border-light);
+      }
+      .guide-step:last-child { border-bottom: none; }
+      .guide-step-num {
+          flex-shrink: 0;
+          width: 22px;
+          height: 22px;
+          border-radius: 50%;
+          background-color: var(--accent);
+          color: var(--bg-main);
+          font-size: 11px;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+      }
+      .guide-step-text {
+          font-size: 12px;
+          line-height: 1.5;
+          color: var(--text-primary);
+      }
+      .guide-step-text strong { font-weight: 600; }
+      .guide-step-text .text-muted { display: block; margin-top: 2px; }
+
+      .guide-tip {
+          background-color: var(--status-success);
+          color: var(--status-success-text);
+          border-radius: 8px;
+          padding: 10px 12px;
+          font-size: 11px;
+          line-height: 1.5;
+          margin-top: 12px;
+      }
+      .guide-tip strong { font-weight: 600; }
+
+      .guide-code {
+          display: inline;
+          font-family: 'Geist Mono', monospace;
+          font-size: 10px;
+          background-color: var(--bg-elevated);
+          border: 1px solid var(--border-light);
+          padding: 1px 5px;
+          border-radius: 4px;
+          word-break: break-all;
+      }
   </style>
 </head>
 <body>
@@ -254,10 +306,11 @@
     <div style="display: flex; gap: 8px; margin-bottom: 16px;">
         <div class="segmented-control" style="flex: 1; margin-bottom: 0;">
           <button id="tab-btn-audio" class="segment-btn active">Grabar Audio</button>
+          <button id="tab-btn-drive" class="segment-btn">Clase Drive</button>
           <button id="tab-btn-capture" class="segment-btn">Capturar Tarjeta</button>
         </div>
         <button id="settingsBtn" class="btn btn-secondary" style="width: auto; padding: 8px;" title="Ajustes">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
         </button>
     </div>
     
@@ -279,8 +332,9 @@
 
         <button id="recordBtn" class="btn btn-primary">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="3"></circle></svg>
-            Iniciar Grabación
+            Iniciar Grabacion
         </button>
+
 
         <div id="controlsGroup" class="flex-row hidden">
             <button id="cancelBtn" class="btn btn-secondary" style="color: #ef4444; border-color: #ef4444;">Cancelar</button>
@@ -303,19 +357,66 @@
         </div>
 
         <div id="audioWarning" class="status-badge status-recording hidden mt-4">
-            Activa el audio en la pestaña.
+            Activa el audio en la pestana.
         </div>
 
         <div class="flex-row justify-between mt-4" style="border-top: 1px solid var(--border-light); padding-top: 16px;">
-            <label class="input-label" style="margin:0;">Detención inactiva (min)</label>
+            <label class="input-label" style="margin:0;">Detencion inactiva (min)</label>
             <input type="number" id="silenceTimeout" value="5" min="1" max="60" class="font-mono" style="width: 60px; padding: 4px 8px;">
         </div>
 
         <div class="flex-row justify-between mt-3" style="border-top: 1px solid var(--border-light); padding-top: 12px;">
             <label class="input-label flex-row" style="margin:0; align-items:center; gap: 8px;">
                 <input type="checkbox" id="ghostModeToggle" style="cursor:pointer; width: 16px; height: 16px; margin: 0; accent-color: var(--text-main);">
-                Modo Fantasma (Silenciar para mí)
+                Modo Fantasma (Silenciar para mi)
             </label>
+        </div>
+    </div>
+
+    <!-- ==================
+         TAB DRIVE (GUIDE)
+         ================== -->
+    <div id="tab-drive" class="hidden">
+        <p class="text-sm font-medium mb-4" style="text-align: center;">
+            Procesar Clase Grabada en Drive
+        </p>
+
+        <div class="guide-step">
+            <span class="guide-step-num">1</span>
+            <div class="guide-step-text">
+                <strong>Abre el video</strong> de la clase en Google Drive desde tu cuenta institucional.
+                <span class="text-muted text-xs">Asegurate de que el video se reproduce correctamente.</span>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <span class="guide-step-num">2</span>
+            <div class="guide-step-text">
+                <strong>Ve al tab "Grabar Audio"</strong> de esta extension e inicia la grabacion normalmente.
+                <span class="text-muted text-xs">tabCapture captura todo el audio que suena en la pestana.</span>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <span class="guide-step-num">3</span>
+            <div class="guide-step-text">
+                <strong>Reproduce el video</strong> en el navegador. Usa <strong>Alt+S</strong> o el boton de camara para capturar pantalla en momentos clave.
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <span class="guide-step-num">4</span>
+            <div class="guide-step-text">
+                <strong>Al terminar</strong>, haz clic en "Finalizar" para subir el audio + capturas al pipeline de procesamiento.
+            </div>
+        </div>
+
+        <div class="guide-tip">
+            <strong>Tip de velocidad:</strong> Abre la consola del navegador (F12) y ejecuta:
+            <br>
+            <span class="guide-code">document.querySelector('video').playbackRate = 4</span>
+            <br>
+            Esto reproduce el video a 4x. Una clase de 2h se graba en 30 min. El audio queda intacto para la IA.
         </div>
     </div>
 
@@ -324,7 +425,7 @@
          ================== -->
     <div id="tab-capture" class="hidden">
         <p class="text-sm text-muted mb-4" style="text-align: center;">
-            Captura la pantalla para extraer un aviso o tarea usando visión multimodal.
+            Captura la pantalla para extraer un aviso o tarea usando vision multimodal.
         </p>
         
         <button id="captureTaskBtn" class="btn btn-secondary">
@@ -348,7 +449,7 @@
          TAB SETTINGS
          ================== -->
     <div id="tab-settings" class="hidden">
-        <p class="text-sm font-medium mb-4" style="text-align: center;">Configuración de Respaldo</p>
+        <p class="text-sm font-medium mb-4" style="text-align: center;">Configuracion de Respaldo</p>
 
         <div class="input-group">
             <label class="input-label">Subcarpeta de descargas (Fallback)</label>
@@ -358,7 +459,7 @@
         <div class="flex-row justify-between mb-4" style="border-top: 1px solid var(--border-light); padding-top: 12px;">
             <label class="input-label flex-row" style="margin:0; align-items:center; gap: 8px;">
                 <input type="checkbox" id="backupAskAlways" style="cursor:pointer; width: 16px; height: 16px; margin: 0; accent-color: var(--text-main);">
-                Preguntar siempre dónde guardar el backup
+                Preguntar siempre donde guardar el backup
             </label>
         </div>
         

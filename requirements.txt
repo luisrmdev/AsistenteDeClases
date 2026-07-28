@@ -4,4 +4,3 @@ python-multipart
 google-genai
 python-dotenv
 tenacity
-yt-dlp

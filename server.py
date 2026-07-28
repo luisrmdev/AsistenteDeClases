@@ -398,11 +398,11 @@ async def list_pending_audios():
     for entry in os.scandir(AUDIOS_DIR):
         # --- New: session subdirectory ---
         if entry.is_dir() and entry.name.startswith("session_"):
-            webm_files = [f for f in os.listdir(entry.path) if f.endswith(".webm")]
+            audio_files = [f for f in os.listdir(entry.path) if f.endswith((".webm", ".m4a", ".opus", ".mp3", ".ogg"))]
             img_files = [f for f in os.listdir(entry.path)
                          if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
-            for f in webm_files:
-                name_parts = f.replace(".webm", "").split("_")
+            for f in audio_files:
+                name_parts = os.path.splitext(f)[0].split("_")
                 if len(name_parts) >= 4:
                     date_str = name_parts[2]
                     if len(date_str) == 8:
@@ -443,15 +443,33 @@ async def list_pending_audios():
     return {"audios": audios}
 
 
-@app.delete("/api/audios/{filename}")
-async def delete_audio(filename: str):
-    if not filename.endswith(".webm"):
-        raise HTTPException(status_code=400, detail="Formato inválido")
-    filepath = os.path.join(AUDIOS_DIR, filename)
-    if os.path.exists(filepath):
-        os.remove(filepath)
-        return {"message": "Audio eliminado exitosamente"}
-    raise HTTPException(status_code=404, detail="Archivo de audio no encontrado")
+@app.delete("/api/audios/{path:path}")
+async def delete_audio_or_image(path: str):
+    target_path = os.path.join(AUDIOS_DIR, path)
+    if not os.path.exists(target_path):
+        raise HTTPException(status_code=404, detail="Archivo o carpeta no encontrado")
+    
+    if os.path.isdir(target_path):
+        shutil.rmtree(target_path)
+        return {"message": "Sesión eliminada exitosamente"}
+    
+    if os.path.isfile(target_path):
+        # Prevent deleting the last image
+        if target_path.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            session_dir = os.path.dirname(target_path)
+            img_files = [f for f in os.listdir(session_dir) if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
+            if len(img_files) <= 1:
+                raise HTTPException(status_code=400, detail="No puedes eliminar la única imagen de la sesión. Se requiere al menos una.")
+        
+        # If deleting the webm inside a session folder, delete the whole folder
+        if target_path.lower().endswith(".webm"):
+            session_dir = os.path.dirname(target_path)
+            if session_dir != AUDIOS_DIR and os.path.basename(session_dir).startswith("session_"):
+                shutil.rmtree(session_dir)
+                return {"message": "Sesión eliminada exitosamente"}
+                
+        os.remove(target_path)
+        return {"message": "Archivo eliminado exitosamente"}
 
 
 # ===========================================================================
@@ -529,7 +547,6 @@ async def upload_audio(
     for img_file in (imagenes or []):
         if not img_file.filename:
             continue
-        # Sanitize filename
         safe_img_name = re.sub(r"[^a-zA-Z0-9_.\-]", "_", img_file.filename)
         img_path = os.path.join(session_dir, safe_img_name)
         try:
@@ -542,6 +559,15 @@ async def upload_audio(
             image_filenames.append(safe_img_name)
         except Exception as e:
             print(f"[Upload] Error guardando imagen {safe_img_name}: {e}")
+
+    # --- REGLA ESTRICTA: el sistema EXIGE al menos 1 imagen ---
+    if not image_filenames:
+        shutil.rmtree(session_dir, ignore_errors=True)
+        raise HTTPException(
+            status_code=400,
+            detail="Se requiere al menos una captura de pantalla junto al audio. "
+                   "Usa Alt+S durante la clase para capturar momentos clave antes de enviar."
+        )
 
     print(f"[Upload] Sesión {session_name}: audio={audio_filename}, imágenes={image_filenames}")
 

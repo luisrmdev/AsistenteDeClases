@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Meet Audio Recorder",
-  "version": "1.0",
-  "description": "Graba el audio de la pestaña activa y lo envía a un servidor local.",
+  "version": "1.2",
+  "description": "Graba el audio de la pestaña activa, captura pantallas y procesa clases.",
   "permissions": [
     "activeTab",
     "tabCapture",
@@ -10,10 +10,12 @@
     "storage",
     "alarms",
     "downloads",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
   ],
   "background": {
     "service_worker": "background.js"

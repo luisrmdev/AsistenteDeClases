@@ -84,19 +84,18 @@ async def save_to_obsidian(
     except Exception as e:
         print("Error guardando en Obsidian:", e)
 
-    # --- Copiar imágenes a vault/Adjuntos/ ---
-    if image_paths:
-        adjuntos_dir = os.path.join(obsidian_path, "Adjuntos")
-        os.makedirs(adjuntos_dir, exist_ok=True)
-        for img_path in image_paths:
-            if not os.path.exists(img_path):
-                continue
-            dest = os.path.join(adjuntos_dir, os.path.basename(img_path))
-            try:
-                _shutil.copy2(img_path, dest)
-                print(f"[Obsidian] Imagen copiada: {os.path.basename(img_path)}")
-            except Exception as e:
-                print(f"[Obsidian] Error copiando imagen {img_path}: {e}")
+    # --- Copiar imágenes a vault/Adjuntos/ (siempre, el sistema es multi-modal) ---
+    adjuntos_dir = os.path.join(obsidian_path, "Adjuntos")
+    os.makedirs(adjuntos_dir, exist_ok=True)
+    for img_path in (image_paths or []):
+        if not os.path.exists(img_path):
+            continue
+        dest = os.path.join(adjuntos_dir, os.path.basename(img_path))
+        try:
+            _shutil.copy2(img_path, dest)
+            print(f"[Obsidian] Imagen copiada: {os.path.basename(img_path)}")
+        except Exception as e:
+            print(f"[Obsidian] Error copiando imagen {img_path}: {e}")
 
 
 async def save_tarjetas_informativas(

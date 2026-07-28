@@ -1,18 +1,18 @@
 # Estado Actual del Proyecto — AsistenteClases
-> Última actualización: 2026-07-27. Refleja la arquitectura post-refactor modular (v3).
+> Última actualización: 2026-07-28. Refleja la arquitectura post-refactor modular (v3) con pipeline multi-modal completo y limpieza de Drive v1.2.
 
 ---
 
 ## 1. Visión General del Sistema
 
-**AsistenteClases** es una aplicación web local (localhost:8000) que funciona como asistente académico personal. Su flujo central es: **captura de audio de clase → procesamiento por IA → almacenamiento de resúmenes estructurados → consulta mediante chat**.
+**AsistenteClases** es una aplicación web local (localhost:8000) que funciona como asistente académico personal. Su flujo central es: **captura multi-modal de clase (audio + capturas de pantalla) → procesamiento por IA → almacenamiento de resúmenes estructurados → consulta mediante chat RAG o tutoría socrática**.
 
 El sistema tiene tres capas:
-1. **Backend** — `server.py` (FastAPI, Python, ~340 líneas). Únicamente enrutador: define rutas y delega a servicios.
-2. **Frontend** — `frontend/index.html` (SPA monolítica, un solo archivo de ~74 KB).
-3. **Extensión de Chrome** — carpeta `extension/`. Captura audio de la pestaña y lo sube al backend.
+1. **Backend** — `server.py` (FastAPI, Python, ~900 líneas). Únicamente enrutador: define rutas y delega a servicios.
+2. **Frontend** — `frontend/index.html` (SPA monolítica, un solo archivo de ~80 KB).
+3. **Extensión de Chrome** — carpeta `extension/`. Captura audio + screenshots y los sube al backend.
 
-**Stack de dependencias** (`requirements.txt`): `fastapi`, `uvicorn`, `python-multipart`, `google-genai`, `python-dotenv`, `tenacity`, `yt-dlp`.
+**Stack de dependencias** (`requirements.txt`): `fastapi`, `uvicorn`, `python-multipart`, `google-genai`, `python-dotenv`, `tenacity`.
 
 ---
 
@@ -27,18 +27,18 @@ AsistenteClases/
 │
 ├── services/
 │   ├── audio_service.py   Preprocesamiento FFmpeg (remove_silences, cleanup_temp).
-│   ├── llm_service.py     Todo el SDK de Gemini: prompts, RAG, chat, stats, image tasks.
-│   └── export_service.py  Guardado Markdown, Obsidian, ICS, reglas del profesor.
+│   ├── llm_service.py     SDK de Gemini: prompts multi-modal, RAG, chat, tutor socrático.
+│   └── export_service.py  Guardado Markdown, Obsidian (Adjuntos/), ICS, reglas del profesor.
 │
 ├── frontend/
 │   └── index.html         Dashboard web (SPA monolítica).
 │
-└── extension/             Extensión de Chrome (Manifest V3).
-    ├── manifest.json
-    ├── background.js      Service Worker orquestador.
-    ├── offscreen.js       MediaRecorder + upload al servidor.
-    ├── popup.html
-    └── popup.js
+└── extension/             Extensión de Chrome (Manifest V3, v1.2).
+    ├── manifest.json      Permisos: tabCapture, scripting, tabs, storage, downloads.
+    ├── background.js      Service Worker: orquestador de grabación + silencio + fallbacks.
+    ├── offscreen.js       MediaRecorder + IndexedDB (chunks + screenshots) + upload multimodal.
+    ├── popup.html         UI con tabs Grabar / Clase Drive (guía) / Capturar Tarjeta / Ajustes.
+    └── popup.js           UI controller para grabación, capturas y extractor de tareas.
 ```
 
 ### `database.py` — Protección de Concurrencia
@@ -52,65 +52,90 @@ Clase `JsonStore` con `asyncio.Lock()`. Cada archivo JSON del sistema tiene su p
 | `stats_store` | `stats.json` |
 | `meta_store` | `resumenes/resumenes_meta.json` |
 | `tarjetas_store` | `resumenes/tarjetas_informativas.json` |
+| `cola_store` | `cola_procesamiento.json` |
 
-Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o `store.update(fn)`. Ningún endpoint hace `open('archivo.json', 'w')` directamente. 
-> **Nota de Resiliencia**: `update(updater_fn)` detecta automáticamente si `updater_fn` es síncrona o asíncrona (`asyncio.iscoroutinefunction`) para evitar errores de serialización (coroutine object not JSON serializable).
+Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o `store.update(fn)`.
+> **Nota de Resiliencia**: `update(updater_fn)` detecta automáticamente si `updater_fn` es síncrona o asíncrona para evitar errores de serialización.
 
 ---
 
-## 3. Flujo Principal de Procesamiento (El Pipeline)
+## 3. Flujo Principal de Procesamiento — Multi-Modal (Obligatorio)
 
-### Punto de Entrada A — Extensión de Chrome (Ruta Principal)
+> **CAMBIO DE PARADIGMA v3.1**: El sistema ya **no admite solo-audio**. Todo upload EXIGE al menos 1 imagen (`HTTP 400` si no). La IA siempre recibe audio + capturas para correlacionarlas.
+
+### Punto de Entrada A — Extensión (Clase en Vivo via Google Meet)
 
 ```
-[Usuario abre clase en Google Meet]
-  → popup.js: presiona "Grabar"
-  → background.js: obtiene streamId via chrome.tabCapture
-  → offscreen.js: MediaRecorder graba audio/webm en memoria
-  → [Al detener] offscreen.js ensambla Blob → uploadAudio()
-  → POST http://localhost:8000/upload (multipart: audio + custom_name opcional)
+[Google Meet en vivo]
+  → popup.js: "Iniciar Grabación"
+  → background.js: streamId via chrome.tabCapture
+  → offscreen.js: MediaRecorder graba audio/webm en chunks de 5s → IndexedDB (store: 'chunks')
+  → Cada 5 min ó Alt+S (manual): captureVisibleTab → IndexedDB (store: 'screenshots')
+  → [Al detener] offscreen.js: ensambla Blob audio + lee screenshots de IndexedDB
+  → FormData: campo 'audio' (Blob webm) + N campos 'imagenes' (Blob jpeg)
+  → POST http://localhost:8000/upload
 
-  VALIDACIÓN DE TAMAÑO (Fase 4):
-  → server.py lee el contenido en memoria
-  → Si tamaño > max_audio_upload_mb (settings) → HTTP 413
-  → Si OK → guarda en audios/meet_YYYYMMDD_HHMMSS[_nombre].webm
+  VALIDACIÓN ESTRICTA:
+  → Si no llegan imágenes → HTTP 400 (regla del sistema)
+  → Si tamaño > max_audio_upload_mb → HTTP 413
+  → Guarda en audios/session_YYYYMMDD_HHMMSS[_nombre]/
+      ├── meet_TIMESTAMP.webm
+      ├── captura_000_t0s.jpg
+      ├── captura_001_t300s.jpg
+      └── ...
 
   FALLBACK (si servidor no responde):
-  → saveAudioLocallyFallback() → base64 en chunks de 5 MB → chrome.downloads
-  → Descarga local en Backups_Clases/ (carpeta configurable)
+  → Intenta generar .zip (audio + imágenes) via JSZip
+  → Si falla: descarga audio .webm + capturas como JSON base64
 ```
 
-### Núcleo — Generación del Resumen (POST /api/generate)
+### Punto de Entrada B — Clase Grabada en Google Drive (mismo flujo de tabCapture)
+
+> **DECISIÓN DE DISEÑO v1.2**: Google Workspace con `preventDownload` bloquea toda descarga programática (yt-dlp, fetch, chrome.downloads con URLs de videoplayback). La solución es usar **el mismo mecanismo de tabCapture** que funciona para clases en vivo: el usuario reproduce el video de Drive en el navegador y graba el audio de la pestaña.
 
 ```
-{ filename, materia_id, modelo_elegido }
-  → server.py delega a:
-    1. materias_store.read() → obtiene prompt_personalizado de la materia
-    2. audio_service.remove_silences(filepath) → FFmpeg silenceremove
-    3. llm_service.generate_summary_from_audio(upload_path, prompt, modelo)
-       → Gemini File API upload → poll hasta ACTIVE → generate_content (retry x5)
-    4. audio_service.cleanup_temp() → borra el .webm temporal
-  → Retorna { content: texto_con_JSON_embebido, stats }
+[Usuario abre video de clase grabada en Google Drive]
+  → Reproduce el video en el navegador (la cuenta institucional tiene permiso de reproducción)
+  → Abre la extensión → Tab "Grabar Audio" → "Iniciar Grabación"
+  → tabCapture captura todo el audio que suena en la pestaña
+  → Alt+S o botón cámara para capturar momentos clave
+  → Al terminar → "Finalizar" → pipeline idéntico al Punto de Entrada A
+
+  TIP DE VELOCIDAD:
+  → Consola del navegador: document.querySelector('video').playbackRate = 4
+  → Una clase de 2h se graba en ~30 min. El audio queda intacto para la IA.
 ```
 
-### Etapa Final — Guardado (POST /api/save)
+La pestaña "Clase Drive" en el popup es una **guía paso a paso** (sin lógica JS) que explica este flujo.
+
+### Núcleo — Cola de Procesamiento (Worker Asíncrono)
 
 ```
-{ filename, content, materia_id }
-  → server.py:
-    1. llm_service.extract_json_block(content) → separa JSON del Markdown
-    2. Extrae tags del Frontmatter YAML con regex
-    3. export_service.save_markdown_and_metadata(...) → .md local + meta_store.update()
-    4. export_service.save_to_obsidian(...) → copia a bóveda si ruta existe
-    5. Si json_data["tarjetas_informativas"]: export_service.save_tarjetas_informativas(...)
-       → append a tarjetas_informativas.json via tarjetas_store.update()
-    6. Si json_data["nuevas_reglas_profesor"]: export_service.save_teacher_rules(...)
-       → append en memoria_ia/reglas_{materia}.md
-    7. shutil.move(audio → papelera_audios/) + retención de 10 archivos
-  → Retorna { message, md_filename, anki_file: null }
+POST /api/generate { filename, materia_id, modelo_elegido, session_dir, image_filenames }
+  → Encola en cola_store (cola_procesamiento.json)
+
+Worker (asyncio task, polling cada 5s):
+  → Lee pending task → marca como 'processing'
+  → Resuelve session_dir + image_paths del filesystem
+  → materias_store.read() → prompt_personalizado
+  → audio_service.remove_silences() → FFmpeg
+  → llm_service.generate_summary_from_audio(audio, prompt, modelo, image_paths=[...])
+      → Gemini Files API: upload audio → poll ACTIVE
+      → Gemini Files API: upload cada imagen → poll ACTIVE
+      → generate_content(contents=[audio_file, img1, img2, ..., prompt_maestro])
+  → audio_service.cleanup_temp()
+  → export_service.save_markdown_and_metadata()
+  → export_service.save_to_obsidian(image_paths=[...])  ← copia a vault/Adjuntos/
+  → Limpia session_dir completo del filesystem
+  → shutil.move(audio → papelera_audios/) → retención 10 archivos
 ```
 
-> **Nota:** `anki_file` siempre es `null`. La generación de Anki fue eliminada completamente.
+### Prompt Maestro Multi-Modal (Único, sin bifurcaciones)
+
+La función `_build_summary_prompt()` en `llm_service.py` genera un único prompt que:
+1. **CORRELACIÓN AUDIO-IMAGEN (OBLIGATORIO)**: instruye a la IA a correlacionar audio con imágenes y usar `![[captura_000_t0s.jpg]]` en el Markdown resultante.
+2. Estructura PARA de Obsidian, arquetipos de nota, Googleability, exhaustividad proporcional.
+3. Extracción de `tarjetas_informativas` y `nuevas_reglas_profesor` en bloque JSON.
 
 ---
 
@@ -118,29 +143,35 @@ Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o 
 
 ```
 AsistenteClases/
-├── audios/                COLA DE ESPERA. .webm pendientes. Archivos temp_*.webm
-│                          de vida muy corta durante el procesado.
-├── papelera_audios/       Audios procesados. Límite: 10 archivos.
-├── resumenes/             CORAZÓN DE DATOS.
-│   ├── *.md               Resúmenes (Markdown con Frontmatter YAML).
-│   ├── resumenes_meta.json Índice central (gestionado por meta_store con Lock).
-│   └── tarjetas_informativas.json Tablón de avisos y tareas (gestionado por tarjetas_store con Lock).
-├── memoria_ia/            Reglas del profesor por materia.
-│   └── reglas_{materia}.md (append al detectar nuevas_reglas_profesor)
-└── exportaciones/         Archivos descargables (si los hay).
+├── audios/                 COLA DE ESPERA. Subdirectorios por sesión.
+│   └── session_TIMESTAMP/  Una carpeta por clase.
+│       ├── meet_*.webm     Audio de la clase.
+│       ├── captura_000_*.jpg
+│       └── captura_NNN_*.jpg
+├── papelera_audios/        Audios procesados. Límite: 10 archivos.
+├── resumenes/              CORAZÓN DE DATOS.
+│   ├── *.md                Resúmenes (Markdown con Frontmatter YAML + links ![[imagen]]).
+│   ├── resumenes_meta.json Índice central (meta_store con Lock).
+│   └── tarjetas_informativas.json (tarjetas_store con Lock).
+├── memoria_ia/             Reglas del profesor por materia.
+│   └── reglas_{materia}.md
+└── exportaciones/          Archivos descargables.
 ```
 
 ### Formatos internos clave
 
-**Resúmenes .md** (el bloque JSON de Gemini se elimina antes de guardar):
+**Resúmenes .md** (Gemini genera `![[imagen.jpg]]` inline donde corresponde):
 ```markdown
 ---
 tipo: [teoria | cheatsheet | tarea]
 estado: [borrador | pendiente]
 tags: [tag1, tag2]
 ---
-[Cuerpo con callouts de Obsidian]
-[[Enlace MOC relacionado]]
+> [!summary] Resumen Feynman
+...
+![[captura_001_t300s.jpg]]
+...
+[[Índice - Semestre actual]]
 ```
 
 **`resumenes_meta.json`** (dict, clave = nombre archivo .md interno):
@@ -163,16 +194,24 @@ tags: [tag1, tag2]
   "obsidian_vault_path": "/ruta/boveda/",
   "browser_cookie_source": "brave",
   "max_audio_upload_mb": 500,
+  "rag_max_docs": 8,
   "default_model": "gemini-3.1-flash-lite"
 }
 ```
 
-**`tarjetas_informativas.json`** (array):
+**`cola_procesamiento.json`** (array de tareas):
 ```json
 [{
-  "id": "uuid", "materia_id": "...", "fecha_creacion": "YYYY-MM-DD",
-  "origen_md": "archivo.md", "tipo": "tarea|examen|aviso",
-  "contenido": "...", "referencia_temporal": "...", "nota_personal": ""
+  "id": "uuid",
+  "filename": "meet_*.webm",
+  "session_dir": "audios/session_TIMESTAMP/",
+  "image_filenames": ["captura_000_t0s.jpg"],
+  "materia_id": "uuid",
+  "modelo_elegido": "gemini-3.1-flash-lite",
+  "estado": "pending|processing|completed|failed",
+  "intentos": 0,
+  "error_msg": "",
+  "fecha_creacion": "YYYY-MM-DD HH:MM:SS"
 }]
 ```
 
@@ -183,132 +222,145 @@ tags: [tag1, tag2]
 ### 5.1 Gestión de Asignaturas (Materias)
 
 - CRUD completo: `GET/POST /api/materias`, `PUT/DELETE /api/materias/{id}`.
-- Persistencia via `materias_store` con Lock.
-- El `prompt_personalizado` llena el slot `{prompt_usar}` del prompt de Gemini.
+- El `prompt_personalizado` llena el slot `{prompt_usar}` del Prompt Maestro.
 - El `materia_id` (UUID) se incrusta en el nombre del .md para filtrado en el chat.
-- **4 materias activas:** Sistemas Operativos 2, Modelado y Simulación 1, Ingeniería Económica 1, Ética Profesional.
 
 ### 5.2 Memoria Dinámica del Profesor
 
 - Gemini extrae reglas en `nuevas_reglas_profesor` del JSON embebido.
 - `export_service.save_teacher_rules()` acumula en `memoria_ia/reglas_{materia}.md` con APPEND.
-- Directorio `memoria_ia/` **actualmente vacío** (ninguna clase ha generado reglas aún).
-- En el chat, `llm_service.chat_with_rag()` lee ese archivo e inyecta su contenido al `system_instruction`.
+- En el chat RAG y en el Tutor Socrático, el contenido se inyecta al `system_instruction`.
 
 ### 5.3 Generación Asistida de Prompts
 
 - `POST /api/generate-prompt` → `llm_service.generate_prompt_for_materia()`.
 - Transforma descripción natural en prompt estructurado [Rol][Contexto][Tarea][Formato].
 
-### 5.4 Integración Obsidian
+### 5.4 Integración Obsidian (Multi-Modal)
 
-- `export_service.save_to_obsidian()` escribe directamente el .md en la bóveda configurada.
-- La carpeta destino y el nombre los propone Gemini en el JSON (estructura PARA: `02 Recursos/Tema`).
+- `export_service.save_to_obsidian()` escribe el .md en la bóveda configurada.
+- Siempre copia las imágenes de la sesión a `vault/Adjuntos/`.
+- Los `![[captura_*.jpg]]` en el Markdown generado por Gemini resuelven correctamente en Obsidian.
 - Falla silenciosamente si la ruta no está montada.
 
-### 5.5 Tablón de Tarjetas Informativas (Ex ICS)
+### 5.5 Tablón de Tarjetas Informativas
 
-- `export_service.save_tarjetas_informativas()` extrae tareas, avisos y exámenes detectados por Gemini y los persiste en `tarjetas_informativas.json`.
-- Cada tarjeta almacena la fecha de la clase (`fecha_creacion`) para dar contexto a referencias como "próxima semana".
-- El dashboard permite agregar anotaciones personales vía `PUT /api/tarjetas/{id}` (modificando únicamente `nota_personal`) y borrar avisos (`DELETE`).
+- `export_service.save_tarjetas_informativas()` persiste en `tarjetas_informativas.json`.
+- Dashboard: `PUT /api/tarjetas/{id}` (solo `nota_personal`) y `DELETE`.
 
-### 5.6 Extractor Visual Multimodal (Captura de Pantalla)
+### 5.6 Extractor Visual de Tareas (Captura Directa)
 
-- Pestaña "Captura" de la extensión → botón "Capturar como Tarjeta Informativa" → `chrome.tabs.captureVisibleTab()` → JPEG.
-- `POST /api/extract-task { image_base64, modelo_elegido }` → `llm_service.extract_task_from_image()`.
-- Usa el modelo enviado en el payload, con fallback a `settings.default_model`.
-- Resultado: Extrae la imagen directo a un JSON `tarjetas_informativas`, creando el `.md` en `resumenes/`, copia en Obsidian, y guardando la nueva tarjeta en `tarjetas_informativas.json` con origen `Captura_Pantalla`.
+- Pestaña "Captura" → `chrome.tabs.captureVisibleTab()` → JPEG.
+- `POST /api/extract-task { image_base64 }` → `llm_service.extract_task_from_image()`.
+- Crea .md + tarjeta informativa + copia a Obsidian.
 
-### 5.7 Validación de Tamaño de Upload (OOM-safe)
+### 5.7 Validación Multi-Capa del Upload (OOM-safe)
 
-El endpoint `POST /upload` implementa **dos capas de defensa** para nunca cargar un archivo gigante en RAM:
+**Capa 0 — Regla Estricta (sin imágenes → HTTP 400)**:
+El sistema rechaza cualquier upload que no incluya al menos 1 imagen. No existe el flujo "solo audio".
 
-**Capa 1 — `Content-Length` header (O(1), cero RAM):**
-Antes de leer ningún byte, se inspecciona el header `Content-Length` de la request. Si el cliente declara un tamaño superior a `max_audio_upload_mb`, se devuelve **HTTP 413** inmediatamente sin tocar el cuerpo de la petición.
+**Capa 1 — `Content-Length` header (O(1), cero RAM)**:
+Inspecciona el header antes de leer ningún byte. Si supera `max_audio_upload_mb` → **HTTP 413**.
 
-**Capa 2 — Streaming por chunks de 1 MB (fallback para transferencias chunked):**
-Cubre el caso en que el cliente no envía `Content-Length` (ej. transferencias chunked). El archivo se escribe en disco en fragmentos de 1 MB. Si la suma acumulada supera el límite, se interrumpe la escritura, **se borra el archivo parcial** del disco y se devuelve HTTP 413. La RAM máxima consumida en cualquier punto es exactamente 1 MB.
+**Capa 2 — Streaming por chunks de 1 MB**:
+Lee audio e imágenes en fragmentos. Si la suma supera el límite, borra el `session_dir` completo y devuelve HTTP 413. RAM máxima: 1 MB.
 
-Si ocurre cualquier otro error de IO durante la escritura, el archivo parcial también se borra antes de responder HTTP 500.
+### 5.8 Cola de Procesamiento Asíncrona (Worker)
 
-### 5.8 Estadísticas de Uso
+- `cola_procesamiento.json` persiste entre reinicios del servidor.
+- Worker (`asyncio.create_task`) hace polling cada 5 segundos.
+- Almacena `session_dir` e `image_filenames` para que el worker resuelva rutas.
+- Compatible hacia atrás: detecta tareas legacy (solo filename, sin `session_dir`) y busca el audio en subdirectorios.
 
-- `llm_service.update_stats()` usa `stats_store.update()` (con Lock) en cada llamada a Gemini.
-- Se resetea automáticamente si la fecha del archivo no coincide con hoy.
-- `GET /api/stats` expone los contadores del día.
+### 5.9 Estadísticas de Uso
+
+- `llm_service.update_stats()` usa `stats_store.update()` (con Lock) en cada llamada.
+- Se resetea automáticamente si la fecha no coincide con hoy.
 
 ---
 
 ## 6. El Motor de Chat y RAG
 
+### 6.1 Chat Normal (`POST /api/chat`)
+
 Implementado en `llm_service.chat_with_rag()`. RAG ligero sin embeddings.
 
-### Flujo `POST /api/chat { mensaje, materia_id, modelo_elegido }`
+**Flujo `{ mensaje, materia_id, modelo_elegido }`**:
 
-**Paso 1 — Filtrado por materia** (desde `meta_store`):
-| materia_id | Documentos seleccionados |
+| Paso | Descripción |
 |---|---|
-| `"todas"` | Todos los registros en resumenes_meta.json |
-| `"default"` | Registros con `__default__` en clave, o sin `__` |
-| `{uuid}` | Registros con `__{uuid}__` en clave |
+| 1. Filtrado | Por `materia_id` en claves de `resumenes_meta.json` |
+| 2. Filtro temporal | `nlp_engine.parse_temporal_filter` (última clase, esta semana, mes) |
+| 3. Índice condensado | Lista cronológica de `condensado` por documento |
+| 4. Scoring | `nlp_engine.score_relevance`: tags ×3.0, texto ×1.0. Top N (rag_max_docs) |
+| 5. Contexto | `contents = [índice, apuntes_top_N, mensaje]` |
+| 6. Reglas | Inyecta `memoria_ia/reglas_{materia}.md` al `system_instruction` si existe |
 
-**Paso 2 — Filtro temporal** (`nlp_engine.parse_temporal_filter`):
-| Expresión | Rango |
-|---|---|
-| "clase pasada" / "última clase" | Últimos 7 días |
-| "esta semana" | Desde el lunes de la semana actual |
-| "semana pasada" | Semana anterior completa |
-| Nombre de mes en español | Todo ese mes del año actual |
-| Sin expresión temporal | Sin filtro |
+### 6.2 Tutor Socrático (`POST /api/tutor/chat`)
 
-**Paso 3 — Índice condensado** (lista cronológica de `condensado` por documento).
+Implementado en `llm_service.tutor_chat_with_rag()`.
 
-**Paso 4 — Scoring** (`nlp_engine.score_relevance`):
-```
-score += coincidencia_tags * 3.0
-score += coincidencia_texto * 1.0
-threshold = 1.0, máximo N documentos en contexto (definido por settings.rag_max_docs, default 8)
-```
-
-**Paso 5 — Contexto a Gemini**:
-```python
-contents = [
-  "ÍNDICE CONDENSADO:\n" + indice,
-  "APUNTES COMPLETOS:\n" + resumenes_completos,  # top N (rag_max_docs)
-  mensaje_usuario
-]
-```
-
-**Paso 6 — Reglas del profesor**: si `memoria_ia/reglas_{materia}.md` existe, se inyecta al `system_instruction`.
+- **Reutiliza el mismo motor RAG** (filtrado, scoring, recuperación de apuntes).
+- Cambia únicamente el `system_instruction`:
+  > *"Eres un profesor riguroso. Haz UNA pregunta a la vez. Si acierta, felicítalo y sube la dificultad. Si se equivoca, guíalo socráticamente con pistas."*
+- El frontend mantiene y envía el **historial completo** en cada petición (`historial: [{role, text}]`).
+- El RAG se inyecta solo en el primer mensaje del historial para no contaminar turnos posteriores.
+- Endpoint en dashboard: pestaña **"Sala de Estudio"** en el sidebar.
 
 ---
 
-## 7. La Extensión de Chrome
+## 7. La Extensión de Chrome (v1.2)
 
-**Arquitectura Manifest V3:**
+**Arquitectura Manifest V3 — Multi-Modal:**
 
 | Archivo | Rol |
 |---|---|
-| `background.js` | Service Worker. Orquestador de estados, timers y alarmas. |
-| `offscreen.js` | MediaRecorder, AudioContext, upload + fallback local. |
-| `popup.html/js` | UI: pestañas "Grabar Audio", "Captura de Tarea", panel Ajustes. |
+| `background.js` | Service Worker: orquestador de grabación, silencio, fallbacks |
+| `offscreen.js` | MediaRecorder + IndexedDB (chunks + screenshots) + upload multimodal |
+| `popup.html/js` | Grabar Audio / Clase Drive (guía) / Capturar Tarjeta / Ajustes |
+
+**Permisos** (`manifest.json` v1.2):
+- `activeTab`, `tabCapture`, `offscreen`, `storage`, `alarms`, `downloads`, `scripting`, `tabs`
+- `host_permissions`: solo `localhost:8000` y `127.0.0.1:8000`
 
 **Ciclo de estados** (`chrome.storage.local.recordingStates[tabId]`):
 `idle → recording ↔ paused → uploading → completed | fallback_saved | error → idle`
 
-**Resiliencia Absoluta (Motor de Fallback)**:
-- `offscreen.js` graba en fragmentos de 5 segundos (`MediaRecorder.start(5000)`) y guarda todo en `IndexedDB` (`AudioRescueDB`).
-- Si el backend falla, `offscreen.js` lee la base de datos, genera un Blob URL, y el background ejecuta la descarga local (sin Base64).
-- Si la PC o navegador crashea, `popup.js` ejecuta un **Disaster Recovery** en su arranque: busca fragmentos huérfanos en `IndexedDB`, los ensambla y gatilla la descarga de emergencia, garantizando cero pérdida de clases.
+### Flujo de Clases de Drive (v1.2 — tabCapture)
 
-**Protección de Pestaña (Anti-Cierres)**:
-Al iniciar grabación, `background.js` inyecta un listener `beforeunload` en la pestaña activa para mostrar un modal de confirmación si el usuario intenta cerrarla por accidente. Se remueve al detener la grabación.
+La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) que instruye al usuario a:
+1. Abrir el video de Drive en el navegador (cuenta institucional)
+2. Ir al tab "Grabar Audio" e iniciar grabación (tabCapture)
+3. Reproducir el video + capturar pantalla con Alt+S
+4. Finalizar → pipeline normal de upload
 
-**Auto-Stop por silencio**: detecta `tab.audible` vía `chrome.tabs.onUpdated`. Crea alarma con delay configurable. Si el audio vuelve, cancela la alarma.
+**Tip integrado**: `document.querySelector('video').playbackRate = 4` para grabar a 4x velocidad.
 
-**Ghost Mode**: `gainNode.gain.value = 0` → graba sin reproducir por altavoces.
+> **Por qué no se usa descarga directa**: Google Workspace con `preventDownload` bloquea yt-dlp (con cookies), fetch a URLs de videoplayback (DASH segmentado), y chrome.downloads. La reproducción en el navegador + tabCapture es la única vía funcional.
 
-**Configuración de backup local**: carpeta destino (`Backups_Clases/` por defecto) y opción "Guardar como" en cada backup.
+### IndexedDB — Schema v2 (`AudioRescueDB`)
+
+| Object Store | Contenido |
+|---|---|
+| `chunks` | `{ id, tabId, timestamp, customName, chunk: Blob }` — fragmentos de audio de 5s |
+| `screenshots` | `{ id, tabId, timestamp, image_base64 \| blob }` — capturas JPEG |
+
+**Capturas automáticas**: cada 5 minutos via `setInterval` en offscreen.js.
+**Capturas manuales**: botón cámara en popup (visible solo durante grabación activa) ó `Alt+S`.
+
+### Resiliencia Multi-Modal
+
+| Escenario | Comportamiento |
+|---|---|
+| Backend falla durante upload | Intenta ZIP (audio + imágenes) via JSZip; si no disponible → audio .webm + JSON base64 |
+| Browser/PC crashea | Disaster Recovery en arranque de popup: ensambla chunks huérfanos + limpia screenshots huérfanos |
+
+**Botones del popup según estado**:
+
+| Estado | Visible |
+|---|---|
+| `idle` | "Iniciar Grabación" |
+| `recording` | Cancelar / Pausar / Finalizar + Botón cámara (captura manual) |
 
 ---
 
@@ -321,13 +373,17 @@ Al iniciar grabación, `background.js` inyecta un listener `beforeunload` en la 
 | GET/POST | `/api/materias` | `materias_store` |
 | PUT/DELETE | `/api/materias/{id}` | `materias_store` |
 | GET/PUT | `/api/settings` | `settings_store` |
-| GET/DELETE | `/api/audios` `/api/audios/{f}` | filesystem directo |
-| POST | `/upload` | filesystem + validación 413 |
-| POST | `/api/generate` | `audio_service` + `llm_service` |
-| POST | `/api/save` | `llm_service` + `export_service` + stores |
+| GET | `/api/audios` | filesystem (sesiones + legacy) |
+| DELETE | `/api/audios/{f}` | filesystem |
+| POST | `/upload` | filesystem + validación 400/413 (exige imágenes) |
+| POST | `/api/generate` | `cola_store` (encola con session_dir + image_filenames) |
+| GET | `/api/cola` | `cola_store` |
+| POST | `/api/cola/{id}/retry` | `cola_store` |
+| DELETE | `/api/cola/{id}` | `cola_store` |
 | GET | `/api/summaries` | filesystem |
 | GET/PUT/DELETE | `/api/summaries/{f}` | filesystem + `meta_store` |
 | POST | `/api/chat` | `llm_service.chat_with_rag` |
+| POST | `/api/tutor/chat` | `llm_service.tutor_chat_with_rag` |
 | POST | `/api/generate-prompt` | `llm_service.generate_prompt_for_materia` |
 | GET/PUT/DEL | `/api/tarjetas` `/api/tarjetas/{id}` | `tarjetas_store` |
 | POST | `/api/extract-task` | `llm_service` + `export_service` |
@@ -338,14 +394,45 @@ Al iniciar grabación, `background.js` inyecta un listener `beforeunload` en la 
 
 ---
 
-## 9. Cambios Respecto a la Versión Anterior (v2 → v3)
+## 9. Módulos del Dashboard (Frontend)
 
-| Área | Antes (v2) | Ahora (v3) |
+| Pestaña | ID | Descripción |
 |---|---|---|
-| Arquitectura | Monolítico (~950 líneas en server.py) | Modular: server + database + 3 services |
-| Concurrencia | `open('file.json', 'w')` sin protección | `asyncio.Lock()` por archivo JSON |
-| Anki | Generaba `.apkg` con IDs aleatorios (bug) | **Eliminado completamente** |
-| `requirements.txt` | Incluía `genanki`, omitía `tenacity` | Corregido |
-| Upload tamaño | `max_audio_upload_mb` guardado pero ignorado | Validación activa → HTTP 413 |
-| `condensado` en meta | Siempre cadena fija (bug) | Primeros 150 chars del contenido real |
-| `enable_anki` | Campo en settings y UI | **Eliminado** |
+| Documentos | `tab-resumenes` | Biblioteca de apuntes con visor Markdown y editor inline |
+| Por Procesar | `tab-audios` | Lista sesiones pendientes, cola de procesamiento, carga de respaldo manual |
+| Tutor Virtual | `tab-chat` | Chat RAG con selector de asignatura |
+| Tablón de Avisos | `tab-tarjetas` | Grid de tarjetas informativas filtradas por materia |
+| Sala de Estudio | `tab-tutor` | Tutor Socrático: selector de materia + botón "Iniciar Simulación" + chat |
+| Asignaturas | `tab-materias` | CRUD de asignaturas con generación de prompt asistida |
+| Preferencias | `tab-config` | Ruta Obsidian, modelo, límites RAG, browser cookie |
+
+---
+
+## 10. Historial de Cambios
+
+### Sesión 2026-07-28 — Limpieza Drive v1.2
+
+| Área | Cambio |
+|---|---|
+| **Decisión arquitectónica** | Eliminada la extracción directa de audio desde Drive. Google Workspace con `preventDownload` bloquea toda descarga programática. El flujo para clases grabadas usa tabCapture (reproducir video + grabar audio de la pestaña). |
+| `extension/manifest.json` | v1.2: eliminados permisos `webRequest`, `webNavigation`, `cookies`. `host_permissions` acotado a `localhost:8000` y `127.0.0.1:8000` (antes era `<all_urls>`). |
+| `extension/background.js` | Eliminado: espía de red `chrome.webRequest.onBeforeRequest`, `doDriveExtraction()`, handlers `GET_DRIVE_AUDIO_URL`, `DRIVE_EXTRACT_DONE`, `EXTRACT_DRIVE_AUDIO`. De 542 → 236 líneas. |
+| `extension/popup.html` | Tab "Clase Drive" convertido de formulario interactivo (inputs + botones + screenshots) a guía estática de 4 pasos con tip de velocidad 4x. Eliminados: `driveExtractBtn`, `driveScreenshotBtn`, `driveDurationInput`, `driveResetBtn`. |
+| `extension/popup.js` | Eliminado: `extractDriveClass()`, `uploadDriveSession()`, `readAllScreenshotsFromDB()`, `updateDriveUI()`, `addScreenshotToDB()`, listeners de `isExtractingDrive`, `DRIVE_EXTRACT_SUCCESS`. De 828 → 478 líneas. |
+| `server.py` | Eliminados 4 endpoints: `POST /api/upload-drive/init`, `/chunk/{s}`, `/import-local/{s}`, `/finish/{s}`. Eliminado `import requests`. De 1043 → 899 líneas. |
+| `requirements.txt` | Eliminada dependencia `yt-dlp`. |
+| Archivos eliminados | `test_drive_url.js`, `test_download.py`, `patch_server.py` — scripts de test/parcheo ya obsoletos. |
+
+### Sesión 2026-07-27 — Pipeline Multi-Modal v3.1
+
+| Área | Cambio |
+|---|---|
+| **Paradigma** | Sistema pasa a ser estrictamente multi-modal. No existe flujo solo-audio. |
+| `extension/offscreen.js` | IndexedDB v2 (stores: chunks + screenshots). Time-lapse 5min. Captura manual. Upload FormData multi-archivo. Fallback ZIP/JSON. |
+| `server.py /upload` | HTTP 400 si no llegan imágenes. Guarda sesión en `audios/session_TIMESTAMP/`. |
+| `server.py /api/generate` | `GenerateRequest` acepta `session_dir` + `image_filenames`. Worker resuelve rutas y pasa `image_paths` al LLM. Limpia `session_dir` completo tras completar. |
+| `server.py /api/audios` | Lista sesiones (subdirectorios) y archivos legacy. Expone `image_count`. |
+| `server.py` | Modificado endpoint `DELETE /api/audios/{filename:path}` para soportar borrado de archivos dentro de `session_dir`. Nuevo modelo `TutorChatRequest`. Nuevo endpoint `POST /api/tutor/chat`. |
+| `services/llm_service.py` | Prompt Maestro unificado (sin `has_images`). Regla 1 exige correlación audio-imagen y `![[img]]`. `generate_summary_from_audio` sube imágenes a Gemini Files API. Nueva función `tutor_chat_with_rag` (RAG reutilizado, system_instruction socrático, historial `types.Content`). |
+| `services/export_service.py` | `save_to_obsidian` siempre copia imágenes a `vault/Adjuntos/`. Sin condicional. |
+| `frontend/index.html` | Solucionados errores 404 de "Audios Pendientes" mapeando correctamente el `session_dir` en el backend, actualizando el `src` de los reproductores y pasando metadata de sesión completa en `processAudio()`. Nueva pestaña "Sala de Estudio" (Tutor Socrático). Nav con icono `graduation-cap`. JS: `tutorHistoryState`, `iniciarSimulacionTutor()`, `handleTutorSubmit()`. `loadMaterias()` pobla selector del tutor. |

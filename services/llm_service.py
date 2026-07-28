@@ -118,28 +118,36 @@ async def generate_prompt_for_materia(descripcion: str, modelo: str) -> tuple[st
 # Summary generation (audio → Gemini → Markdown + JSON)
 # ---------------------------------------------------------------------------
 
-def _build_summary_prompt(prompt_usar: str, fecha_actual: str, has_images: bool = False) -> str:
-    imagen_instruccion = ""
-    if has_images:
-        imagen_instruccion = """
-5. MODO MULTI-MODAL ACTIVADO: Se te han proporcionado capturas de pantalla tomadas cronológicamente durante la clase.
-   - Relaciona el contenido del audio con las imágenes. Si el profesor explica algo que coincide con lo que se ve en una captura (un diagrama, fórmula, código, diapositiva), descríbelo en detalle en el apunte.
-   - Cuando hagas referencia a una imagen específica, INSERTA LA IMAGEN en el Markdown usando la sintaxis de Obsidian: ![[nombre_de_la_imagen.jpg]]
-   - El nombre de la imagen corresponde exactamente al nombre del archivo que se te proporcionó (ej. captura_000_t0s.jpg).
-   - Solo inserta la imagen si es realmente relevante para el concepto que se está explicando en ese momento."""
-
+def _build_summary_prompt(prompt_usar: str, fecha_actual: str) -> str:
+    """
+    Prompt Maestro Multi-Modal (v2).
+    El sistema SIEMPRE recibe audio + capturas de pantalla.
+    La IA debe correlacionar ambas fuentes y usar la sintaxis Obsidian ![[imagen.jpg]].
+    """
     return f"""Eres un experto en Personal Knowledge Management (PKM) y un ingeniero de software senior. La fecha de hoy es {fecha_actual}.
 Contexto de la clase: {prompt_usar}
 
-A partir de la transcripción, debes crear una nota que cumpla ESTRICTAMENTE las siguientes reglas de mi bóveda de Obsidian:
-1. ESTRUCTURA DE CARPETAS: Mi bóveda usa PARA (01 Proyectos, 02 Recursos, 03 Areas, 04 Archivo).
-2. REGLA DE TITULACIÓN (Googleability): Una nota = Un solo concepto. Títulos directos. Ej Teórico: "Costo de Oportunidad". Ej Técnico: "Cómo configurar Git con SSH en Linux".
-3. ARQUETIPOS DE NOTA:
+Se te han proporcionado el audio de la clase Y capturas de pantalla tomadas cronológicamente.
+Tu tarea es crear una nota de estudio de calidad profesional que cumpla ESTRICTAMENTE las siguientes reglas:
+
+1. CORRELACIÓN AUDIO-IMAGEN (OBLIGATORIO): Relaciona el contenido del audio con las imágenes.
+   Cuando el profesor explique algo que coincida con lo que se ve en una captura (diagrama, fórmula, código, diapositiva), descríbelo en detalle en el apunte E INSERTA LA IMAGEN con la sintaxis Obsidian:
+   ![[nombre_exacto_del_archivo.jpg]]
+   El nombre del archivo es exactamente el que se te proporcionó (ej. captura_000_t0s.jpg).
+   Solo inserta imágenes que sean realmente relevantes para el concepto que se está explicando.
+
+2. ESTRUCTURA DE CARPETAS: Mi bóveda usa PARA (01 Proyectos, 02 Recursos, 03 Areas, 04 Archivo).
+
+3. REGLA DE TITULACIÓN (Googleability): Una nota = Un solo concepto. Títulos directos.
+   Ej Teórico: "Costo de Oportunidad". Ej Técnico: "Cómo configurar Git con SSH en Linux".
+
+4. ARQUETIPOS DE NOTA:
    A. Técnico / Cheat Sheet: Inicia con > [!warning] o > [!info]. Pasos directos sin relleno. Bloques de código especificados.
    B. Teórico: Inicia con > [!summary] (Resumen Feynman). Desarrollo en viñetas. Ejemplos con > [!example].
-4. CERO NOTAS HUÉRFANAS: Al final de la nota, incluye un enlace de Obsidian a un concepto relacionado (ej. [[Índice - Semestre actual]]).
-{imagen_instruccion}
-5. EXHAUSTIVIDAD OBLIGATORIA (PROPORCIONALIDAD): ¡NO COMPRIMAS EN EXCESO! El nivel de detalle y la longitud de la nota deben ser directamente proporcionales a la duración del audio. Si el audio es una clase larga de 2 horas, tu respuesta debe ser un documento largo y exhaustivo, con múltiples subtítulos, capturando cada concepto, debate, y ejemplo mencionado. No recortes ni simplifiques información valiosa solo por resumir. Muestra todo el contenido relevante estructurado a profundidad.
+
+5. CERO NOTAS HUÉRFANAS: Al final incluye un enlace de Obsidian a un concepto relacionado (ej. [[Índice - Semestre actual]]).
+
+6. EXHAUSTIVIDAD OBLIGATORIA (PROPORCIONALIDAD): ¡NO COMPRIMAS EN EXCESO! El nivel de detalle debe ser directamente proporcional a la duración del audio y la cantidad de imágenes. Muestra todo el contenido relevante estructurado a profundidad.
 
 Además, debes extraer reglas:
 Si en el audio el profesor explica un método de resolución específico, una fórmula propia, o exige explícitamente que los problemas se resuelvan de una manera particular (diferente a los libros), extráelo detalladamente en el array 'nuevas_reglas_profesor' del bloque JSON. Si no hay reglas nuevas en esta clase, deja el array vacío [].
@@ -153,7 +161,7 @@ estado: borrador
 tags: [tag1, tag2]
 ---
 
-[Contenido de la nota usando Callouts de Obsidian y estructura requerida]
+[Contenido de la nota usando Callouts de Obsidian, imágenes ![[...]] y estructura requerida]
 
 [Enlace MOC o Concepto Relacionado]
 
@@ -186,7 +194,7 @@ async def generate_summary_from_audio(
     image_paths: list = None,
 ) -> tuple[str, dict]:
     """
-    Sube el audio (y opcionalmente imágenes) a la Files API de Gemini,
+    Sube el audio + imágenes (SIEMPRE requeridas) a la Files API de Gemini,
     espera procesamiento y genera el resumen multi-modal.
 
     Returns:
@@ -195,7 +203,9 @@ async def generate_summary_from_audio(
     image_paths = image_paths or []
     client = genai.Client()
     fecha_actual = datetime.now().strftime("%Y-%m-%d")
-    prompt_completo = _build_summary_prompt(prompt_usar, fecha_actual, has_images=bool(image_paths))
+    # Single unified prompt — always multimodal
+    prompt_completo = _build_summary_prompt(prompt_usar, fecha_actual)
+
 
     # --- Upload audio ---
     print(f"Subiendo audio a Gemini Files API...", flush=True)

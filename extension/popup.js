@@ -24,8 +24,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sendCaptureBtn = document.getElementById('sendCaptureBtn');
 
   const tabBtnAudio = document.getElementById('tab-btn-audio');
+  const tabBtnDrive = document.getElementById('tab-btn-drive');
   const tabBtnCapture = document.getElementById('tab-btn-capture');
   const tabAudio = document.getElementById('tab-audio');
+  const tabDrive = document.getElementById('tab-drive');
   const tabCapture = document.getElementById('tab-capture');
 
   const settingsBtn = document.getElementById('settingsBtn');
@@ -37,7 +39,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let currentCaptureDataUrl = null;
   let countdownInterval = null;
 
-  // --- FASE 1: Recuperación de Desastres (v2 — limpia chunks + screenshots) ---
+  // --- FASE 1: Recuperacion de Desastres (v2 — limpia chunks + screenshots) ---
   async function runDisasterRecovery() {
     try {
       const db = await new Promise((resolve, reject) => {
@@ -223,7 +225,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   cancelBtn.addEventListener('click', () => {
-    if (confirm("¿Estás seguro de que deseas cancelar la grabación? Todo el audio se perderá de forma permanente.")) {
+    if (confirm("Estas seguro de que deseas cancelar la grabacion? Todo el audio se perdera de forma permanente.")) {
       chrome.runtime.sendMessage({ target: 'background', type: 'CANCEL_RECORDING', tabId: currentTabId });
     }
   });
@@ -236,7 +238,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         type: 'MANUAL_SCREENSHOT_FROM_POPUP',
         tabId: currentTabId
       });
-      // Show brief feedback
       if (screenshotFeedback) {
         screenshotFeedback.classList.remove('hidden');
         setTimeout(() => screenshotFeedback.classList.add('hidden'), 2000);
@@ -306,10 +307,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       pauseBtn.classList.remove('hidden');
       resumeBtn.classList.add('hidden');
 
-      // Show manual screenshot button only during active recording
+      // Show manual screenshot button during active recording
       if (manualScreenshotBtn) manualScreenshotBtn.classList.remove('hidden');
 
-      statusIndicator.textContent = 'Grabación Activa';
+      statusIndicator.textContent = 'Grabacion Activa';
       statusIndicator.className = 'status-badge status-recording';
     } else if (state === 'paused') {
       silenceTimeoutInput.disabled = false;
@@ -366,29 +367,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- TABS LOGIC ---
   tabBtnAudio.addEventListener('click', () => {
     tabAudio.classList.remove('hidden');
+    tabDrive.classList.add('hidden');
     tabCapture.classList.add('hidden');
     tabSettings.classList.add('hidden');
-
     tabBtnAudio.className = 'segment-btn active';
+    tabBtnDrive.className = 'segment-btn';
+    tabBtnCapture.className = 'segment-btn';
+  });
+
+  tabBtnDrive.addEventListener('click', () => {
+    tabDrive.classList.remove('hidden');
+    tabAudio.classList.add('hidden');
+    tabCapture.classList.add('hidden');
+    tabSettings.classList.add('hidden');
+    tabBtnDrive.className = 'segment-btn active';
+    tabBtnAudio.className = 'segment-btn';
     tabBtnCapture.className = 'segment-btn';
   });
 
   tabBtnCapture.addEventListener('click', () => {
     tabCapture.classList.remove('hidden');
     tabAudio.classList.add('hidden');
+    tabDrive.classList.add('hidden');
     tabSettings.classList.add('hidden');
-
     tabBtnCapture.className = 'segment-btn active';
     tabBtnAudio.className = 'segment-btn';
+    tabBtnDrive.className = 'segment-btn';
   });
 
   settingsBtn.addEventListener('click', () => {
     tabAudio.classList.add('hidden');
     tabCapture.classList.add('hidden');
+    tabDrive.classList.add('hidden');
     tabSettings.classList.remove('hidden');
-
     tabBtnAudio.classList.remove('active');
     tabBtnCapture.classList.remove('active');
+    tabBtnDrive.classList.remove('active');
   });
 
   closeSettingsBtn.addEventListener('click', () => {
@@ -396,6 +410,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     tabAudio.classList.remove('hidden');
     tabBtnAudio.classList.add('active');
   });
+
 
   // --- LOGICA DEL EXTRACTOR VISUAL DE TAREAS ---
   captureTaskBtn.addEventListener('click', () => {
@@ -438,7 +453,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           throw new Error(errJson.detail || 'Error en el servidor');
       }
 
-      captureStatus.textContent = '¡Tarea Guardada!';
+      captureStatus.textContent = 'Tarea Guardada!';
       captureStatus.className = 'status-badge status-success mt-4';
       captureStatus.classList.remove('hidden');
 

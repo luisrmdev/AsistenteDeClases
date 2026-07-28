@@ -1,11 +1,11 @@
 {
-    "fecha": "2026-07-24",
-    "gemini-3.5-flash": {
-        "peticiones": 0,
-        "tokens": 0
-    },
-    "gemini-3.1-flash-lite": {
-        "peticiones": 6,
-        "tokens": 133513
-    }
+  "fecha": "2026-07-27",
+  "gemini-3.5-flash": {
+    "peticiones": 0,
+    "tokens": 0
+  },
+  "gemini-3.1-flash-lite": {
+    "peticiones": 3,
+    "tokens": 13545
+  }
 }
