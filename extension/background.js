@@ -25,10 +25,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     cancelRecording(message.tabId);
   } else if (message.type === 'UPDATE_STATE') {
     updateState(message.tabId, message.state);
-  } else if (message.type === 'DOWNLOAD_FALLBACK_URL') {
-    handleFallbackUrl(message);
-  } else if (message.type === 'DOWNLOAD_FALLBACK_JSON') {
-    handleFallbackJson(message);
   } else if (message.type === 'CAPTURE_SCREENSHOT') {
     captureTabScreenshot(message.tabId, sendResponse);
     return true;
@@ -53,47 +49,7 @@ async function captureTabScreenshot(tabId, sendResponse) {
   }
 }
 
-// --- Fallback: audio download ---
-async function handleFallbackUrl(message) {
-  try {
-    const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
-    const subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
-    const askAlways = result.backupAskAlways || false;
-    const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-    const safeCustomName = message.customName ? message.customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
-    const ext = message.filename ? message.filename.split('.').pop() : 'webm';
-    const filename = `${subfolder}backup-${safeCustomName}${dateStr}.${ext}`;
 
-    chrome.downloads.download({
-      url: message.url, filename: filename, saveAs: askAlways
-    }, (downloadId) => {
-      if (chrome.runtime.lastError) {
-        console.error("Download failed:", chrome.runtime.lastError);
-        updateState(message.tabId, 'error');
-      } else {
-        updateState(message.tabId, 'fallback_saved');
-      }
-    });
-  } catch (e) {
-    console.error('Fallback download failed:', e);
-    updateState(message.tabId, 'error');
-  }
-}
-
-// --- Fallback: screenshots JSON download ---
-async function handleFallbackJson(message) {
-  try {
-    const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
-    const subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
-    const askAlways = result.backupAskAlways || false;
-    const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-    const safeCustomName = message.customName ? message.customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
-    const filename = `${subfolder}backup-capturas-${safeCustomName}${dateStr}.json`;
-    chrome.downloads.download({ url: message.url, filename: filename, saveAs: askAlways });
-  } catch (e) {
-    console.error('Fallback JSON download failed:', e);
-  }
-}
 
 // Detectar silencio en las pestañas
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -123,6 +79,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name.startsWith('silence_')) {
     const tabId = parseInt(alarm.name.replace('silence_', ''));
     stopRecording(tabId);
+  } else if (alarm.name.startsWith('screenshot_')) {
+    const tabId = parseInt(alarm.name.replace('screenshot_', ''));
+    chrome.runtime.sendMessage({
+      target: 'offscreen',
+      type: 'AUTO_SCREENSHOT',
+      tabId: tabId
+    }).catch(() => {});
   }
 });
 
@@ -152,13 +115,15 @@ async function startRecording(tabId) {
   chrome.tabCapture.getMediaStreamId({ targetTabId: tabId }, async (streamId) => {
     if (chrome.runtime.lastError) { console.error(chrome.runtime.lastError.message); return; }
     await setupOffscreenDocument('offscreen.html');
-    const ghostRes = await chrome.storage.local.get(['ghostModes']);
-    const ghostModes = ghostRes.ghostModes || {};
+    const configRes = await chrome.storage.local.get(['ghostModes', 'screenshotIntervalMin']);
+    const ghostModes = configRes.ghostModes || {};
     const isGhost = ghostModes[tabId] || false;
+    const intervalMin = configRes.screenshotIntervalMin || 5;
 
     chrome.runtime.sendMessage({ target: 'offscreen', type: 'START_RECORDING', streamId, tabId, ghostMode: isGhost });
     updateState(tabId, 'recording');
     clearSilenceAlarm(tabId);
+    chrome.alarms.create(`screenshot_${tabId}`, { periodInMinutes: intervalMin });
 
     const timerRes = await chrome.storage.local.get(['recordingTimers']);
     const timers = timerRes.recordingTimers || {};
@@ -179,6 +144,7 @@ async function startRecording(tabId) {
 
 async function pauseRecording(tabId) {
   clearSilenceAlarm(tabId);
+  chrome.alarms.clear(`screenshot_${tabId}`);
   const timerRes = await chrome.storage.local.get(['recordingTimers']);
   const timers = timerRes.recordingTimers || {};
   const t = timers[tabId];
@@ -187,16 +153,19 @@ async function pauseRecording(tabId) {
 }
 
 async function resumeRecording(tabId) {
-  const timerRes = await chrome.storage.local.get(['recordingTimers']);
-  const timers = timerRes.recordingTimers || {};
+  const configRes = await chrome.storage.local.get(['recordingTimers', 'screenshotIntervalMin']);
+  const timers = configRes.recordingTimers || {};
+  const intervalMin = configRes.screenshotIntervalMin || 5;
   const t = timers[tabId];
   if (t && t.paused) { t.startTime = Date.now(); t.paused = false; await chrome.storage.local.set({ recordingTimers: timers }); }
   try { await chrome.runtime.sendMessage({ target: 'offscreen', type: 'RESUME_RECORDING', tabId }); } catch (err) { console.warn("Error enviando reanudar al offscreen", err); }
+  chrome.alarms.create(`screenshot_${tabId}`, { periodInMinutes: intervalMin });
 }
 
 async function stopRecording(tabId) {
   try {
     clearSilenceAlarm(tabId);
+    chrome.alarms.clear(`screenshot_${tabId}`);
     const result = await chrome.storage.local.get(['customNames', 'recordingTimers']);
     const customName = (result.customNames || {})[tabId] || '';
     const timers = result.recordingTimers || {};
@@ -209,6 +178,7 @@ async function stopRecording(tabId) {
 async function cancelRecording(tabId) {
   try {
     clearSilenceAlarm(tabId);
+    chrome.alarms.clear(`screenshot_${tabId}`);
     const result = await chrome.storage.local.get(['recordingTimers']);
     const timers = result.recordingTimers || {};
     if (timers[tabId]) { delete timers[tabId]; await chrome.storage.local.set({ recordingTimers: timers }); }

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Asistente de Clases - Dashboard IA</title>
+    <link rel="icon" type="image/png" href="favicon.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,6 +15,12 @@
 
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- KaTeX CSS + JS para renderizar matemáticas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked-katex-extension"></script>
+
     <script src="https://unpkg.com/lucide@latest"></script>
 
     <script>
@@ -81,32 +88,32 @@
 
     <style>
       :root {
-        --color-bg: #fafafa;
-        --color-surface: #ffffff;
-        --color-surface-hover: #f4f4f5;
-        --color-border: #e4e4e7;
-        --color-text-main: #09090b;
-        --color-text-muted: #71717a;
-        --color-accent: #18181b;
-        --color-accent-hover: #27272a;
-        --color-accent-text: #fafafa;
-        --color-accent-rgb: 24, 24, 27;
-        --color-danger: #ef4444;
-        --color-danger-bg: #fef2f2;
+        --color-bg: #cbd5e1; /* Slate 300 - Gris estructural denso. Corta de raíz la emisión de luz brillante. */
+        --color-surface: #e2e8f0; /* Slate 200 - Superficies completamente grises, cero blanco en la pantalla. */
+        --color-surface-hover: #cbd5e1; 
+        --color-border: #94a3b8; /* Slate 400 - Bordes definidos para marcar estructura */
+        --color-text-main: #0f172a; /* Slate 900 - Contraste profundo necesario sobre fondos grises */
+        --color-text-muted: #334155; /* Slate 700 */
+        --color-accent: #0369a1; /* Sky 700 - Azul oscurecido e industrial */
+        --color-accent-hover: #075985; 
+        --color-accent-text: #f0f9ff;
+        --color-accent-rgb: 3, 105, 161;
+        --color-danger: #be123c; /* Rojo industrial apagado */
+        --color-danger-bg: #fecdd3;
       }
 
       .dark {
-        --color-bg: #09090b;
-        --color-surface: #121214;
-        --color-surface-hover: #1e1e20;
-        --color-border: #27272a;
-        --color-text-main: #fafafa;
-        --color-text-muted: #a1a1aa;
-        --color-accent: #fafafa;
-        --color-accent-hover: #e4e4e7;
-        --color-accent-text: #09090b;
-        --color-accent-rgb: 250, 250, 250;
-        --color-danger: #f87171;
+        --color-bg: #090e17; /* Slate/Navy profundo, elimina el negro puro penetrante */
+        --color-surface: #131d2e; /* Tarjetas sutilmente elevadas con un tinte azul-gris */
+        --color-surface-hover: #1e293b; 
+        --color-border: #1e293b; /* Bordes suaves que no distraen */
+        --color-text-main: #e2e8f0; /* Blanco roto suave (Slate 200) para evitar fatiga visual */
+        --color-text-muted: #94a3b8; /* Gris azulado para textos secundarios */
+        --color-accent: #3b82f6; /* Azul vibrante (Blue 500) adaptado para fondos oscuros */
+        --color-accent-hover: #60a5fa; /* Blue 400 */
+        --color-accent-text: #ffffff;
+        --color-accent-rgb: 59, 130, 246;
+        --color-danger: #ef4444;
         --color-danger-bg: #450a0a;
       }
 
@@ -199,6 +206,40 @@
         box-shadow: 0 0 0 1px var(--color-text-main);
       }
 
+      /* Collapsed sidebar styles */
+      #main-sidebar {
+        transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        position: relative;
+      }
+      #main-sidebar.collapsed {
+        width: 80px;
+      }
+      #main-sidebar.collapsed .nav-text,
+      #main-sidebar.collapsed .resource-monitor {
+        display: none;
+      }
+      #main-sidebar.collapsed .nav-btn {
+        justify-content: center;
+        padding-left: 0;
+        padding-right: 0;
+      }
+      #main-sidebar.collapsed #main-sidebar-header {
+        flex-direction: column;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        gap: 1.25rem;
+      }
+      
+      #biblioteca-sidebar {
+        transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s;
+        overflow: hidden;
+      }
+      #biblioteca-sidebar.collapsed {
+        width: 0;
+        transform: translateX(-100%);
+        border-color: transparent;
+      }
+
       .btn-primary {
         background-color: var(--color-accent);
         color: var(--color-accent-text);
@@ -282,7 +323,22 @@
         border-radius: 8px;
         padding: 16px;
       }
-
+      
+      .prose blockquote {
+        border-left-color: var(--color-accent);
+        background-color: var(--color-surface);
+        padding: 16px 20px;
+        border-radius: 0 8px 8px 0;
+        color: var(--color-text-muted);
+        font-style: italic;
+        margin: 24px 0;
+        border-left-width: 4px;
+      }
+      .prose blockquote p {
+        margin: 0 !important;
+        color: inherit;
+        font-weight: 400;
+      }
       .modal-overlay {
         background-color: rgba(0, 0, 0, 0.4);
         backdrop-filter: blur(8px);
@@ -485,16 +541,13 @@
   </head>
   <body class="flex h-screen overflow-hidden bg-background">
     <aside
+      id="main-sidebar"
       class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0"
     >
-      <div
-        class="p-6 border-b border-borderGray flex justify-between items-center"
-      >
-        <h1
-          class="text-lg font-serif tracking-tight flex items-center gap-2 text-charcoal"
-        >
-          <i data-lucide="layers" class="w-5 h-5"></i>
-          Asistente IA
+      <div id="main-sidebar-header" class="p-6 border-b border-borderGray flex justify-between items-center transition-all">
+        <h1 class="text-lg font-serif tracking-tight flex items-center gap-2 text-charcoal">
+          <i data-lucide="layers" class="w-5 h-5 shrink-0"></i>
+          <span class="nav-text">Asistente IA</span>
         </h1>
         <button
           id="theme-toggle"
@@ -507,118 +560,55 @@
       </div>
 
       <div class="flex-1 py-4 text-sm font-medium">
-        <button
-          onclick="switchTab('resumenes')"
-          id="nav-resumenes"
-          class="w-full text-left px-6 py-2.5 transition-colors nav-btn active-nav flex items-center gap-3"
-        >
-          <i data-lucide="file-text" class="w-4 h-4 opacity-70"></i> Documentos
+        <button onclick="switchTab('resumenes')" id="nav-resumenes" class="w-full text-left px-6 py-2.5 transition-colors nav-btn active-nav flex items-center gap-3">
+          <i data-lucide="file-text" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Documentos</span>
         </button>
-        <button
-          onclick="switchTab('audios')"
-          id="nav-audios"
-          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
-        >
-          <i data-lucide="mic" class="w-4 h-4 opacity-70"></i> Por Procesar
+        <button onclick="switchTab('audios')" id="nav-audios" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+          <i data-lucide="mic" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Por Procesar</span>
         </button>
-        <button
-          onclick="switchTab('chat')"
-          id="nav-chat"
-          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
-        >
-          <i data-lucide="message-square" class="w-4 h-4 opacity-70"></i> Tutor
-          Virtual
+        <button onclick="switchTab('chat')" id="nav-chat" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+          <i data-lucide="message-square" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Tutor Virtual</span>
         </button>
-        <button
-          onclick="switchTab('tarjetas')"
-          id="nav-tarjetas"
-          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
-        >
-          <i data-lucide="clipboard-list" class="w-4 h-4 opacity-70"></i> Tablón
-          de Avisos
+        <button onclick="switchTab('tarjetas')" id="nav-tarjetas" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+          <i data-lucide="clipboard-list" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Tablón de Avisos</span>
         </button>
-        <button
-          onclick="switchTab('tutor')"
-          id="nav-tutor"
-          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1 border-t border-borderGray pt-3"
-        >
-          <i
-            data-lucide="graduation-cap"
-            class="w-4 h-4 opacity-70 text-emerald-500"
-          ></i>
-          Sala de Estudio
+        <button onclick="switchTab('tutor')" id="nav-tutor" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1 border-t border-borderGray pt-3">
+          <i data-lucide="graduation-cap" class="w-4 h-4 opacity-70 text-emerald-500 shrink-0"></i> <span class="nav-text">Sala de Estudio</span>
         </button>
 
-        <div class="px-6 mt-8 mb-2">
-          <h4
-            class="text-[10px] font-bold uppercase tracking-wider text-textMuted"
-          >
-            Ajustes
-          </h4>
+        <div class="px-6 mt-8 mb-2 nav-text">
+          <h4 class="text-[10px] font-bold uppercase tracking-wider text-textMuted">Ajustes</h4>
         </div>
 
-        <button
-          onclick="switchTab('materias')"
-          id="nav-materias"
-          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3"
-        >
-          <i data-lucide="book-open" class="w-4 h-4 opacity-70"></i> Asignaturas
+        <button onclick="switchTab('materias')" id="nav-materias" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3">
+          <i data-lucide="book-open" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Asignaturas</span>
         </button>
-        <button
-          onclick="switchTab('config')"
-          id="nav-config"
-          class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1"
-        >
-          <i data-lucide="settings" class="w-4 h-4 opacity-70"></i> Preferencias
+        <button onclick="switchTab('config')" id="nav-config" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+          <i data-lucide="settings" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Preferencias</span>
         </button>
       </div>
 
-      <div class="p-6 border-t border-borderGray mt-auto">
-        <h3
-          class="text-[10px] font-bold text-textMuted uppercase tracking-[0.05em] mb-3"
-        >
-          Monitor de Recursos
-        </h3>
-
+      <div class="p-6 border-t border-borderGray mt-auto resource-monitor">
+        <h3 class="text-[10px] font-bold text-textMuted uppercase tracking-[0.05em] mb-3">Monitor de Recursos</h3>
         <div class="flex flex-col gap-2">
-          <div
-            class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5"
-          >
-            <span class="text-[10px] font-medium text-textMuted"
-              >Red neuronal</span
-            >
-            <span
-              id="ui-current-model"
-              class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full uppercase tracking-wider font-bold"
-              >Flash 3.5</span
-            >
+          <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
+            <span class="text-[10px] font-medium text-textMuted">Red neuronal</span>
+            <span id="ui-current-model" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Flash 3.5</span>
           </div>
-          <div
-            class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5"
-          >
-            <span class="text-[10px] font-medium text-textMuted"
-              >Llamadas (Hoy)</span
-            >
-            <span
-              id="ui-peticiones"
-              class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold"
-              >0</span
-            >
+          <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
+            <span class="text-[10px] font-medium text-textMuted">Llamadas (Hoy)</span>
+            <span id="ui-peticiones" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
-          <div
-            class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5"
-          >
-            <span class="text-[10px] font-medium text-textMuted"
-              >Tokens Inyectados</span
-            >
-            <span
-              id="ui-tokens"
-              class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold"
-              >0</span
-            >
+          <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
+            <span class="text-[10px] font-medium text-textMuted">Tokens Inyectados</span>
+            <span id="ui-tokens" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
           </div>
         </div>
       </div>
+      
+      <button onclick="toggleMainSidebar()" class="absolute bottom-6 -right-3.5 bg-surface border border-borderGray rounded-full p-1 text-textMuted hover:text-charcoal hover:border-charcoal transition-all shadow-sm z-50">
+          <i data-lucide="chevron-left" class="w-4 h-4" id="sidebar-chevron"></i>
+      </button>
     </aside>
 
     <main class="flex-1 h-full overflow-hidden relative bg-background">
@@ -627,18 +617,28 @@
         ======================== -->
       <section id="tab-resumenes" class="tab-content flex h-full fade-in">
         <div
-          class="w-72 border-r border-borderGray bg-surface flex flex-col h-full"
+          id="biblioteca-sidebar"
+          class="w-72 border-r border-borderGray bg-surface flex flex-col h-full relative flex-shrink-0"
         >
           <div
-            class="p-4 text-[10px] font-bold text-textMuted uppercase tracking-wider border-b border-borderGray"
+            class="p-4 border-b border-borderGray flex justify-between items-center whitespace-nowrap"
           >
-            Biblioteca de Apuntes
+            <div class="text-[10px] font-bold text-textMuted uppercase tracking-wider flex items-center gap-2">
+              <i data-lucide="library" class="w-3.5 h-3.5"></i>
+              Biblioteca
+            </div>
+            <button onclick="toggleBiblioteca()" class="text-textMuted hover:text-charcoal transition p-1 rounded hover:bg-borderGray/50" aria-label="Ocultar biblioteca">
+              <i data-lucide="panel-left-close" class="w-4 h-4"></i>
+            </button>
           </div>
           <div
             id="summaries-list"
             class="flex-1 overflow-y-auto px-3 py-3 space-y-1 text-sm"
           ></div>
         </div>
+        <button onclick="toggleBiblioteca()" id="btn-show-biblioteca" class="absolute top-4 left-4 z-10 bg-surface border border-borderGray rounded p-2 text-textMuted hover:text-charcoal shadow-sm transition-all hidden" aria-label="Mostrar biblioteca">
+           <i data-lucide="panel-left-open" class="w-4 h-4"></i>
+        </button>
         <div class="flex-1 overflow-y-auto px-16 py-20 flex flex-col">
           <div id="content-header" class="flex justify-end mb-8 hidden">
             <button
@@ -698,18 +698,18 @@
                 data-lucide="upload-cloud"
                 class="w-4 h-4 text-emerald-500"
               ></i>
-              Cargar Audio de Respaldo
+              Cargar Material de Respaldo
             </h3>
             <p class="text-xs text-textMuted mb-4">
-              Sube un archivo de audio (.webm, .ogg, .mp4, etc.) guardado
-              localmente cuando el servidor estuvo desconectado.
+              Sube un archivo .zip generado por la extensión, o selecciona múltiples archivos a la vez (audio .webm + imágenes .jpg, o .json de respaldo).
             </p>
 
             <div class="flex gap-2">
               <input
                 type="file"
                 id="backup-audio-input"
-                accept="audio/*,video/*"
+                accept="audio/*,video/*,image/*,.zip,.json"
+                multiple
                 class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray"
               />
               <button
@@ -752,7 +752,6 @@
               class="bg-surface text-xs rounded-md px-3 py-1.5 border border-borderGray font-medium"
             >
               <option value="todas">Todo el Semestre</option>
-              <option value="default">Materia General</option>
             </select>
           </div>
         </div>
@@ -852,7 +851,7 @@
               id="tutor-materia-select"
               class="bg-surface text-xs rounded-md px-3 py-2 border border-borderGray font-medium"
             >
-              <option value="todas">Todas las materias</option>
+              <option value="" disabled selected>Selecciona una asignatura...</option>
             </select>
             <button
               id="btn-iniciar-tutor"
@@ -1128,6 +1127,24 @@
 
                   <label
                     class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 border-t border-borderGray/60 pt-6"
+                    >Límite de la Papelera</label
+                  >
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      id="config-papelera-items"
+                      class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
+                      placeholder="Ej. 10"
+                      min="1"
+                      max="100"
+                    />
+                  </div>
+                  <p class="text-xs text-textMuted mt-3 leading-relaxed mb-6">
+                    Número máximo de sesiones (carpetas de audio e imágenes) que se conservarán en la papelera antes de ser eliminadas permanentemente.
+                  </p>
+
+                  <label
+                    class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 border-t border-borderGray/60 pt-6"
                     >Memoria RAG (Documentos Máximos)</label
                   >
                   <div class="flex gap-2">
@@ -1182,25 +1199,19 @@
                   <div class="pt-4 border-t border-borderGray/60">
                     <label
                       class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2"
-                      >Navegador para extracción de Drive (Bypass)</label
+                      >Carpeta de Respaldo de Extensión</label
                     >
-                    <select
-                      id="config-browser-cookie"
-                      class="w-full rounded-md p-3 text-sm bg-background border border-borderGray cursor-pointer focus:border-charcoal outline-none transition-all"
-                    >
-                      <option value="brave">Brave Browser</option>
-                      <option value="chrome">Google Chrome</option>
-                      <option value="firefox">Mozilla Firefox</option>
-                      <option value="chromium">Chromium</option>
-                      <option value="edge">Microsoft Edge</option>
-                      <option value="opera">Opera</option>
-                    </select>
+                    <input
+                      type="text"
+                      id="config-extension-backup"
+                      class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
+                      placeholder="Ej. Backups_Clases/"
+                    />
                     <p class="text-xs text-textMuted mt-3 leading-relaxed">
-                      Selecciona el navegador principal donde mantienes la
-                      sesión activa de Google Drive para permitir el Bypass de
-                      cookies.
+                      Subcarpeta dentro de tus Descargas donde la extensión guardará los respaldos de emergencia (.zip) si el servidor falla.
                     </p>
                   </div>
+
                 </div>
               </div>
             </div>
@@ -1231,6 +1242,14 @@
 
     <div id="toast-container"></div>
     <script>
+      // Configurar Marked para soportar KaTeX (matemáticas)
+      if (window.marked && window.markedKatex) {
+        marked.use(markedKatex({
+          throwOnError: false,
+          output: "html"
+        }));
+      }
+
       // Theme logic
       const themeBtn = document.getElementById("theme-toggle");
 
@@ -1248,6 +1267,30 @@
         const isDark = document.documentElement.classList.contains("dark");
         setTheme(!isDark);
       });
+
+      // Sidebar logic
+      function toggleMainSidebar() {
+        const sidebar = document.getElementById("main-sidebar");
+        const chevron = document.getElementById("sidebar-chevron");
+        sidebar.classList.toggle("collapsed");
+        if (sidebar.classList.contains("collapsed")) {
+            chevron.setAttribute("data-lucide", "chevron-right");
+        } else {
+            chevron.setAttribute("data-lucide", "chevron-left");
+        }
+        lucide.createIcons();
+      }
+
+      function toggleBiblioteca() {
+        const sidebar = document.getElementById("biblioteca-sidebar");
+        const showBtn = document.getElementById("btn-show-biblioteca");
+        sidebar.classList.toggle("collapsed");
+        if (sidebar.classList.contains("collapsed")) {
+            showBtn.classList.remove("hidden");
+        } else {
+            showBtn.classList.add("hidden");
+        }
+      }
 
       // Toast System
       function showToast(message, type = "info") {
@@ -1392,10 +1435,12 @@
               data.max_audio_upload_mb || 500;
             document.getElementById("config-rag-max-docs").value =
               data.rag_max_docs || 8;
+            document.getElementById("config-papelera-items").value =
+              data.max_papelera_items || 10;
 
-            if (data.browser_cookie_source) {
-              document.getElementById("config-browser-cookie").value =
-                data.browser_cookie_source;
+            if (data.extension_backup_dir) {
+              document.getElementById("config-extension-backup").value =
+                data.extension_backup_dir;
             }
             if (data.default_model) {
               document.getElementById("model-selector").value =
@@ -1411,11 +1456,11 @@
 
       function saveAppSettings() {
         const path = document.getElementById("config-obsidian-path").value;
-        const browserSource = document.getElementById(
-          "config-browser-cookie",
-        ).value;
+        const extensionBackupDir = document.getElementById("config-extension-backup").value;
         const maxAudioMB =
           parseInt(document.getElementById("config-max-audio-mb").value) || 500;
+        const maxPapeleraItems =
+          parseInt(document.getElementById("config-papelera-items").value) || 10;
         const ragMaxDocs =
           parseInt(document.getElementById("config-rag-max-docs").value) || 8;
         const selectedModel = document.getElementById("model-selector").value;
@@ -1430,8 +1475,9 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             obsidian_vault_path: path,
-            browser_cookie_source: browserSource,
+            extension_backup_dir: extensionBackupDir,
             max_audio_upload_mb: maxAudioMB,
+            max_papelera_items: maxPapeleraItems,
             rag_max_docs: ragMaxDocs,
             default_model: selectedModel,
           }),
@@ -1636,13 +1682,13 @@
             const tutorSelect = document.getElementById("tutor-materia-select");
 
             chatSelect.innerHTML =
-              '<option value="todas">Todo el Semestre</option><option value="default">Materia General</option>';
+              '<option value="todas">Todo el Semestre</option>';
             if (tarjetasSelect)
               tarjetasSelect.innerHTML =
                 '<option value="todas">Todas las materias</option>';
             if (tutorSelect)
               tutorSelect.innerHTML =
-                '<option value="todas">Todas las materias</option>';
+                '<option value="" disabled selected>Selecciona una asignatura...</option>';
 
             data.forEach((m) => {
               chatSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
@@ -1885,7 +1931,7 @@
               return;
             }
 
-            let options = '<option value="default">Materia General</option>';
+            let options = '<option value="" disabled selected>Selecciona una asignatura...</option>';
             materias.forEach(
               (m) =>
                 (options += `<option value="${m.id}">${m.nombre}</option>`),
@@ -2100,6 +2146,11 @@
         const select = document.getElementById(`sel-${filename}`);
         const a = window.audiosMap[filename];
 
+        if (!select.value) {
+          showToast("Por favor selecciona una asignatura para extraer apuntes.", "error");
+          return;
+        }
+
         const payload = {
           filename: filename,
           materia_id: select.value,
@@ -2133,30 +2184,45 @@
         const btn = document.getElementById("btn-backup-upload");
 
         if (!input.files || input.files.length === 0) {
-          showToast("Por favor, selecciona un archivo de audio.", "error");
+          showToast("Por favor, selecciona archivos de respaldo.", "error");
           return;
         }
 
-        const file = input.files[0];
+        const files = Array.from(input.files);
+        let audioFile = null;
+        let imageFiles = [];
+        let jsonFile = null;
+        let zipFile = null;
+        let customName = "";
 
-        // Validaciones
-        const maxMBStr =
-          document.getElementById("config-max-audio-mb")?.value || 500;
+        for (const file of files) {
+          const ext = file.name.split('.').pop().toLowerCase();
+          if (['webm', 'mp3', 'wav', 'ogg', 'm4a', 'mp4', 'aac'].includes(ext)) {
+            audioFile = file;
+          } else if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) {
+            imageFiles.push(file);
+          } else if (ext === 'json') {
+            jsonFile = file;
+          } else if (ext === 'zip') {
+            zipFile = file;
+          }
+        }
+
+        if (!zipFile && !audioFile) {
+          showToast("Debes incluir al menos un archivo de audio o un archivo .zip.", "error");
+          return;
+        }
+
+        const maxMBStr = document.getElementById("config-max-audio-mb")?.value || 500;
         const maxMB = parseInt(maxMBStr, 10);
-        if (file.size > maxMB * 1024 * 1024) {
+        const mainFile = zipFile || audioFile;
+
+        if (mainFile.size > maxMB * 1024 * 1024) {
           showToast(
-            `El archivo pesa ${(file.size / 1024 / 1024).toFixed(1)}MB. El límite es ${maxMB}MB (Ajustable en Preferencias).`,
-            "error",
+            `El archivo pesa ${(mainFile.size / 1024 / 1024).toFixed(1)}MB. El límite es ${maxMB}MB.`,
+            "error"
           );
           return;
-        }
-
-        const validExtensions = /\.(webm|mp3|wav|ogg|m4a|mp4|aac)$/i;
-        if (!validExtensions.test(file.name)) {
-          showToast(
-            "Formato no óptimo. Se recomiendan .webm, .m4a o .mp3 para mejor desempeño de IA.",
-            "warning",
-          );
         }
 
         const originalText = btn.innerHTML;
@@ -2168,15 +2234,40 @@
 
         try {
           const formData = new FormData();
-          formData.append("audio", file, file.name);
 
-          // Intentar extraer custom_name del nombre del archivo backup-NOMBRE-fecha.webm
-          let customName = "";
-          if (file.name.includes("backup-")) {
-            const parts = file.name.split("-");
+          if (mainFile.name.includes("backup-")) {
+            const parts = mainFile.name.split("-");
             if (parts.length >= 3 && parts[1].length > 0) {
               customName = parts[1];
               formData.append("custom_name", customName);
+            }
+          }
+
+          if (zipFile) {
+            formData.append("audio", zipFile, zipFile.name);
+          } else {
+            formData.append("audio", audioFile, audioFile.name);
+
+            if (jsonFile) {
+              const text = await jsonFile.text();
+              const data = JSON.parse(text);
+              if (data.capturas) {
+                data.capturas.forEach(cap => {
+                   const base64Data = cap.base64.split(',')[1] || cap.base64;
+                   const byteString = atob(base64Data);
+                   const arrayBuffer = new ArrayBuffer(byteString.length);
+                   const int8Array = new Uint8Array(arrayBuffer);
+                   for (let i = 0; i < byteString.length; i++) {
+                     int8Array[i] = byteString.charCodeAt(i);
+                   }
+                   const blob = new Blob([int8Array], { type: 'image/jpeg' });
+                   formData.append("imagenes", blob, cap.filename);
+                });
+              }
+            }
+
+            for (const img of imageFiles) {
+              formData.append("imagenes", img, img.name);
             }
           }
 
@@ -2186,17 +2277,18 @@
           });
 
           if (!response.ok) {
-            throw new Error(`Error HTTP: ${response.status}`);
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.detail || `Error HTTP: ${response.status}`);
           }
 
           const data = await response.json();
-          showToast(data.message || "Archivo subido correctamente.", "success");
+          showToast(data.message || "Material subido correctamente.", "success");
 
           input.value = "";
           loadAudios(); // Refrescar la lista de pendientes
         } catch (err) {
           console.error("Error subiendo backup:", err);
-          showToast("Error al subir el archivo.", "error");
+          showToast(err.message || "Error al subir el archivo.", "error");
         } finally {
           btn.innerHTML = originalText;
           btn.disabled = false;
@@ -2263,6 +2355,12 @@
       }
       // ====== TAB: TUTOR SOCRÁTICO ======
       function iniciarSimulacionTutor() {
+        const select = document.getElementById("tutor-materia-select");
+        if (!select.value) {
+           showToast("Por favor selecciona una asignatura primero.", "error");
+           return;
+        }
+
         tutorHistoryState = [];
         const historyDiv = document.getElementById("tutor-history");
         historyDiv.innerHTML = "";
@@ -2277,7 +2375,6 @@
         btn.disabled = false;
         btn.classList.remove("opacity-60", "cursor-not-allowed");
 
-        const select = document.getElementById("tutor-materia-select");
         const matName = select.options[select.selectedIndex].text;
 
         const inicioText = `¡Hola! Soy tu tutor virtual. He analizado tus apuntes de la materia **${matName}**. ¿Estás listo para comenzar con la primera pregunta de razonamiento para evaluar tus conocimientos?`;

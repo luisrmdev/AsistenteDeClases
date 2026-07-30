@@ -118,7 +118,7 @@ async def generate_prompt_for_materia(descripcion: str, modelo: str) -> tuple[st
 # Summary generation (audio → Gemini → Markdown + JSON)
 # ---------------------------------------------------------------------------
 
-def _build_summary_prompt(prompt_usar: str, fecha_actual: str) -> str:
+def _build_summary_prompt(prompt_usar: str, fecha_actual: str, materia_name: str) -> str:
     """
     Prompt Maestro Multi-Modal (v2).
     El sistema SIEMPRE recibe audio + capturas de pantalla.
@@ -145,9 +145,11 @@ Tu tarea es crear una nota de estudio de calidad profesional que cumpla ESTRICTA
    A. Técnico / Cheat Sheet: Inicia con > [!warning] o > [!info]. Pasos directos sin relleno. Bloques de código especificados.
    B. Teórico: Inicia con > [!summary] (Resumen Feynman). Desarrollo en viñetas. Ejemplos con > [!example].
 
-5. CERO NOTAS HUÉRFANAS: Al final incluye un enlace de Obsidian a un concepto relacionado (ej. [[Índice - Semestre actual]]).
+5. CERO NOTAS HUÉRFANAS: Al final incluye un enlace de Obsidian a la materia correspondiente (ej. [[Índice - {materia_name}]]).
 
 6. EXHAUSTIVIDAD OBLIGATORIA (PROPORCIONALIDAD): ¡NO COMPRIMAS EN EXCESO! El nivel de detalle debe ser directamente proporcional a la duración del audio y la cantidad de imágenes. Muestra todo el contenido relevante estructurado a profundidad.
+
+7. FORMATO MATEMÁTICO ESTRICTO: Para cualquier fórmula, ecuación o notación matemática, DEBES usar sintaxis LaTeX nativa. Usa $fórmula$ para matemáticas en línea y $$fórmula$$ para bloques matemáticos. JAMÁS uses texto plano. REGLA DE FRACCIONES: Para divisiones, usa SIEMPRE `\frac{a}{b}` en lugar de diagonales (`a/b`).
 
 Además, debes extraer reglas:
 Si en el audio el profesor explica un método de resolución específico, una fórmula propia, o exige explícitamente que los problemas se resuelvan de una manera particular (diferente a los libros), extráelo detalladamente en el array 'nuevas_reglas_profesor' del bloque JSON. Si no hay reglas nuevas en esta clase, deja el array vacío [].
@@ -192,6 +194,7 @@ async def generate_summary_from_audio(
     prompt_usar: str,
     modelo: str,
     image_paths: list = None,
+    materia_name: str = "Semestre actual"
 ) -> tuple[str, dict]:
     """
     Sube el audio + imágenes (SIEMPRE requeridas) a la Files API de Gemini,
@@ -204,7 +207,7 @@ async def generate_summary_from_audio(
     client = genai.Client()
     fecha_actual = datetime.now().strftime("%Y-%m-%d")
     # Single unified prompt — always multimodal
-    prompt_completo = _build_summary_prompt(prompt_usar, fecha_actual)
+    prompt_completo = _build_summary_prompt(prompt_usar, fecha_actual, materia_name)
 
 
     # --- Upload audio ---
@@ -372,18 +375,38 @@ async def chat_with_rag(
         "Eres mi tutor universitario experto. Basa tus respuestas ESTRICTAMENTE en mis "
         "documentos de estudio proporcionados. Si la información no está explícitamente en "
         "los apuntes, indica claramente que 'no se menciona en los apuntes de clase'."
+        "\nREGLA DE FORMATO MATEMÁTICO: Para toda ecuación, fórmula o notación matemática, "
+        "usa ESTRICTAMENTE sintaxis LaTeX ($fórmula$ para inline, $$fórmula$$ para bloque). "
+        "USA SIEMPRE `\\frac{a}{b}` para fracciones y divisiones; PROHIBIDO usar diagonales (`/`)."
     )
-    materia_name = materia_id if materia_id and materia_id != "default" else "general"
-    reglas_filepath = _os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
-    if _os.path.exists(reglas_filepath):
-        with open(reglas_filepath, "r", encoding="utf-8") as rf:
-            reglas_adicionales = rf.read()
-            if reglas_adicionales.strip():
-                sys_instruction += (
-                    "\n\nERES UN ASISTENTE ESTUDIANTIL. DEBES OBEDECER ESTRICTAMENTE LAS "
-                    "SIGUIENTES REGLAS Y MÉTODOS DEL PROFESOR AL RESOLVER PROBLEMAS:\n"
-                    + reglas_adicionales
-                )
+    if materia_id == "todas":
+        reglas_totales = ""
+        if _os.path.exists(MEMORIA_DIR):
+            for f in _os.listdir(MEMORIA_DIR):
+                if f.startswith("reglas_") and f.endswith(".md"):
+                    with open(_os.path.join(MEMORIA_DIR, f), "r", encoding="utf-8") as rf:
+                        content = rf.read().strip()
+                        if content:
+                            mat_name = f.replace("reglas_", "").replace(".md", "")
+                            reglas_totales += f"\n--- Reglas de {mat_name} ---\n{content}\n"
+        if reglas_totales:
+            sys_instruction += (
+                "\n\nERES UN ASISTENTE ESTUDIANTIL. DEBES OBEDECER ESTRICTAMENTE LAS "
+                "SIGUIENTES REGLAS Y MÉTODOS DE TUS PROFESORES AL RESOLVER PROBLEMAS:\n"
+                + reglas_totales
+            )
+    else:
+        materia_name = materia_id if materia_id and materia_id != "default" else "general"
+        reglas_filepath = _os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
+        if _os.path.exists(reglas_filepath):
+            with open(reglas_filepath, "r", encoding="utf-8") as rf:
+                reglas_adicionales = rf.read()
+                if reglas_adicionales.strip():
+                    sys_instruction += (
+                        "\n\nERES UN ASISTENTE ESTUDIANTIL. DEBES OBEDECER ESTRICTAMENTE LAS "
+                        "SIGUIENTES REGLAS Y MÉTODOS DEL PROFESOR AL RESOLVER PROBLEMAS:\n"
+                        + reglas_adicionales
+                    )
 
     # 6. Llamada a Gemini
     client = genai.Client()
@@ -476,7 +499,10 @@ async def tutor_chat_with_rag(
         "Reglas:\n"
         "Haz UNA pregunta a la vez.\n"
         "Evalúa la respuesta del alumno. Si acierta, felicítalo brevemente y sube la dificultad con otra pregunta del material.\n"
-        "Si se equivoca, no le des la respuesta; guíalo socráticamente con pistas hasta que lo entienda."
+        "Si se equivoca, no le des la respuesta; guíalo socráticamente con pistas hasta que lo entienda.\n"
+        "REGLA DE FORMATO MATEMÁTICO: Para toda ecuación, fórmula o notación matemática, "
+        "usa ESTRICTAMENTE sintaxis LaTeX ($fórmula$ para inline, $$fórmula$$ para bloque). "
+        "USA SIEMPRE `\\frac{a}{b}` para fracciones y divisiones; PROHIBIDO usar diagonales (`/`)."
     )
 
     materia_name = materia_id if materia_id and materia_id != "default" else "general"

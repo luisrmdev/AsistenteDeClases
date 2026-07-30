@@ -15,7 +15,7 @@ load_dotenv()
 # --- Constantes de rutas de archivos ---
 AUDIOS_DIR = "audios"
 RESUMENES_DIR = "resumenes"
-PAPELERA_DIR = "papelera_audios"
+PAPELERA_DIR = "papelera_sesiones"
 EXPORTACIONES_DIR = "exportaciones"
 MEMORIA_DIR = "memoria_ia"
 MATERIAS_FILE = "materias.json"
@@ -77,8 +77,9 @@ class JsonStore:
 # --- Instancias globales (una por archivo) ---
 settings_store = JsonStore(SETTINGS_FILE, default={
     "obsidian_vault_path": os.getenv("OBSIDIAN_VAULT_PATH", ""),
-    "browser_cookie_source": "brave",
+    "extension_backup_dir": "Backups_Clases/",
     "max_audio_upload_mb": 500,
+    "max_papelera_items": 10,
     "default_model": "gemini-3.1-flash-lite",
     "rag_max_docs": 8,
 })

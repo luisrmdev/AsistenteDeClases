@@ -37,8 +37,8 @@ AsistenteClases/
     ├── manifest.json      Permisos: tabCapture, scripting, tabs, storage, downloads.
     ├── background.js      Service Worker: orquestador de grabación + silencio + fallbacks.
     ├── offscreen.js       MediaRecorder + IndexedDB (chunks + screenshots) + upload multimodal.
-    ├── popup.html         UI con tabs Grabar / Clase Drive (guía) / Capturar Tarjeta / Ajustes.
-    └── popup.js           UI controller para grabación, capturas y extractor de tareas.
+    ├── popup.html         UI "Deep Midnight & Electric Cyan" con botones en píldora y tabs Grabar / Capturar Tarjeta / Ajustes.
+    └── popup.js           UI controller modular para grabación, capturas y extractor de tareas.
 ```
 
 ### `database.py` — Protección de Concurrencia
@@ -70,43 +70,26 @@ Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o 
   → popup.js: "Iniciar Grabación"
   → background.js: streamId via chrome.tabCapture
   → offscreen.js: MediaRecorder graba audio/webm en chunks de 5s → IndexedDB (store: 'chunks')
-  → Cada 5 min ó Alt+S (manual): captureVisibleTab → IndexedDB (store: 'screenshots')
+  → `background.js` usa `chrome.alarms` (intervalo configurable en UI) ó Alt+S (manual) → `captureVisibleTab` → IndexedDB (store: 'screenshots')
   → [Al detener] offscreen.js: ensambla Blob audio + lee screenshots de IndexedDB
   → FormData: campo 'audio' (Blob webm) + N campos 'imagenes' (Blob jpeg)
   → POST http://localhost:8000/upload
 
-  VALIDACIÓN ESTRICTA:
+  VALIDACIÓN Y REPARACIÓN ESTRICTA:
   → Si no llegan imágenes → HTTP 400 (regla del sistema)
   → Si tamaño > max_audio_upload_mb → HTTP 413
+  → Se repara la duración del archivo `.webm` mediante `ffmpeg -c copy` para reconstruir los metadatos de búsqueda (`Cues`) omitidos por `MediaRecorder`.
   → Guarda en audios/session_YYYYMMDD_HHMMSS[_nombre]/
       ├── meet_TIMESTAMP.webm
       ├── captura_000_t0s.jpg
       ├── captura_001_t300s.jpg
       └── ...
 
-  FALLBACK (si servidor no responde):
-  → Intenta generar .zip (audio + imágenes) via JSZip
-  → Si falla: descarga audio .webm + capturas como JSON base64
+  FALLBACK (si servidor no responde o rechaza la subida):
+  → Genera un .zip (audio + imágenes) en memoria usando JSZip.
+  → Descarga el archivo de forma nativa directamente desde el contexto activo (`offscreen.js` o `popup.js`).
+  → Si JSZip no está disponible, descarga el `.webm` de audio y un `.json` con imágenes en base64 de forma separada.
 ```
-
-### Punto de Entrada B — Clase Grabada en Google Drive (mismo flujo de tabCapture)
-
-> **DECISIÓN DE DISEÑO v1.2**: Google Workspace con `preventDownload` bloquea toda descarga programática (yt-dlp, fetch, chrome.downloads con URLs de videoplayback). La solución es usar **el mismo mecanismo de tabCapture** que funciona para clases en vivo: el usuario reproduce el video de Drive en el navegador y graba el audio de la pestaña.
-
-```
-[Usuario abre video de clase grabada en Google Drive]
-  → Reproduce el video en el navegador (la cuenta institucional tiene permiso de reproducción)
-  → Abre la extensión → Tab "Grabar Audio" → "Iniciar Grabación"
-  → tabCapture captura todo el audio que suena en la pestaña
-  → Alt+S o botón cámara para capturar momentos clave
-  → Al terminar → "Finalizar" → pipeline idéntico al Punto de Entrada A
-
-  TIP DE VELOCIDAD:
-  → Consola del navegador: document.querySelector('video').playbackRate = 4
-  → Una clase de 2h se graba en ~30 min. El audio queda intacto para la IA.
-```
-
-La pestaña "Clase Drive" en el popup es una **guía paso a paso** (sin lógica JS) que explica este flujo.
 
 ### Núcleo — Cola de Procesamiento (Worker Asíncrono)
 
@@ -126,8 +109,8 @@ Worker (asyncio task, polling cada 5s):
   → audio_service.cleanup_temp()
   → export_service.save_markdown_and_metadata()
   → export_service.save_to_obsidian(image_paths=[...])  ← copia a vault/Adjuntos/
-  → Limpia session_dir completo del filesystem
-  → shutil.move(audio → papelera_audios/) → retención 10 archivos
+  → shutil.move(session_dir → papelera_sesiones/) ← mueve directorio multimodal completo a papelera
+  → Aplica rotación de papelera (limite max_backups_almacenados definido en preferencias)
 ```
 
 ### Prompt Maestro Multi-Modal (Único, sin bifurcaciones)
@@ -148,7 +131,7 @@ AsistenteClases/
 │       ├── meet_*.webm     Audio de la clase.
 │       ├── captura_000_*.jpg
 │       └── captura_NNN_*.jpg
-├── papelera_audios/        Audios procesados. Límite: 10 archivos.
+├── papelera_sesiones/      Sesiones procesadas. Límite: rotación automática.
 ├── resumenes/              CORAZÓN DE DATOS.
 │   ├── *.md                Resúmenes (Markdown con Frontmatter YAML + links ![[imagen]]).
 │   ├── resumenes_meta.json Índice central (meta_store con Lock).
@@ -192,8 +175,9 @@ tags: [tag1, tag2]
 ```json
 {
   "obsidian_vault_path": "/ruta/boveda/",
-  "browser_cookie_source": "brave",
+  "extension_backup_dir": "Backups_Clases/",
   "max_audio_upload_mb": 500,
+  "max_papelera_items": 10,
   "rag_max_docs": 8,
   "default_model": "gemini-3.1-flash-lite"
 }
@@ -204,7 +188,8 @@ tags: [tag1, tag2]
 [{
   "id": "uuid",
   "filename": "meet_*.webm",
-  "session_dir": "audios/session_TIMESTAMP/",
+  "session_name": "session_TIMESTAMP",
+  "session_dir": "ruta/absoluta/audios/session_TIMESTAMP/",
   "image_filenames": ["captura_000_t0s.jpg"],
   "materia_id": "uuid",
   "modelo_elegido": "gemini-3.1-flash-lite",
@@ -254,6 +239,11 @@ tags: [tag1, tag2]
 - `POST /api/extract-task { image_base64 }` → `llm_service.extract_task_from_image()`.
 - Crea .md + tarjeta informativa + copia a Obsidian.
 
+### 5.7 Resolución de Rutas Multimedia (Seguridad)
+
+- El backend usa helpers (`_media_url`, `_public_session_dir`) para exponer rutas consistentes `/media/session_.../archivo.jpg` sin filtrar rutas locales del sistema operativo.
+- El frontend utiliza `session_name` en lugar de `session_dir` para orquestar los endpoints DELETE de imágenes y sesiones, garantizando portabilidad multiplataforma.
+
 ### 5.7 Validación Multi-Capa del Upload (OOM-safe)
 
 **Capa 0 — Regla Estricta (sin imágenes → HTTP 400)**:
@@ -276,6 +266,12 @@ Lee audio e imágenes en fragmentos. Si la suma supera el límite, borra el `ses
 
 - `llm_service.update_stats()` usa `stats_store.update()` (con Lock) en cada llamada.
 - Se resetea automáticamente si la fecha no coincide con hoy.
+
+### 5.10 Renderizado Matemático Universal (LaTeX)
+
+- Integración de **KaTeX** en el frontend (más rápido que MathJax), enganchado a `marked.js` a través de `marked-katex-extension`.
+- La UI renderiza fórmulas nativas tanto en la vista de resúmenes (Markdown), como en el Chat Normal y el Tutor Socrático.
+- **Enforcement en el Backend**: Los prompts maestros de *Generación*, *Chat* y *Tutor* imponen el uso de sintaxis estricta `$fórmula$` (inline) y `$$fórmula$$` (bloque). Además, fuerzan el comando `\frac{a}{b}` en lugar de divisiones planas (`a/b`), garantizando notación matemática universitaria estándar.
 
 ---
 
@@ -304,7 +300,8 @@ Implementado en `llm_service.tutor_chat_with_rag()`.
 - Cambia únicamente el `system_instruction`:
   > *"Eres un profesor riguroso. Haz UNA pregunta a la vez. Si acierta, felicítalo y sube la dificultad. Si se equivoca, guíalo socráticamente con pistas."*
 - El frontend mantiene y envía el **historial completo** en cada petición (`historial: [{role, text}]`).
-- El RAG se inyecta solo en el primer mensaje del historial para no contaminar turnos posteriores.
+- El RAG se inyecta solo en el primer mensaje del usuario genuino del historial para no contaminar turnos posteriores.
+- Se filtran mensajes generativos iniciales de la UI para no romper el formato esperado por la API de Gemini.
 - Endpoint en dashboard: pestaña **"Sala de Estudio"** en el sidebar.
 
 ---
@@ -352,7 +349,7 @@ La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) 
 
 | Escenario | Comportamiento |
 |---|---|
-| Backend falla durante upload | Intenta ZIP (audio + imágenes) via JSZip; si no disponible → audio .webm + JSON base64 |
+| Backend falla durante upload | Intenta ZIP (audio + imágenes) via JSZip; si falla → audio .webm + JSON base64. El Dashboard web acepta ambos formatos (incluso .zip directo y extrae en el servidor). |
 | Browser/PC crashea | Disaster Recovery en arranque de popup: ensambla chunks huérfanos + limpia screenshots huérfanos |
 
 **Botones del popup según estado**:
@@ -404,35 +401,6 @@ La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) 
 | Tablón de Avisos | `tab-tarjetas` | Grid de tarjetas informativas filtradas por materia |
 | Sala de Estudio | `tab-tutor` | Tutor Socrático: selector de materia + botón "Iniciar Simulación" + chat |
 | Asignaturas | `tab-materias` | CRUD de asignaturas con generación de prompt asistida |
-| Preferencias | `tab-config` | Ruta Obsidian, modelo, límites RAG, browser cookie |
+| Preferencias | `tab-config` | Ruta Obsidian, modelo, límites RAG, carpeta de respaldo de extensión |
 
----
 
-## 10. Historial de Cambios
-
-### Sesión 2026-07-28 — Limpieza Drive v1.2
-
-| Área | Cambio |
-|---|---|
-| **Decisión arquitectónica** | Eliminada la extracción directa de audio desde Drive. Google Workspace con `preventDownload` bloquea toda descarga programática. El flujo para clases grabadas usa tabCapture (reproducir video + grabar audio de la pestaña). |
-| `extension/manifest.json` | v1.2: eliminados permisos `webRequest`, `webNavigation`, `cookies`. `host_permissions` acotado a `localhost:8000` y `127.0.0.1:8000` (antes era `<all_urls>`). |
-| `extension/background.js` | Eliminado: espía de red `chrome.webRequest.onBeforeRequest`, `doDriveExtraction()`, handlers `GET_DRIVE_AUDIO_URL`, `DRIVE_EXTRACT_DONE`, `EXTRACT_DRIVE_AUDIO`. De 542 → 236 líneas. |
-| `extension/popup.html` | Tab "Clase Drive" convertido de formulario interactivo (inputs + botones + screenshots) a guía estática de 4 pasos con tip de velocidad 4x. Eliminados: `driveExtractBtn`, `driveScreenshotBtn`, `driveDurationInput`, `driveResetBtn`. |
-| `extension/popup.js` | Eliminado: `extractDriveClass()`, `uploadDriveSession()`, `readAllScreenshotsFromDB()`, `updateDriveUI()`, `addScreenshotToDB()`, listeners de `isExtractingDrive`, `DRIVE_EXTRACT_SUCCESS`. De 828 → 478 líneas. |
-| `server.py` | Eliminados 4 endpoints: `POST /api/upload-drive/init`, `/chunk/{s}`, `/import-local/{s}`, `/finish/{s}`. Eliminado `import requests`. De 1043 → 899 líneas. |
-| `requirements.txt` | Eliminada dependencia `yt-dlp`. |
-| Archivos eliminados | `test_drive_url.js`, `test_download.py`, `patch_server.py` — scripts de test/parcheo ya obsoletos. |
-
-### Sesión 2026-07-27 — Pipeline Multi-Modal v3.1
-
-| Área | Cambio |
-|---|---|
-| **Paradigma** | Sistema pasa a ser estrictamente multi-modal. No existe flujo solo-audio. |
-| `extension/offscreen.js` | IndexedDB v2 (stores: chunks + screenshots). Time-lapse 5min. Captura manual. Upload FormData multi-archivo. Fallback ZIP/JSON. |
-| `server.py /upload` | HTTP 400 si no llegan imágenes. Guarda sesión en `audios/session_TIMESTAMP/`. |
-| `server.py /api/generate` | `GenerateRequest` acepta `session_dir` + `image_filenames`. Worker resuelve rutas y pasa `image_paths` al LLM. Limpia `session_dir` completo tras completar. |
-| `server.py /api/audios` | Lista sesiones (subdirectorios) y archivos legacy. Expone `image_count`. |
-| `server.py` | Modificado endpoint `DELETE /api/audios/{filename:path}` para soportar borrado de archivos dentro de `session_dir`. Nuevo modelo `TutorChatRequest`. Nuevo endpoint `POST /api/tutor/chat`. |
-| `services/llm_service.py` | Prompt Maestro unificado (sin `has_images`). Regla 1 exige correlación audio-imagen y `![[img]]`. `generate_summary_from_audio` sube imágenes a Gemini Files API. Nueva función `tutor_chat_with_rag` (RAG reutilizado, system_instruction socrático, historial `types.Content`). |
-| `services/export_service.py` | `save_to_obsidian` siempre copia imágenes a `vault/Adjuntos/`. Sin condicional. |
-| `frontend/index.html` | Solucionados errores 404 de "Audios Pendientes" mapeando correctamente el `session_dir` en el backend, actualizando el `src` de los reproductores y pasando metadata de sesión completa en `processAudio()`. Nueva pestaña "Sala de Estudio" (Tutor Socrático). Nav con icono `graduation-cap`. JS: `tutorHistoryState`, `iniciarSimulacionTutor()`, `handleTutorSubmit()`. `loadMaterias()` pobla selector del tutor. |

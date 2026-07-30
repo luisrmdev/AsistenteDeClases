@@ -7,6 +7,8 @@ import os
 import re
 import shutil
 import uuid
+import zipfile
+import subprocess
 from datetime import datetime
 
 import asyncio
@@ -38,6 +40,37 @@ load_dotenv()
 # ===========================================================================
 # Worker Task Queue
 # ===========================================================================
+
+async def move_session_to_trash(target_path: str):
+    if not os.path.exists(target_path):
+        return
+        
+    settings = await settings_store.read()
+    max_papelera = settings.get("max_papelera_items", 10)
+    
+    basename = os.path.basename(target_path.rstrip("/\\"))
+    papelera_path = os.path.join(PAPELERA_DIR, basename)
+    
+    if os.path.exists(papelera_path):
+        papelera_path = os.path.join(PAPELERA_DIR, f"{uuid.uuid4().hex[:8]}_{basename}")
+        
+    shutil.move(target_path, papelera_path)
+    
+    papelera_items = []
+    for f in os.listdir(PAPELERA_DIR):
+        item_path = os.path.join(PAPELERA_DIR, f)
+        papelera_items.append((item_path, os.path.getmtime(item_path)))
+        
+    papelera_items.sort(key=lambda x: x[1], reverse=True)
+    
+    for old_item, _ in papelera_items[max_papelera:]:
+        try:
+            if os.path.isdir(old_item):
+                shutil.rmtree(old_item)
+            else:
+                os.remove(old_item)
+        except Exception:
+            pass
 
 async def worker_loop():
     while True:
@@ -88,11 +121,13 @@ async def worker_loop():
 
             # Configurar prompt
             prompt_usar = ""
+            materia_name = "Semestre actual"
             if pending["materia_id"] and pending["materia_id"] != "default":
                 materias = await materias_store.read()
                 m = next((m for m in materias if m["id"] == pending["materia_id"]), None)
                 if m:
                     prompt_usar = m["prompt_personalizado"]
+                    materia_name = m["nombre"]
 
             try:
                 # LLM Call — now passes image_paths for multi-modal
@@ -103,6 +138,7 @@ async def worker_loop():
                         prompt_usar,
                         pending.get("modelo_elegido", "gemini-3.1-flash-lite"),
                         image_paths=image_paths,
+                        materia_name=materia_name,
                     )
                 finally:
                     audio_service.cleanup_temp(upload_path, filepath)
@@ -156,30 +192,12 @@ async def worker_loop():
                     return ts
                 await cola_store.update(set_completed)
 
-                # --- Cleanup session directory (move audio to papelera, delete images) ---
+                # --- Cleanup session directory (move entire session to papelera) ---
                 if session_dir and os.path.isdir(session_dir):
-                    # Move audio to papelera
-                    papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
-                    shutil.move(filepath, papelera_path)
-                    # Delete entire session dir (images already copied to Obsidian)
-                    shutil.rmtree(session_dir, ignore_errors=True)
+                    await move_session_to_trash(session_dir)
                 else:
                     # Legacy: move single audio file
-                    papelera_path = os.path.join(PAPELERA_DIR, os.path.basename(filepath))
-                    shutil.move(filepath, papelera_path)
-
-                # Cleanup papelera (keep last 10)
-                papelera_files = sorted(
-                    [os.path.join(PAPELERA_DIR, f) for f in os.listdir(PAPELERA_DIR)
-                     if os.path.isfile(os.path.join(PAPELERA_DIR, f))],
-                    key=os.path.getmtime,
-                    reverse=True,
-                )
-                for old_file in papelera_files[10:]:
-                    try:
-                        os.remove(old_file)
-                    except Exception:
-                        pass
+                    await move_session_to_trash(filepath)
 
             except Exception as e:
                 def set_failed(ts):
@@ -292,8 +310,9 @@ class SummaryUpdate(BaseModel):
 
 class SettingsUpdate(BaseModel):
     obsidian_vault_path: str
-    browser_cookie_source: str = "brave"
+    extension_backup_dir: str = "Backups_Clases/"
     max_audio_upload_mb: int = 500
+    max_papelera_items: int = 10
     default_model: str = "gemini-3.1-flash-lite"
     rag_max_docs: int = 8
 
@@ -382,8 +401,9 @@ async def get_settings_endpoint():
 async def update_settings_endpoint(req: SettingsUpdate):
     async def _update(settings: dict) -> dict:
         settings["obsidian_vault_path"] = req.obsidian_vault_path
-        settings["browser_cookie_source"] = req.browser_cookie_source
+        settings["extension_backup_dir"] = req.extension_backup_dir
         settings["max_audio_upload_mb"] = req.max_audio_upload_mb
+        settings["max_papelera_items"] = req.max_papelera_items
         settings["default_model"] = req.default_model
         settings["rag_max_docs"] = req.rag_max_docs
         return settings
@@ -474,8 +494,8 @@ async def delete_audio_or_image(path: str):
         raise HTTPException(status_code=404, detail="Archivo o carpeta no encontrado")
     
     if os.path.isdir(target_path):
-        shutil.rmtree(target_path)
-        return {"message": "Sesión eliminada exitosamente"}
+        await move_session_to_trash(target_path)
+        return {"message": "Sesión movida a la papelera exitosamente"}
     
     if os.path.isfile(target_path):
         # Prevent deleting the last image
@@ -489,11 +509,17 @@ async def delete_audio_or_image(path: str):
         if target_path.lower().endswith(".webm"):
             session_dir = os.path.dirname(target_path)
             if session_dir != AUDIOS_DIR and os.path.basename(session_dir).startswith("session_"):
-                shutil.rmtree(session_dir)
-                return {"message": "Sesión eliminada exitosamente"}
+                await move_session_to_trash(session_dir)
+                return {"message": "Sesión movida a la papelera exitosamente"}
                 
-        os.remove(target_path)
-        return {"message": "Archivo eliminado exitosamente"}
+        # If it's just a single image being deleted manually (not the last one), we can just remove it
+        if target_path.lower().endswith((".jpg", ".jpeg", ".png", ".webp")):
+            os.remove(target_path)
+            return {"message": "Imagen eliminada exitosamente"}
+            
+        # Legacy single webm
+        await move_session_to_trash(target_path)
+        return {"message": "Archivo movido a la papelera exitosamente"}
 
 
 # ===========================================================================
@@ -541,9 +567,14 @@ async def upload_audio(
 
     session_dir = os.path.join(AUDIOS_DIR, session_name)
     os.makedirs(session_dir, exist_ok=True)
-    audio_filepath = os.path.join(session_dir, audio_filename)
+    
+    is_zip = audio.filename.lower().endswith(".zip")
+    if is_zip:
+        audio_filepath = os.path.join(session_dir, "temp.zip")
+    else:
+        audio_filepath = os.path.join(session_dir, audio_filename)
 
-    # --- Capa 2: Streaming del audio por chunks (OOM-safe) ---
+    # --- Capa 2: Streaming del audio (o zip) por chunks (OOM-safe) ---
     bytes_written = 0
     try:
         with open(audio_filepath, "wb") as f:
@@ -564,25 +595,63 @@ async def upload_audio(
         raise
     except Exception as e:
         shutil.rmtree(session_dir, ignore_errors=True)
-        raise HTTPException(status_code=500, detail=f"Error al guardar el audio: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al guardar el archivo principal: {e}")
 
-    # --- Guardar imágenes adjuntas ---
     image_filenames = []
-    for img_file in (imagenes or []):
-        if not img_file.filename:
-            continue
-        safe_img_name = re.sub(r"[^a-zA-Z0-9_.\-]", "_", img_file.filename)
-        img_path = os.path.join(session_dir, safe_img_name)
+
+    if is_zip:
+        # Extraer el ZIP
         try:
-            with open(img_path, "wb") as f:
-                while True:
-                    chunk = await img_file.read(CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    f.write(chunk)
-            image_filenames.append(safe_img_name)
+            with zipfile.ZipFile(audio_filepath, 'r') as zip_ref:
+                zip_ref.extractall(session_dir)
+            os.remove(audio_filepath) # Borramos el zip temporal
+            
+            # Buscar el archivo de audio y las imágenes
+            extracted_files = os.listdir(session_dir)
+            found_audio = False
+            for f in extracted_files:
+                f_lower = f.lower()
+                if not found_audio and f_lower.endswith((".webm", ".m4a", ".mp3", ".ogg", ".wav", ".aac", ".mp4")):
+                    # Renombrar al formato estándar
+                    os.rename(os.path.join(session_dir, f), os.path.join(session_dir, audio_filename))
+                    found_audio = True
+                elif f_lower.endswith((".jpg", ".jpeg", ".png", ".webp")):
+                    # Normalizar nombre
+                    safe_img_name = re.sub(r"[^a-zA-Z0-9_.\-]", "_", f)
+                    if safe_img_name != f:
+                        os.rename(os.path.join(session_dir, f), os.path.join(session_dir, safe_img_name))
+                    image_filenames.append(safe_img_name)
+                else:
+                    # Otros archivos no deseados (ej. basura de macOS)
+                    pass
+            
+            if not found_audio:
+                shutil.rmtree(session_dir, ignore_errors=True)
+                raise HTTPException(status_code=400, detail="No se encontró ningún archivo de audio válido dentro del ZIP.")
+                
+        except HTTPException:
+            raise
         except Exception as e:
-            print(f"[Upload] Error guardando imagen {safe_img_name}: {e}")
+            shutil.rmtree(session_dir, ignore_errors=True)
+            raise HTTPException(status_code=500, detail=f"Error al procesar el archivo ZIP: {e}")
+            
+    else:
+        # --- Guardar imágenes adjuntas ---
+        for img_file in (imagenes or []):
+            if not img_file.filename:
+                continue
+            safe_img_name = re.sub(r"[^a-zA-Z0-9_.\-]", "_", img_file.filename)
+            img_path = os.path.join(session_dir, safe_img_name)
+            try:
+                with open(img_path, "wb") as f:
+                    while True:
+                        chunk = await img_file.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                image_filenames.append(safe_img_name)
+            except Exception as e:
+                print(f"[Upload] Error guardando imagen {safe_img_name}: {e}")
 
     # --- REGLA ESTRICTA: el sistema EXIGE al menos 1 imagen ---
     if not image_filenames:
@@ -592,6 +661,24 @@ async def upload_audio(
             detail="Se requiere al menos una captura de pantalla junto al audio. "
                    "Usa Alt+S durante la clase para capturar momentos clave antes de enviar."
         )
+
+    # --- REPARAR DURACIÓN DEL WEBM ---
+    # MediaRecorder no escribe la duración ni los Cues (índice) en el archivo WebM.
+    # FFmpeg -c copy reescribe el contenedor de forma ultrarrápida, calculando la duración.
+    audio_full_path = os.path.join(session_dir, audio_filename)
+    if audio_filename.lower().endswith(".webm") and os.path.exists(audio_full_path):
+        temp_audio = audio_full_path + ".temp.webm"
+        try:
+            subprocess.run(
+                ["ffmpeg", "-y", "-i", audio_full_path, "-c", "copy", temp_audio],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
+            if os.path.exists(temp_audio):
+                os.replace(temp_audio, audio_full_path)
+        except Exception as e:
+            print(f"[Upload] Advertencia: No se pudo reparar metadatos WebM: {e}")
 
     print(f"[Upload] Sesión {session_name}: audio={audio_filename}, imágenes={image_filenames}")
 

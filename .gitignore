@@ -19,7 +19,7 @@ memoria_ia/
 .DS_Store
 
 # Runtime data & user config
-papelera_audios/
+papelera_sesiones/
 exportaciones/
 settings.json
 materias.json

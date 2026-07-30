@@ -5,8 +5,6 @@ const streams = {};
 const tempNames = {};
 const gainNodes = {};
 const cancelFlags = {};
-// Store screenshot capture intervals per tab
-const screenshotIntervals = {};
 // Track recording start time per tab (for screenshot timestamps)
 const recordingStartTimes = {};
 
@@ -150,15 +148,13 @@ chrome.runtime.onMessage.addListener(async (message) => {
   } else if (message.type === 'MANUAL_SCREENSHOT') {
     // Triggered by the manual button in popup.js during recording
     await captureAndStoreScreenshot(message.tabId, true);
+  } else if (message.type === 'AUTO_SCREENSHOT') {
+    // Triggered by background.js alarms API to prevent throttling
+    await captureAndStoreScreenshot(message.tabId, false);
   }
 });
 
 function pauseRecording(tabId) {
-  // Pause screenshot interval
-  if (screenshotIntervals[tabId]) {
-    clearInterval(screenshotIntervals[tabId]);
-    delete screenshotIntervals[tabId];
-  }
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state === 'recording') {
     mediaRecorder.pause();
@@ -167,8 +163,6 @@ function pauseRecording(tabId) {
 }
 
 function resumeRecording(tabId) {
-  // Resume screenshot interval
-  startScreenshotInterval(tabId);
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state === 'paused') {
     mediaRecorder.resume();
@@ -215,14 +209,7 @@ async function captureAndStoreScreenshot(tabId, isManual = false) {
   }
 }
 
-function startScreenshotInterval(tabId) {
-  // Clear any existing interval
-  if (screenshotIntervals[tabId]) clearInterval(screenshotIntervals[tabId]);
-  // Capture every 5 minutes (300000ms)
-  screenshotIntervals[tabId] = setInterval(async () => {
-    await captureAndStoreScreenshot(tabId);
-  }, 5 * 60 * 1000);
-}
+// Removed startScreenshotInterval as it was migrated to chrome.alarms in background.js
 
 // --- Recording Core ---
 async function startRecording(streamId, tabId, isGhost) {
@@ -266,12 +253,6 @@ async function startRecording(streamId, tabId, isGhost) {
     };
 
     mediaRecorder.onstop = async () => {
-      // Stop screenshot interval
-      if (screenshotIntervals[tabId]) {
-        clearInterval(screenshotIntervals[tabId]);
-        delete screenshotIntervals[tabId];
-      }
-
       if (cancelFlags[tabId]) {
         // Clean up without uploading
         if (streams[tabId]) streams[tabId].getTracks().forEach(track => track.stop());
@@ -316,9 +297,6 @@ async function startRecording(streamId, tabId, isGhost) {
 
     mediaRecorder.start(5000); // Chunking every 5 seconds
 
-    // Start time-lapse screenshot interval
-    startScreenshotInterval(tabId);
-
     // Take an initial screenshot immediately at second 0
     await captureAndStoreScreenshot(tabId);
 
@@ -340,10 +318,6 @@ function stopRecording(tabId, customName) {
 
 function cancelRecording(tabId) {
   cancelFlags[tabId] = true;
-  if (screenshotIntervals[tabId]) {
-    clearInterval(screenshotIntervals[tabId]);
-    delete screenshotIntervals[tabId];
-  }
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
@@ -392,13 +366,15 @@ async function uploadAudio(audioBlob, screenshots, tabId, customName) {
 // --- Fallback: Save everything locally ---
 async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
   try {
-    // Try to package as a .zip using JSZip (loaded via importScripts or dynamic import)
-    // If JSZip is not available, fall back to separate downloads
+    const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
+    let subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
+    subfolder = subfolder.replace(/^\/+/, ''); // Sanitize leading slash
+    if (subfolder && !subfolder.endsWith('/')) subfolder += '/';
+    const askAlways = result.backupAskAlways || false;
+
     let zipSuccess = false;
 
     try {
-      // Attempt dynamic JSZip import (requires jszip.min.js in extension)
-      // We try-catch so missing JSZip doesn't break the entire fallback
       const JSZip = await loadJSZip();
       if (JSZip) {
         const zip = new JSZip();
@@ -414,14 +390,10 @@ async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
         const zipUrl = URL.createObjectURL(zipBlob);
         const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
         const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
+        const filename = `${subfolder}backup-${safeCustomName}${dateStr}.zip`;
 
-        chrome.runtime.sendMessage({
-          target: 'background',
-          type: 'DOWNLOAD_FALLBACK_URL',
-          url: zipUrl,
-          filename: `backup-${safeCustomName}${dateStr}.zip`,
-          customName: customName,
-          tabId: tabId
+        chrome.downloads.download({ url: zipUrl, filename: filename, saveAs: askAlways }, () => {
+           if (chrome.runtime.lastError) console.error("Zip download failed:", chrome.runtime.lastError.message);
         });
         zipSuccess = true;
       }
@@ -430,17 +402,15 @@ async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
     }
 
     if (!zipSuccess) {
-      // Fallback B: Download audio .webm + JSON with screenshots in base64
       const audioUrl = URL.createObjectURL(audioBlob);
-      chrome.runtime.sendMessage({
-        target: 'background',
-        type: 'DOWNLOAD_FALLBACK_URL',
-        url: audioUrl,
-        customName: customName,
-        tabId: tabId
+      const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+      const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
+      const filename = `${subfolder}backup-${safeCustomName}${dateStr}.webm`;
+      
+      chrome.downloads.download({ url: audioUrl, filename: filename, saveAs: askAlways }, () => {
+         if (chrome.runtime.lastError) console.error("Audio download failed:", chrome.runtime.lastError.message);
       });
 
-      // If there are screenshots, build a base64 JSON
       if (screenshots.length > 0) {
         const screenshotData = await Promise.all(
           screenshots.map(async (shot, index) => {
@@ -460,15 +430,15 @@ async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
 
         const jsonBlob = new Blob([JSON.stringify({ capturas: screenshotData }, null, 2)], { type: 'application/json' });
         const jsonUrl = URL.createObjectURL(jsonBlob);
-        chrome.runtime.sendMessage({
-          target: 'background',
-          type: 'DOWNLOAD_FALLBACK_JSON',
-          url: jsonUrl,
-          customName: customName,
-          tabId: tabId
+        const jsonFilename = `${subfolder}backup-capturas-${safeCustomName}${dateStr}.json`;
+        
+        chrome.downloads.download({ url: jsonUrl, filename: jsonFilename, saveAs: askAlways }, () => {
+           if (chrome.runtime.lastError) console.error("JSON download failed:", chrome.runtime.lastError.message);
         });
       }
     }
+    
+    updateState(tabId, 'fallback_saved');
   } catch (e) {
     console.error('Fallback save failed:', e);
     updateState(tabId, 'error');

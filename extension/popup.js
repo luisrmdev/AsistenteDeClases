@@ -22,18 +22,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   const previewContainer = document.getElementById('previewContainer');
   const capturePreviewImg = document.getElementById('capturePreviewImg');
   const sendCaptureBtn = document.getElementById('sendCaptureBtn');
+  const cancelCaptureBtn = document.getElementById('cancelCaptureBtn');
+  const captureTaskBtnContainer = document.getElementById('captureTaskBtnContainer');
 
   const tabBtnAudio = document.getElementById('tab-btn-audio');
-  const tabBtnDrive = document.getElementById('tab-btn-drive');
   const tabBtnCapture = document.getElementById('tab-btn-capture');
   const tabAudio = document.getElementById('tab-audio');
-  const tabDrive = document.getElementById('tab-drive');
   const tabCapture = document.getElementById('tab-capture');
 
   const settingsBtn = document.getElementById('settingsBtn');
   const tabSettings = document.getElementById('tab-settings');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const backupSubfolder = document.getElementById('backupSubfolder');
+  const screenshotIntervalMin = document.getElementById('screenshotIntervalMin');
   const backupAskAlways = document.getElementById('backupAskAlways');
 
   let currentCaptureDataUrl = null;
@@ -86,12 +87,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             const blob = new Blob(chunks, { type: 'audio/webm' });
             const url = URL.createObjectURL(blob);
 
-            chrome.runtime.sendMessage({
-              target: 'background',
-              type: 'DOWNLOAD_FALLBACK_URL',
-              url: url,
-              customName: customName,
-              tabId: tabId
+            const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
+            let subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
+            subfolder = subfolder.replace(/^\/+/, ''); // Sanitize leading slash
+            if (subfolder && !subfolder.endsWith('/')) subfolder += '/';
+            const askAlways = result.backupAskAlways || false;
+            const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+            const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
+            const filename = `${subfolder}backup-${safeCustomName}${dateStr}.webm`;
+
+            chrome.downloads.download({ url: url, filename: filename, saveAs: askAlways }, (downloadId) => {
+              if (chrome.runtime.lastError) {
+                 console.error("Download failed in popup:", chrome.runtime.lastError.message);
+              }
+              chrome.runtime.sendMessage({ target: 'background', type: 'UPDATE_STATE', state: 'fallback_saved', tabId: tabId });
             });
 
             // Clean chunks
@@ -163,9 +172,32 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Load and save backup settings
-  chrome.storage.local.get(['backupSubfolder', 'backupAskAlways'], (result) => {
-    backupSubfolder.value = result.backupSubfolder !== undefined ? result.backupSubfolder : 'Backups_Clases/';
+  chrome.storage.local.get(['backupSubfolder', 'backupAskAlways', 'screenshotIntervalMin'], async (result) => {
+    let subfolder = result.backupSubfolder !== undefined ? result.backupSubfolder : 'Backups_Clases/';
+    
+    // Sync con el backend si está disponible
+    try {
+      const res = await fetch('http://localhost:8000/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.extension_backup_dir !== undefined) {
+          subfolder = data.extension_backup_dir;
+          chrome.storage.local.set({ backupSubfolder: subfolder });
+        }
+      }
+    } catch (e) {
+      console.log('Backend no disponible para sincronizar subcarpeta de backup');
+    }
+
+    backupSubfolder.value = subfolder;
     backupAskAlways.checked = result.backupAskAlways || false;
+    screenshotIntervalMin.value = result.screenshotIntervalMin || 5;
+  });
+
+  screenshotIntervalMin.addEventListener('change', () => {
+    let val = parseInt(screenshotIntervalMin.value);
+    if (isNaN(val) || val < 1) val = 5;
+    chrome.storage.local.set({ screenshotIntervalMin: val });
   });
 
   backupSubfolder.addEventListener('input', () => {
@@ -367,42 +399,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   // --- TABS LOGIC ---
   tabBtnAudio.addEventListener('click', () => {
     tabAudio.classList.remove('hidden');
-    tabDrive.classList.add('hidden');
     tabCapture.classList.add('hidden');
     tabSettings.classList.add('hidden');
     tabBtnAudio.className = 'segment-btn active';
-    tabBtnDrive.className = 'segment-btn';
-    tabBtnCapture.className = 'segment-btn';
-  });
-
-  tabBtnDrive.addEventListener('click', () => {
-    tabDrive.classList.remove('hidden');
-    tabAudio.classList.add('hidden');
-    tabCapture.classList.add('hidden');
-    tabSettings.classList.add('hidden');
-    tabBtnDrive.className = 'segment-btn active';
-    tabBtnAudio.className = 'segment-btn';
     tabBtnCapture.className = 'segment-btn';
   });
 
   tabBtnCapture.addEventListener('click', () => {
     tabCapture.classList.remove('hidden');
     tabAudio.classList.add('hidden');
-    tabDrive.classList.add('hidden');
     tabSettings.classList.add('hidden');
     tabBtnCapture.className = 'segment-btn active';
     tabBtnAudio.className = 'segment-btn';
-    tabBtnDrive.className = 'segment-btn';
   });
 
   settingsBtn.addEventListener('click', () => {
     tabAudio.classList.add('hidden');
     tabCapture.classList.add('hidden');
-    tabDrive.classList.add('hidden');
     tabSettings.classList.remove('hidden');
     tabBtnAudio.classList.remove('active');
     tabBtnCapture.classList.remove('active');
-    tabBtnDrive.classList.remove('active');
   });
 
   closeSettingsBtn.addEventListener('click', () => {
@@ -412,7 +428,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
 
-  // --- LOGICA DEL EXTRACTOR VISUAL DE TAREAS ---
   captureTaskBtn.addEventListener('click', () => {
     captureTaskBtn.disabled = true;
     captureStatus.classList.add('hidden');
@@ -428,9 +443,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
       currentCaptureDataUrl = dataUrl;
       capturePreviewImg.src = dataUrl;
+      captureTaskBtnContainer.classList.add('hidden');
       previewContainer.classList.remove('hidden');
       previewContainer.style.display = 'flex';
     });
+  });
+
+  cancelCaptureBtn.addEventListener('click', () => {
+    currentCaptureDataUrl = null;
+    previewContainer.classList.add('hidden');
+    previewContainer.style.display = 'none';
+    captureTaskBtnContainer.classList.remove('hidden');
+    captureStatus.classList.add('hidden');
   });
 
   sendCaptureBtn.addEventListener('click', async () => {
@@ -461,6 +485,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         captureStatus.classList.add('hidden');
         previewContainer.classList.add('hidden');
         previewContainer.style.display = 'none';
+        captureTaskBtnContainer.classList.remove('hidden');
         sendCaptureBtn.disabled = false;
         currentCaptureDataUrl = null;
       }, 4000);
