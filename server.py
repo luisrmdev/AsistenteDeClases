@@ -211,6 +211,23 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+def _public_session_dir(path: str | None) -> str | None:
+    if not path:
+        return None
+    return path.replace(os.sep, "/")
+
+
+def _session_name_from_dir(session_dir: str | None) -> str | None:
+    if not session_dir:
+        return None
+    return os.path.basename(session_dir.rstrip("/\\"))
+
+
+def _media_url(*parts: str) -> str:
+    clean_parts = [part.strip("/\\") for part in parts if part]
+    return "/media/" + "/".join(clean_parts)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -241,6 +258,7 @@ class GenerateRequest(BaseModel):
     filename: str
     materia_id: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
+    session_name: str = None
     session_dir: str = None
     image_filenames: list = []
 
@@ -414,7 +432,10 @@ async def list_pending_audios():
                 audios.append({
                     "filename": f,
                     "display_name": display_name,
-                    "session_dir": entry.path,
+                    "session_name": entry.name,
+                    "session_dir": _public_session_dir(os.path.join(AUDIOS_DIR, entry.name)),
+                    "audio_url": _media_url(entry.name, f),
+                    "image_urls": [_media_url(entry.name, img) for img in img_files],
                     "image_count": len(img_files),
                     "image_filenames": img_files,
                 })
@@ -434,7 +455,10 @@ async def list_pending_audios():
             audios.append({
                 "filename": f,
                 "display_name": display_name,
+                "session_name": None,
                 "session_dir": None,
+                "audio_url": _media_url(f),
+                "image_urls": [],
                 "image_count": 0,
                 "image_filenames": [],
             })
@@ -574,7 +598,10 @@ async def upload_audio(
     return {
         "message": "Sesión subida correctamente",
         "filename": audio_filename,
-        "session_dir": session_dir,
+        "session_name": session_name,
+        "session_dir": _public_session_dir(session_dir),
+        "audio_url": _media_url(session_name, audio_filename),
+        "image_urls": [_media_url(session_name, img) for img in image_filenames],
         "image_filenames": image_filenames,
     }
 
@@ -633,8 +660,12 @@ async def queue_generate_task(req: GenerateRequest):
     (session_dir + image_filenames) como el legado (filename en audios/ plano).
     """
     # Intentar localizar el audio: primero en session_dir (nuevo), luego plano (legado)
+    session_name = getattr(req, "session_name", None)
     session_dir = getattr(req, "session_dir", None)
     image_filenames = getattr(req, "image_filenames", []) or []
+
+    if session_name and not session_dir:
+        session_dir = os.path.join(AUDIOS_DIR, session_name)
 
     if session_dir:
         filepath = os.path.join(session_dir, req.filename)
@@ -651,7 +682,8 @@ async def queue_generate_task(req: GenerateRequest):
                     candidate = os.path.join(entry.path, req.filename)
                     if os.path.exists(candidate):
                         filepath = candidate
-                        session_dir = entry.path
+                        session_dir = os.path.join(AUDIOS_DIR, entry.name)
+                        session_name = entry.name
                         # Collect images in that session dir
                         image_filenames = [
                             f for f in os.listdir(session_dir)
@@ -670,6 +702,7 @@ async def queue_generate_task(req: GenerateRequest):
         ts.append({
             "id": task_id,
             "filename": req.filename,
+            "session_name": session_name,
             "session_dir": session_dir,
             "image_filenames": image_filenames,
             "materia_id": req.materia_id,

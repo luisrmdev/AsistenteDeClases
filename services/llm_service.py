@@ -498,23 +498,49 @@ async def tutor_chat_with_rag(
     
     # Añadimos el RAG como contexto en el primer mensaje de usuario o lo simulamos
     rag_context = f"ÍNDICE CONDENSADO:\n{indice_condensado}\nAPUNTES:\n{resumenes_completos}"
-    
-    if len(historial_mensajes) == 0:
-        # Primer turno
-        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=f"Contexto: {rag_context}\n\nPregunta: {pregunta_actual}")]))
+    historial_limpio = [
+        msg for msg in historial_mensajes
+        if msg.get("role") in {"user", "model"} and msg.get("text")
+    ]
+
+    # El mensaje inicial de la UI es solo decorativo; no debe contaminar el historial
+    while historial_limpio and historial_limpio[0].get("role") != "user":
+        historial_limpio.pop(0)
+
+    contexto_inyectado = False
+
+    if not historial_limpio:
+        contents.append(
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=f"Contexto: {rag_context}\n\nPregunta: {pregunta_actual}")],
+            )
+        )
     else:
-        # Reconstruir historial
-        for idx, msg in enumerate(historial_mensajes):
+        for msg in historial_limpio:
             role = msg.get("role", "user")
             text = msg.get("text", "")
-            
-            # Solo en el primer mensaje inyectar RAG
-            if idx == 0 and role == "user":
+
+            if not contexto_inyectado and role == "user":
                 text = f"Contexto: {rag_context}\n\nPregunta: {text}"
-                
+                contexto_inyectado = True
+
             contents.append(types.Content(role=role, parts=[types.Part.from_text(text=text)]))
-        
-        contents.append(types.Content(role="user", parts=[types.Part.from_text(text=pregunta_actual)]))
+
+        if not contexto_inyectado:
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=f"Contexto: {rag_context}\n\nPregunta: {pregunta_actual}")],
+                )
+            )
+        else:
+            contents.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text=pregunta_actual)],
+                )
+            )
 
     res = client.models.generate_content(
         model=modelo,

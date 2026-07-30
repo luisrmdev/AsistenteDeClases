@@ -1275,6 +1275,12 @@
         }, 4000);
       }
 
+      function escapeHTML(text) {
+        const element = document.createElement("div");
+        element.textContent = text;
+        return element.innerHTML;
+      }
+
       // State
       let materias = [];
       let currentAudioFile = "";
@@ -1889,26 +1895,24 @@
             data.audios.forEach((a) => {
               window.audiosMap[a.filename] = a;
 
-              let mediaSrc = `/media/${a.filename}`;
+              let mediaSrc = a.audio_url || `/media/${a.filename}`;
               let imagesHtml = "";
-              if (a.session_dir) {
-                // Extract just the session_xxxxx folder name
-                const sessionFolderName = a.session_dir.split("/").pop();
-                mediaSrc = `/media/${sessionFolderName}/${a.filename}`;
-
-                if (a.image_filenames && a.image_filenames.length > 0) {
+              if (a.image_urls && a.image_urls.length > 0) {
+                if (a.session_name) {
                   const carouselId = `carousel-${a.filename.replace(/[^a-zA-Z0-9]/g, "_")}`;
-                  const imgListJson = JSON.stringify(
-                    a.image_filenames.map(
-                      (img) => `/media/${sessionFolderName}/${img}`,
-                    ),
-                  ).replace(/"/g, "&quot;");
+                  const imgListJson = JSON.stringify(a.image_urls).replace(
+                    /"/g,
+                    "&quot;",
+                  );
                   imagesHtml = `<div class="img-carousel-wrapper">`;
                   imagesHtml += `<button class="img-carousel-arrow left" onclick="scrollCarousel('${carouselId}', -1)" title="Anterior"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>`;
                   imagesHtml += `<button class="img-carousel-arrow right" onclick="scrollCarousel('${carouselId}', 1)" title="Siguiente"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>`;
                   imagesHtml += `<div class="img-carousel-track" id="${carouselId}">`;
-                  a.image_filenames.forEach((img, idx) => {
-                    const imgSrc = `/media/${sessionFolderName}/${img}`;
+                  a.image_urls.forEach((imgSrc, idx) => {
+                    const img =
+                      a.image_filenames && a.image_filenames[idx]
+                        ? a.image_filenames[idx]
+                        : imgSrc.split("/").pop();
                     imagesHtml += `
                                         <div class="relative group img-carousel-thumb" id="img-container-${img}">
                                             <img src="${imgSrc}" class="h-20 w-32 object-cover rounded border border-borderGray" title="${img}" onclick="openImagePreview('${imgSrc}', '${img}', ${idx}, ${imgListJson})">
@@ -1958,9 +1962,8 @@
         if (confirm("¿Descartar esta sesión permanentemente?")) {
           const a = window.audiosMap[filename];
           let pathToDelete = filename;
-          if (a && a.session_dir) {
-            const sessionFolderName = a.session_dir.split("/").pop();
-            pathToDelete = `${sessionFolderName}/${filename}`;
+          if (a && a.session_name) {
+            pathToDelete = `${a.session_name}/${filename}`;
           }
           fetch(`/api/audios/${pathToDelete}`, { method: "DELETE" }).then(() =>
             loadAudios(),
@@ -1979,9 +1982,8 @@
         }
         if (confirm("¿Eliminar esta imagen de la sesión?")) {
           let pathToDelete = imgFilename;
-          if (a && a.session_dir) {
-            const sessionFolderName = a.session_dir.split("/").pop();
-            pathToDelete = `${sessionFolderName}/${imgFilename}`;
+          if (a && a.session_name) {
+            pathToDelete = `${a.session_name}/${imgFilename}`;
           }
           fetch(`/api/audios/${pathToDelete}`, { method: "DELETE" }).then(
             (res) => {
@@ -2103,6 +2105,7 @@
           materia_id: select.value,
           modelo_elegido:
             localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite",
+          session_name: a ? a.session_name : null,
           session_dir: a ? a.session_dir : null,
           image_filenames: a ? a.image_filenames || [] : [],
         };
