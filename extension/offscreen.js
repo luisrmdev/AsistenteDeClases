@@ -350,15 +350,19 @@ async function uploadAudio(audioBlob, screenshots, tabId, customName) {
 
     if (response.ok) {
       console.log('Upload successful (audio + screenshots)');
-      updateState(tabId, 'completed');
       await deleteChunksFromDB(tabId);
       await deleteScreenshotsFromDB(tabId);
+      updateState(tabId, 'completed');
     } else {
       console.error('Upload failed:', response.statusText);
       await saveLocallyFallback(audioBlob, screenshots, customName, tabId);
     }
   } catch (error) {
-    console.error('Error uploading:', error);
+    if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+      console.warn('Network error or Extension Reload detected. Upload aborted. Triggering local backup fallback...', error.message);
+    } else {
+      console.error('Error uploading:', error);
+    }
     await saveLocallyFallback(audioBlob, screenshots, customName, tabId);
   }
 }
@@ -367,92 +371,43 @@ async function uploadAudio(audioBlob, screenshots, tabId, customName) {
 async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
   try {
     const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
-    let subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
-    subfolder = subfolder.replace(/^\/+/, ''); // Sanitize leading slash
-    if (subfolder && !subfolder.endsWith('/')) subfolder += '/';
-    const askAlways = result.backupAskAlways || false;
+    let rootSubfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
+    rootSubfolder = rootSubfolder.replace(/^\/+/, ''); // Sanitize leading slash
+    if (rootSubfolder && !rootSubfolder.endsWith('/')) rootSubfolder += '/';
+    
+    // We ignore askAlways for backups to prevent spamming the user with 20 popups
+    // All files will go directly to the specific folder.
+    
+    const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
+    const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'sesion';
+    
+    // Create a unique folder for this specific session backup
+    const sessionFolder = `${rootSubfolder}${safeCustomName}_${dateStr}/`;
 
-    let zipSuccess = false;
+    // 1. Download Audio
+    const audioUrl = URL.createObjectURL(audioBlob);
+    const audioFilename = `${sessionFolder}grabacion.webm`;
+    
+    chrome.downloads.download({ url: audioUrl, filename: audioFilename, saveAs: false }, () => {
+       if (chrome.runtime.lastError) console.error("Audio download failed:", chrome.runtime.lastError.message);
+    });
 
-    try {
-      const JSZip = await loadJSZip();
-      if (JSZip) {
-        const zip = new JSZip();
-        zip.file('grabacion.webm', audioBlob);
-
-        screenshots.forEach((shot, index) => {
-          const paddedIndex = String(index).padStart(3, '0');
-          const filename = `captura_${paddedIndex}_t${shot.tiempo_segundos}s.jpg`;
-          zip.file(filename, shot.image_blob);
-        });
-
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        const zipUrl = URL.createObjectURL(zipBlob);
-        const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-        const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
-        const filename = `${subfolder}backup-${safeCustomName}${dateStr}.zip`;
-
-        chrome.downloads.download({ url: zipUrl, filename: filename, saveAs: askAlways }, () => {
-           if (chrome.runtime.lastError) console.error("Zip download failed:", chrome.runtime.lastError.message);
-        });
-        zipSuccess = true;
-      }
-    } catch (zipErr) {
-      console.warn('[Fallback] JSZip not available, falling back to separate files:', zipErr);
-    }
-
-    if (!zipSuccess) {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-      const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
-      const filename = `${subfolder}backup-${safeCustomName}${dateStr}.webm`;
-      
-      chrome.downloads.download({ url: audioUrl, filename: filename, saveAs: askAlways }, () => {
-         if (chrome.runtime.lastError) console.error("Audio download failed:", chrome.runtime.lastError.message);
-      });
-
-      if (screenshots.length > 0) {
-        const screenshotData = await Promise.all(
-          screenshots.map(async (shot, index) => {
-            const reader = new FileReader();
-            const base64 = await new Promise((resolve) => {
-              reader.onload = () => resolve(reader.result);
-              reader.readAsDataURL(shot.image_blob);
-            });
-            return {
-              index,
-              tiempo_segundos: shot.tiempo_segundos,
-              filename: `captura_${String(index).padStart(3, '0')}_t${shot.tiempo_segundos}s.jpg`,
-              base64
-            };
-          })
-        );
-
-        const jsonBlob = new Blob([JSON.stringify({ capturas: screenshotData }, null, 2)], { type: 'application/json' });
-        const jsonUrl = URL.createObjectURL(jsonBlob);
-        const jsonFilename = `${subfolder}backup-capturas-${safeCustomName}${dateStr}.json`;
+    // 2. Download Screenshots
+    if (screenshots && screenshots.length > 0) {
+      screenshots.forEach((shot, index) => {
+        const paddedIndex = String(index).padStart(3, '0');
+        const imgFilename = `${sessionFolder}captura_${paddedIndex}_t${shot.tiempo_segundos}s.jpg`;
+        const imgUrl = URL.createObjectURL(shot.image_blob);
         
-        chrome.downloads.download({ url: jsonUrl, filename: jsonFilename, saveAs: askAlways }, () => {
-           if (chrome.runtime.lastError) console.error("JSON download failed:", chrome.runtime.lastError.message);
+        chrome.downloads.download({ url: imgUrl, filename: imgFilename, saveAs: false }, () => {
+           if (chrome.runtime.lastError) console.error(`Screenshot ${index} download failed:`, chrome.runtime.lastError.message);
         });
-      }
+      });
     }
     
     updateState(tabId, 'fallback_saved');
   } catch (e) {
     console.error('Fallback save failed:', e);
     updateState(tabId, 'error');
-  }
-}
-
-// Attempt to load JSZip (bundled in extension dir as jszip.min.js)
-async function loadJSZip() {
-  try {
-    // JSZip can be loaded via importScripts in service worker context
-    // In offscreen document context, we use a dynamic <script> approach
-    if (typeof JSZip !== 'undefined') return JSZip;
-    return null;
-  } catch {
-    return null;
   }
 }

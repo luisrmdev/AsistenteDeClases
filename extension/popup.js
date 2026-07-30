@@ -87,38 +87,55 @@ document.addEventListener('DOMContentLoaded', async () => {
             const blob = new Blob(chunks, { type: 'audio/webm' });
             const url = URL.createObjectURL(blob);
 
-            const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
-            let subfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
-            subfolder = subfolder.replace(/^\/+/, ''); // Sanitize leading slash
-            if (subfolder && !subfolder.endsWith('/')) subfolder += '/';
-            const askAlways = result.backupAskAlways || false;
+            const result = await chrome.storage.local.get(['backupSubfolder']);
+            let rootSubfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
+            rootSubfolder = rootSubfolder.replace(/^\/+/, ''); // Sanitize leading slash
+            if (rootSubfolder && !rootSubfolder.endsWith('/')) rootSubfolder += '/';
+            
             const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-            const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') + '-' : '';
-            const filename = `${subfolder}backup-${safeCustomName}${dateStr}.webm`;
+            const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'sesion';
+            const sessionFolder = `${rootSubfolder}${safeCustomName}_${dateStr}/`;
 
-            chrome.downloads.download({ url: url, filename: filename, saveAs: askAlways }, (downloadId) => {
+            // Download audio
+            const filename = `${sessionFolder}grabacion.webm`;
+            chrome.downloads.download({ url: url, filename: filename, saveAs: false }, (downloadId) => {
               if (chrome.runtime.lastError) {
-                 console.error("Download failed in popup:", chrome.runtime.lastError.message);
+                 console.error("Audio download failed in popup:", chrome.runtime.lastError.message);
               }
               chrome.runtime.sendMessage({ target: 'background', type: 'UPDATE_STATE', state: 'fallback_saved', tabId: tabId });
             });
 
-            // Clean chunks
+            // Recover and download screenshots, then clean them up
+            if (db.objectStoreNames.contains('screenshots')) {
+              const sTx = db.transaction('screenshots', 'readonly');
+              const sStore = sTx.objectStore('screenshots');
+              const sReq = sStore.getAll();
+              sReq.onsuccess = () => {
+                const tabScreenshots = sReq.result.filter(s => s.tabId === tabId);
+                
+                // Download each screenshot
+                tabScreenshots.sort((a, b) => a.tiempo_segundos - b.tiempo_segundos).forEach((shot, index) => {
+                  const paddedIndex = String(index).padStart(3, '0');
+                  const imgFilename = `${sessionFolder}captura_${paddedIndex}_t${shot.tiempo_segundos}s.jpg`;
+                  const imgUrl = URL.createObjectURL(shot.image_blob);
+                  chrome.downloads.download({ url: imgUrl, filename: imgFilename, saveAs: false }, () => {
+                     if (chrome.runtime.lastError) console.error("Screenshot download failed:", chrome.runtime.lastError.message);
+                  });
+                });
+
+                // Clean downloaded screenshots from IndexedDB
+                const delTx = db.transaction('screenshots', 'readwrite');
+                const delStore = delTx.objectStore('screenshots');
+                tabScreenshots.forEach(s => delStore.delete(s.id));
+              };
+            }
+
+            // Clean audio chunks
             const dTx = db.transaction('chunks', 'readwrite');
             const dStore = dTx.objectStore('chunks');
             allChunks.filter(c => c.tabId === tabId).forEach(c => {
               dStore.delete(c.id);
             });
-
-            // Clean orphaned screenshots too
-            if (db.objectStoreNames.contains('screenshots')) {
-              const sTx = db.transaction('screenshots', 'readwrite');
-              const sStore = sTx.objectStore('screenshots');
-              const sReq = sStore.getAll();
-              sReq.onsuccess = () => {
-                sReq.result.filter(s => s.tabId === tabId).forEach(s => sStore.delete(s.id));
-              };
-            }
           }
         }
       };

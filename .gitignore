@@ -7,8 +7,8 @@ env/
 .env
 
 # Media and Generated Data
-# audios/ contiene sesiones (audio + screenshots) pendientes de procesar
-audios/
+# grabaciones/ contiene sesiones (audio + screenshots) pendientes de procesar
+grabaciones/
 resumenes/
 memoria_ia/
 
@@ -23,9 +23,8 @@ papelera_sesiones/
 exportaciones/
 settings.json
 materias.json
-stats.json
 # Cola de procesamiento asíncrona (estado runtime, se regenera al iniciar)
-cola_procesamiento.json
+resumenes/cola_tareas.json
 
 # Dev / Audit artifacts
 model_output.txt

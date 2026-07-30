@@ -98,6 +98,8 @@ async def worker_loop():
             # --- Resolve paths from session_dir (new) or legacy filename (old) ---
             session_dir = pending.get("session_dir")  # e.g. "audios/session_20260727_1530"
             if session_dir:
+                # Blindaje Multi-OS: Asegura que las barras coincidan con el sistema operativo actual (Linux/Windows)
+                session_dir = os.path.normpath(session_dir)
                 audio_filename = pending["filename"]
                 filepath = os.path.join(session_dir, audio_filename)
                 image_filenames = pending.get("image_filenames", [])
@@ -122,23 +124,50 @@ async def worker_loop():
             # Configurar prompt
             prompt_usar = ""
             materia_name = "Semestre actual"
+            temperatura = 0.3
             if pending["materia_id"] and pending["materia_id"] != "default":
                 materias = await materias_store.read()
                 m = next((m for m in materias if m["id"] == pending["materia_id"]), None)
                 if m:
                     prompt_usar = m["prompt_personalizado"]
                     materia_name = m["nombre"]
+                    temperatura = m.get("temperatura", 0.3)
 
             try:
+                settings = await settings_store.read()
+                silence_db = settings.get("audio_silence_db", -30)
+                
+                # --- Preparar Imágenes (Renombrar y Copiar a Adjuntos) ---
+                from database import ADJUNTOS_DIR
+                renamed_image_paths = []
+                if image_paths and session_dir:
+                    session_id = os.path.basename(session_dir.rstrip("/\\")).replace("session_", "")
+                    for img in image_paths:
+                        basename = os.path.basename(img)
+                        if not basename.startswith(session_id):
+                            new_basename = f"{session_id}_{basename}"
+                            new_path = os.path.join(session_dir, new_basename)
+                            os.rename(img, new_path)
+                        else:
+                            new_path = img
+                            new_basename = basename
+                            
+                        # Copiar a adjuntos permanentemente
+                        dest = os.path.join(ADJUNTOS_DIR, new_basename)
+                        shutil.copy2(new_path, dest)
+                        renamed_image_paths.append(new_path)
+                    image_paths = renamed_image_paths
+
                 # LLM Call — now passes image_paths for multi-modal
-                upload_path = audio_service.remove_silences(filepath)
+                upload_path = audio_service.remove_silences(filepath, silence_threshold_db=silence_db)
                 try:
-                    texto, stats = await llm_service.generate_summary_from_audio(
+                    texto = await llm_service.generate_summary_from_audio(
                         upload_path,
                         prompt_usar,
                         pending.get("modelo_elegido", "gemini-3.1-flash-lite"),
                         image_paths=image_paths,
                         materia_name=materia_name,
+                        temperatura=temperatura
                     )
                 finally:
                     audio_service.cleanup_temp(upload_path, filepath)
@@ -148,13 +177,18 @@ async def worker_loop():
                 fecha_str = datetime.now().strftime("%Y-%m-%d")
 
                 md_filename = pending["filename"].replace(".webm", ".md")
+                mat_id = pending["materia_id"] if (pending.get("materia_id") and pending["materia_id"] != "default") else "default"
+                
                 if md_filename.startswith("meet_"):
-                    mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
                     md_filename = md_filename.replace("meet_", f"resumen__{mat_id}__meet_")
 
                 suggested_filename = json_data.get("filename", md_filename).replace("/", "-")
                 if not suggested_filename.endswith(".md"):
                     suggested_filename += ".md"
+                    
+                if f"__{mat_id}__" not in suggested_filename:
+                    suggested_filename = f"resumen__{mat_id}__{suggested_filename}"
+
                 suggested_folder = json_data.get("folder", "")
 
                 tags_match = re.search(r"tags:\s*\[(.*?)\]", texto_limpio, re.IGNORECASE)
@@ -254,8 +288,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Servir archivos de audio via /media
+# Servir archivos de audio y adjuntos
 app.mount("/media", StaticFiles(directory=AUDIOS_DIR), name="media")
+from database import ADJUNTOS_DIR
+app.mount("/adjuntos", StaticFiles(directory=ADJUNTOS_DIR), name="adjuntos")
 
 
 # ===========================================================================
@@ -265,11 +301,13 @@ app.mount("/media", StaticFiles(directory=AUDIOS_DIR), name="media")
 class MateriaCreate(BaseModel):
     nombre: str
     prompt_personalizado: str
+    temperatura: float = 0.3
 
 
 class MateriaUpdate(BaseModel):
     nombre: str
     prompt_personalizado: str
+    temperatura: float = 0.3
 
 
 class GenerateRequest(BaseModel):
@@ -315,6 +353,15 @@ class SettingsUpdate(BaseModel):
     max_papelera_items: int = 10
     default_model: str = "gemini-3.1-flash-lite"
     rag_max_docs: int = 8
+    nlp_threshold: float = 1.0
+    audio_silence_db: int = -30
+    
+    # Prompts Core
+    prompt_maestro_resumenes: str | None = None
+    prompt_chat_rag: str | None = None
+    prompt_tutor_socratico: str | None = None
+    prompt_generator_sys: str | None = None
+    prompt_tarea_extractor: str | None = None
 
 
 class TaskExtractRequest(BaseModel):
@@ -326,10 +373,6 @@ class TaskExtractRequest(BaseModel):
 # Stats
 # ===========================================================================
 
-@app.get("/api/stats")
-async def get_stats_endpoint():
-    return await llm_service.get_or_reset_stats()
-
 
 # ===========================================================================
 # Materias
@@ -337,7 +380,17 @@ async def get_stats_endpoint():
 
 @app.get("/api/materias")
 async def get_materias():
-    return await materias_store.read()
+    materias = await materias_store.read()
+    if not os.path.exists(RESUMENES_DIR):
+        for m in materias:
+            m["doc_count"] = 0
+        return materias
+        
+    files = [f for f in os.listdir(RESUMENES_DIR) if f.endswith(".md")]
+    for m in materias:
+        m["doc_count"] = sum(1 for f in files if f"__{m['id']}__" in f)
+        
+    return materias
 
 
 @app.post("/api/materias")
@@ -346,6 +399,7 @@ async def create_materia(materia: MateriaCreate):
         "id": str(uuid.uuid4()),
         "nombre": materia.nombre,
         "prompt_personalizado": materia.prompt_personalizado,
+        "temperatura": materia.temperatura,
     }
 
     async def _append(materias: list) -> list:
@@ -365,6 +419,7 @@ async def update_materia(materia_id: str, materia: MateriaUpdate):
             if m["id"] == materia_id:
                 m["nombre"] = materia.nombre
                 m["prompt_personalizado"] = materia.prompt_personalizado
+                m["temperatura"] = materia.temperatura
                 found.update(m)
         return materias
 
@@ -394,7 +449,29 @@ async def delete_materia(materia_id: str):
 
 @app.get("/api/settings")
 async def get_settings_endpoint():
-    return await settings_store.read()
+    settings = await settings_store.read()
+    
+    from services.llm_service import (
+        DEFAULT_PROMPT_MAESTRO,
+        DEFAULT_PROMPT_CHAT,
+        DEFAULT_PROMPT_TUTOR,
+        DEFAULT_PROMPT_GENERATOR,
+        DEFAULT_PROMPT_EXTRACTOR
+    )
+    
+    # Inyectar los valores por defecto si no existen en el json
+    if not settings.get("prompt_maestro_resumenes"):
+        settings["prompt_maestro_resumenes"] = DEFAULT_PROMPT_MAESTRO
+    if not settings.get("prompt_chat_rag"):
+        settings["prompt_chat_rag"] = DEFAULT_PROMPT_CHAT
+    if not settings.get("prompt_tutor_socratico"):
+        settings["prompt_tutor_socratico"] = DEFAULT_PROMPT_TUTOR
+    if not settings.get("prompt_generator_sys"):
+        settings["prompt_generator_sys"] = DEFAULT_PROMPT_GENERATOR
+    if not settings.get("prompt_tarea_extractor"):
+        settings["prompt_tarea_extractor"] = DEFAULT_PROMPT_EXTRACTOR
+        
+    return settings
 
 
 @app.put("/api/settings")
@@ -406,6 +483,20 @@ async def update_settings_endpoint(req: SettingsUpdate):
         settings["max_papelera_items"] = req.max_papelera_items
         settings["default_model"] = req.default_model
         settings["rag_max_docs"] = req.rag_max_docs
+        settings["nlp_threshold"] = req.nlp_threshold
+        settings["audio_silence_db"] = req.audio_silence_db
+        
+        if req.prompt_maestro_resumenes is not None:
+            settings["prompt_maestro_resumenes"] = req.prompt_maestro_resumenes
+        if req.prompt_chat_rag is not None:
+            settings["prompt_chat_rag"] = req.prompt_chat_rag
+        if req.prompt_tutor_socratico is not None:
+            settings["prompt_tutor_socratico"] = req.prompt_tutor_socratico
+        if req.prompt_generator_sys is not None:
+            settings["prompt_generator_sys"] = req.prompt_generator_sys
+        if req.prompt_tarea_extractor is not None:
+            settings["prompt_tarea_extractor"] = req.prompt_tarea_extractor
+            
         return settings
 
     await settings_store.update(_update)
@@ -700,10 +791,10 @@ async def upload_audio(
 @app.post("/api/generate-prompt")
 async def generate_prompt(req: PromptGenRequest):
     try:
-        prompt_generado, stats = await llm_service.generate_prompt_for_materia(
+        prompt_generado = await llm_service.generate_prompt_for_materia(
             req.descripcion, req.modelo_elegido
         )
-        return {"prompt_generado": prompt_generado, "stats": stats}
+        return {"prompt_generado": prompt_generado}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -715,23 +806,23 @@ async def generate_prompt(req: PromptGenRequest):
 @app.post("/api/chat")
 async def chat_estudio(req: ChatRequest):
     try:
-        respuesta, stats = await llm_service.chat_with_rag(
+        respuesta = await llm_service.chat_with_rag(
             req.mensaje, req.materia_id, req.modelo_elegido
         )
-        return {"respuesta": respuesta, "stats": stats}
+        return {"respuesta": respuesta}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/tutor/chat")
 async def tutor_chat(req: TutorChatRequest):
     try:
-        respuesta, stats = await llm_service.tutor_chat_with_rag(
+        respuesta = await llm_service.tutor_chat_with_rag(
             historial_mensajes=req.historial,
             pregunta_actual=req.pregunta,
             materia_id=req.materia_id,
             modelo=req.modelo_elegido
         )
-        return {"respuesta": respuesta, "stats": stats}
+        return {"respuesta": respuesta}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -838,6 +929,9 @@ async def list_summaries():
     files = [f for f in os.listdir(RESUMENES_DIR) if f.endswith(".md")]
     files.sort(key=lambda x: os.path.getmtime(os.path.join(RESUMENES_DIR, x)), reverse=True)
 
+    materias_list = await materias_store.read()
+    mat_dict = {m.get("id"): m.get("nombre", "Desconocida") for m in materias_list}
+
     summaries = []
     for f in files:
         clean_name = re.sub(r"__.*?__", "", f).replace("resumen_meet_", "").replace(".md", "")
@@ -850,6 +944,15 @@ async def list_summaries():
             display_name = f"{custom_name} ({date_str})" if custom_name else f"Reunión {date_str}"
         else:
             display_name = f
+            
+        # Parse materia_id from filename (resumen__materia_id__...)
+        materia_id = "default"
+        materia_name = "General"
+        match = re.search(r"__(.*?)__", f)
+        if match:
+            materia_id = match.group(1)
+            if materia_id != "default":
+                materia_name = mat_dict.get(materia_id, "Desconocida")
 
         try:
             mtime = os.path.getmtime(os.path.join(RESUMENES_DIR, f))
@@ -857,7 +960,13 @@ async def list_summaries():
         except Exception:
             created_at = "Fecha desconocida"
 
-        summaries.append({"filename": f, "display_name": display_name, "created_at": created_at})
+        summaries.append({
+            "filename": f, 
+            "display_name": display_name, 
+            "created_at": created_at,
+            "materia_id": materia_id,
+            "materia_name": materia_name
+        })
     return {"summaries": summaries}
 
 
@@ -986,20 +1095,8 @@ async def extract_task_from_image(req: TaskExtractRequest):
         texto, _ = await llm_service.extract_task_from_image(img_bytes, modelo)
         json_data, texto_limpio = llm_service.extract_json_block(texto)
 
-        suggested_filename = json_data.get(
-            "filename",
-            f"Tarea_Captura_{datetime.now().strftime('%Y%m%d%H%M%S')}.md",
-        ).replace("/", "-")
-        if not suggested_filename.endswith(".md"):
-            suggested_filename += ".md"
-        suggested_folder = json_data.get("folder", "01 Proyectos/Tareas")
-
-        # Guardar .md local
-        with open(os.path.join(RESUMENES_DIR, suggested_filename), "w", encoding="utf-8") as f:
-            f.write(texto_limpio)
-
-        # Guardar en Obsidian
-        await export_service.save_to_obsidian(suggested_filename, suggested_folder, texto_limpio)
+        # El usuario solicitó no crear archivos .md ni pasarlos a Obsidian para tareas/anuncios.
+        # Las tareas capturadas irán únicamente al Tablón de Avisos (tarjetas_informativas.json)
 
         # Guardar tarjetas informativas
         if json_data.get("tarjetas_informativas"):
@@ -1008,7 +1105,7 @@ async def extract_task_from_image(req: TaskExtractRequest):
                 json_data["tarjetas_informativas"], "Captura_Pantalla", "default", fecha_str
             )
 
-        return {"message": "Tarea extraída y guardada correctamente", "filename": suggested_filename}
+        return {"message": "Tarea extraída y añadida al Tablón de Avisos correctamente", "filename": "Solo Tablón"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

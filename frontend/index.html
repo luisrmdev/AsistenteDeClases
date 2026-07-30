@@ -595,14 +595,6 @@
             <span class="text-[10px] font-medium text-textMuted">Red neuronal</span>
             <span id="ui-current-model" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Flash 3.5</span>
           </div>
-          <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
-            <span class="text-[10px] font-medium text-textMuted">Llamadas (Hoy)</span>
-            <span id="ui-peticiones" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
-          </div>
-          <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
-            <span class="text-[10px] font-medium text-textMuted">Tokens Inyectados</span>
-            <span id="ui-tokens" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full font-bold">0</span>
-          </div>
         </div>
       </div>
       
@@ -621,7 +613,7 @@
           class="w-72 border-r border-borderGray bg-surface flex flex-col h-full relative flex-shrink-0"
         >
           <div
-            class="p-4 border-b border-borderGray flex justify-between items-center whitespace-nowrap"
+            class="p-4 flex justify-between items-center whitespace-nowrap"
           >
             <div class="text-[10px] font-bold text-textMuted uppercase tracking-wider flex items-center gap-2">
               <i data-lucide="library" class="w-3.5 h-3.5"></i>
@@ -630,6 +622,11 @@
             <button onclick="toggleBiblioteca()" class="text-textMuted hover:text-charcoal transition p-1 rounded hover:bg-borderGray/50" aria-label="Ocultar biblioteca">
               <i data-lucide="panel-left-close" class="w-4 h-4"></i>
             </button>
+          </div>
+          <div class="px-4 pb-3 border-b border-borderGray">
+             <select id="doc-materia-filter" onchange="loadSummaries()" class="w-full bg-background border border-borderGray rounded text-xs p-2 text-charcoal font-medium focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all">
+                <option value="todas">Todas las materias</option>
+             </select>
           </div>
           <div
             id="summaries-list"
@@ -945,94 +942,59 @@
           class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 transition-opacity duration-300"
         >
           <div
-            class="bg-background rounded-xl shadow-2xl border border-borderGray w-full max-w-[460px] max-h-[90vh] overflow-y-auto transform scale-95 transition-transform duration-300 p-8"
+            class="bg-background rounded-xl shadow-2xl border border-borderGray w-full max-w-[1000px] max-h-[90vh] flex flex-col transform scale-95 transition-transform duration-300"
             id="materia-modal-content"
           >
-            <div class="flex justify-between items-center mb-6">
-              <h3
-                class="text-lg font-serif font-bold text-charcoal"
-                id="mat-form-title"
-              >
-                Nueva Asignatura
-              </h3>
-              <button
-                onclick="closeMateriaModal()"
-                class="text-textMuted hover:text-charcoal transition-colors"
-              >
+            <div class="p-8 pb-6 border-b border-borderGray flex justify-between items-center shrink-0">
+              <h3 class="text-lg font-serif font-bold text-charcoal" id="mat-form-title">Nueva Asignatura</h3>
+              <button onclick="closeMateriaModal()" class="text-textMuted hover:text-charcoal transition-colors">
                 <i data-lucide="x" class="w-5 h-5"></i>
               </button>
             </div>
 
-            <div class="space-y-6">
-              <div>
-                <label
-                  class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2"
-                  >Nombre de la Clase</label
-                >
-                <input
-                  type="text"
-                  id="mat-nombre"
-                  class="w-full rounded-md p-3 text-sm bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all"
-                  placeholder="Ej. Biología Celular Avanzada"
-                />
+            <div class="p-8 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-8">
+              <!-- Left Column -->
+              <div class="space-y-6 flex flex-col">
+                  <div>
+                    <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2">Nombre de la Clase</label>
+                    <input type="text" id="mat-nombre" class="w-full rounded-md p-3 text-sm bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all" placeholder="Ej. Biología Celular Avanzada" />
+                  </div>
+
+                  <div class="p-5 bg-surface rounded-xl border border-borderGray relative flex-1 flex flex-col min-h-[320px]">
+                    <label class="block text-[10px] font-bold text-charcoal uppercase tracking-wider mb-2">Ingeniería de Prompt Automática</label>
+                    <p class="text-xs text-textMuted mb-4 leading-relaxed">Describe brevemente cómo quieres que actúe la IA en esta clase.</p>
+                    <textarea id="mat-natural" class="w-full flex-1 rounded-md p-3 text-sm border border-borderGray bg-background mb-4 focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all resize-none" placeholder="Ej. Actúa como un experto y extrae solo las definiciones..."></textarea>
+                    <button onclick="generatePrompt()" id="btn-gen-prompt" class="btn-secondary w-full text-xs font-bold py-2.5 flex justify-center items-center gap-2 hover:bg-borderGray transition-colors mt-auto shrink-0">
+                      <i data-lucide="sparkles" class="w-4 h-4"></i>
+                      <span>Traducir a Prompt Técnico</span>
+                    </button>
+                  </div>
               </div>
 
-              <div
-                class="p-5 bg-surface rounded-xl border border-borderGray relative"
-              >
-                <label
-                  class="block text-[10px] font-bold text-charcoal uppercase tracking-wider mb-2"
-                >
-                  Ingeniería de Prompt Automática
-                </label>
-                <p class="text-xs text-textMuted mb-4 leading-relaxed">
-                  Describe brevemente cómo quieres que actúe la IA en esta
-                  clase.
-                </p>
-                <textarea
-                  id="mat-natural"
-                  rows="2"
-                  class="w-full rounded-md p-3 text-sm border border-borderGray bg-background mb-4 focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all resize-none"
-                  placeholder="Ej. Actúa como un experto y extrae solo las definiciones..."
-                ></textarea>
-                <button
-                  onclick="generatePrompt()"
-                  id="btn-gen-prompt"
-                  class="btn-secondary w-full text-xs font-bold py-2.5 flex justify-center items-center gap-2 hover:bg-borderGray transition-colors"
-                >
-                  <i data-lucide="sparkles" class="w-4 h-4"></i>
-                  <span>Traducir a Prompt Técnico</span>
-                </button>
-              </div>
+              <!-- Right Column -->
+              <div class="space-y-6 flex flex-col">
+                  <div>
+                    <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2 flex justify-between">
+                      <span>Temperatura del LLM (Creatividad vs Analítico)</span>
+                      <span id="mat-temperatura-val" class="text-charcoal font-bold">0.3</span>
+                    </label>
+                    <input type="range" id="mat-temperatura" min="0.0" max="1.0" step="0.1" value="0.3" oninput="document.getElementById('mat-temperatura-val').innerText = this.value" class="w-full accent-charcoal" />
+                    <div class="flex justify-between text-[10px] text-textMuted mt-1 uppercase tracking-wider">
+                      <span>Analítico / Código (0.0)</span>
+                      <span>Creativo / Teoría (1.0)</span>
+                    </div>
+                  </div>
 
-              <div>
-                <label
-                  class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2"
-                  >Contexto Técnico Final</label
-                >
-                <textarea
-                  id="mat-prompt"
-                  rows="6"
-                  class="w-full rounded-md p-3 text-[11px] font-mono bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all leading-relaxed resize-none text-textMuted focus:text-charcoal"
-                  placeholder="Eres un asistente experto..."
-                ></textarea>
+                  <div class="flex-1 flex flex-col min-h-[320px]">
+                    <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-2">Contexto Técnico Final</label>
+                    <textarea id="mat-prompt" class="w-full flex-1 rounded-md p-3 text-[11px] font-mono bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all leading-relaxed resize-none text-textMuted focus:text-charcoal" placeholder="Eres un asistente experto..."></textarea>
+                  </div>
               </div>
+            </div>
 
-              <div class="flex gap-3 pt-2">
-                <button
-                  onclick="closeMateriaModal()"
-                  class="btn-secondary flex-1 py-3 text-sm font-medium transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  id="btn-save-materia"
-                  onclick="saveMateria()"
-                  class="btn-primary flex-1 py-3 text-sm font-medium shadow-sm hover:shadow transition-all"
-                >
-                  Guardar
-                </button>
-              </div>
+            <div class="p-6 border-t border-borderGray flex gap-3 shrink-0 bg-surface/30 rounded-b-xl">
+              <button onclick="closeMateriaModal()" class="btn-secondary flex-1 py-3 text-sm font-medium transition-all">Cancelar</button>
+              <button id="btn-save-materia" onclick="saveMateria()" class="btn-primary flex-1 py-3 text-sm font-medium shadow-sm hover:shadow transition-all">Guardar Asignatura</button>
             </div>
           </div>
         </div>
@@ -1089,6 +1051,23 @@
                     Este modelo alimentará el procesamiento del Tutor Virtual,
                     RAG y extracción de resúmenes.
                   </p>
+                  
+                  <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 border-t border-borderGray/60 pt-6">Sensibilidad de Búsqueda (NLP Threshold)</label>
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      id="config-nlp-threshold"
+                      class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
+                      placeholder="Ej. 1.0"
+                      min="0.1"
+                      max="10.0"
+                      step="0.1"
+                    />
+                  </div>
+                  <p class="text-xs text-textMuted mt-3 leading-relaxed">
+                    Puntaje mínimo para considerar un documento "relevante" en el chat. 
+                    Un valor más alto (ej. 2.0) hace la búsqueda más estricta (default: 1.0).
+                  </p>
                 </div>
               </div>
 
@@ -1123,6 +1102,23 @@
                   <p class="text-xs text-textMuted mt-3 leading-relaxed mb-6">
                     Previene la carga accidental de archivos crudos gigantes
                     (ej. .wav). Máximo sugerido: 500 MB.
+                  </p>
+
+                  <label class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2 border-t border-borderGray/60 pt-6">Umbral de Silencio Audio (dB)</label>
+                  <div class="flex gap-2">
+                    <input
+                      type="number"
+                      id="config-audio-silence"
+                      class="flex-1 rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
+                      placeholder="Ej. -30"
+                      min="-60"
+                      max="-10"
+                      step="1"
+                    />
+                  </div>
+                  <p class="text-xs text-textMuted mt-3 leading-relaxed mb-6">
+                    Límite (en decibelios) para considerar que el audio es ruido de fondo y recortarlo.
+                    Usa -20 para aulas ruidosas o -40 para aulas muy silenciosas (default: -30).
                   </p>
 
                   <label
@@ -1214,6 +1210,41 @@
 
                 </div>
               </div>
+
+              <!-- Prompts Core -->
+              <div class="bento-card p-8 bg-surface/50 border border-borderGray hover:border-textMuted transition-colors h-full">
+                <h3 class="text-sm font-bold text-charcoal mb-5 uppercase tracking-wider flex items-center gap-2">
+                  <i data-lucide="terminal" class="w-4 h-4 text-purple-600"></i>
+                  Prompts del Sistema
+                </h3>
+                <p class="text-xs text-textMuted mb-6 leading-relaxed">
+                  Personaliza las instrucciones maestras que el LLM recibe para cada flujo de trabajo. 
+                  Usa las variables sugeridas en el editor.
+                </p>
+
+                <div class="flex flex-col gap-3">
+                  <button onclick="openPromptEditor('prompt_maestro_resumenes')" class="flex justify-between items-center w-full px-4 py-3 bg-background border border-borderGray rounded-lg hover:border-charcoal transition-colors">
+                    <span class="text-sm font-medium text-charcoal">Resúmenes (Maestro)</span>
+                    <i data-lucide="edit-2" class="w-4 h-4 text-textMuted"></i>
+                  </button>
+                  <button onclick="openPromptEditor('prompt_chat_rag')" class="flex justify-between items-center w-full px-4 py-3 bg-background border border-borderGray rounded-lg hover:border-charcoal transition-colors">
+                    <span class="text-sm font-medium text-charcoal">Chat Normal (RAG)</span>
+                    <i data-lucide="edit-2" class="w-4 h-4 text-textMuted"></i>
+                  </button>
+                  <button onclick="openPromptEditor('prompt_tutor_socratico')" class="flex justify-between items-center w-full px-4 py-3 bg-background border border-borderGray rounded-lg hover:border-charcoal transition-colors">
+                    <span class="text-sm font-medium text-charcoal">Tutor Socrático</span>
+                    <i data-lucide="edit-2" class="w-4 h-4 text-textMuted"></i>
+                  </button>
+                  <button onclick="openPromptEditor('prompt_tarea_extractor')" class="flex justify-between items-center w-full px-4 py-3 bg-background border border-borderGray rounded-lg hover:border-charcoal transition-colors">
+                    <span class="text-sm font-medium text-charcoal">Extractor de Tareas</span>
+                    <i data-lucide="edit-2" class="w-4 h-4 text-textMuted"></i>
+                  </button>
+                  <button onclick="openPromptEditor('prompt_generator_sys')" class="flex justify-between items-center w-full px-4 py-3 bg-background border border-borderGray rounded-lg hover:border-charcoal transition-colors">
+                    <span class="text-sm font-medium text-charcoal">Generador de Prompts</span>
+                    <i data-lucide="edit-2" class="w-4 h-4 text-textMuted"></i>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1239,8 +1270,27 @@
         </div>
       </section>
     </main>
-
     <div id="toast-container"></div>
+
+    <!-- MODAL: EDIT PROMPT -->
+    <div id="prompt-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+      <div class="bg-background rounded-xl shadow-2xl border border-borderGray w-full max-w-[800px] h-[80vh] flex flex-col transform scale-95 transition-transform duration-300">
+         <div class="p-6 border-b border-borderGray flex justify-between items-center bg-surface rounded-t-xl">
+            <div>
+              <h3 class="text-lg font-serif font-bold text-charcoal" id="prompt-modal-title">Editar Prompt</h3>
+              <p class="text-xs text-textMuted mt-1" id="prompt-modal-desc">Modifica las instrucciones base. Ten cuidado con no borrar las variables.</p>
+            </div>
+            <button onclick="closePromptModal()" class="text-textMuted hover:text-charcoal transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+         </div>
+         <div class="flex-1 p-6 overflow-hidden flex flex-col bg-background">
+            <textarea id="prompt-modal-textarea" class="w-full flex-1 rounded-md p-4 text-sm font-mono leading-relaxed bg-surface border border-borderGray focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all resize-none shadow-inner"></textarea>
+         </div>
+         <div class="p-6 border-t border-borderGray flex justify-end gap-4 bg-surface rounded-b-xl">
+            <button onclick="resetPromptToDefault()" class="btn-secondary px-6 py-2 rounded-md text-sm font-bold bg-background border border-borderGray hover:bg-surface">Restaurar Original</button>
+            <button onclick="savePromptModal()" class="btn-primary px-6 py-2 rounded-md text-sm font-bold shadow-sm">Guardar Cambios</button>
+         </div>
+      </div>
+    </div>
     <script>
       // Configurar Marked para soportar KaTeX (matemáticas)
       if (window.marked && window.markedKatex) {
@@ -1248,6 +1298,14 @@
           throwOnError: false,
           output: "html"
         }));
+      }
+
+      // Interceptor para soportar sintaxis Obsidian de imágenes en visor web
+      function renderMarkdown(text) {
+          if (!text) return "";
+          // Reemplazar ![[imagen.jpg]] con ![Adjunto](/adjuntos/imagen.jpg)
+          const processedText = text.replace(/!\[\[(.*?\.(jpg|jpeg|png|webp))\]\]/gi, '![Adjunto](/adjuntos/$1)');
+          return marked.parse(processedText);
       }
 
       // Theme logic
@@ -1369,7 +1427,7 @@
             localStorage.setItem("modelo_elegido", savedModel);
             document.getElementById("ui-current-model").innerText =
               getUiName(savedModel);
-            loadStats();
+
           })
           .catch((e) => console.error("Error cargando modelos:", e));
 
@@ -1379,10 +1437,10 @@
           document.getElementById("ui-current-model").innerText = getUiName(
             e.target.value,
           );
-          loadStats();
+
         });
 
-        loadStats();
+
 
         // Chat form submission
         document.getElementById("chat-form").addEventListener("submit", (e) => {
@@ -1402,41 +1460,29 @@
         lucide.createIcons();
       });
 
-      function updateStatsUI(stats) {
-        const currentModel =
-          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
-        const modelData = stats[currentModel];
-        if (modelData) {
-          document.getElementById("ui-peticiones").innerText =
-            `${modelData.peticiones}`;
-          document.getElementById("ui-tokens").innerText =
-            `${modelData.tokens.toLocaleString()}`;
-        } else {
-          document.getElementById("ui-peticiones").innerText = `0`;
-          document.getElementById("ui-tokens").innerText = `0`;
-        }
-      }
 
-      function loadStats() {
-        fetch("/api/stats")
-          .then((r) => r.json())
-          .then((data) => updateStatsUI(data));
-      }
 
       // Settings config logic
+      let currentAppSettings = {};
+
       function loadAppSettings() {
         fetch("/api/settings")
           .then((r) => r.json())
           .then((data) => {
+            currentAppSettings = data;
+            
             document.getElementById("config-obsidian-path").value =
               data.obsidian_vault_path || "";
-
             document.getElementById("config-max-audio-mb").value =
               data.max_audio_upload_mb || 500;
             document.getElementById("config-rag-max-docs").value =
               data.rag_max_docs || 8;
             document.getElementById("config-papelera-items").value =
               data.max_papelera_items || 10;
+            document.getElementById("config-nlp-threshold").value = 
+              data.nlp_threshold || 1.0;
+            document.getElementById("config-audio-silence").value = 
+              data.audio_silence_db || -30;
 
             if (data.extension_backup_dir) {
               document.getElementById("config-extension-backup").value =
@@ -1463,6 +1509,10 @@
           parseInt(document.getElementById("config-papelera-items").value) || 10;
         const ragMaxDocs =
           parseInt(document.getElementById("config-rag-max-docs").value) || 8;
+        const nlpThreshold = 
+          parseFloat(document.getElementById("config-nlp-threshold").value) || 1.0;
+        const audioSilenceDb = 
+          parseInt(document.getElementById("config-audio-silence").value) || -30;
         const selectedModel = document.getElementById("model-selector").value;
 
         const btn = document.getElementById("btn-save-settings");
@@ -1470,17 +1520,27 @@
         btn.innerText = "Guardando...";
         btn.disabled = true;
 
-        fetch("/api/settings", {
+        const payload = {
+          obsidian_vault_path: path,
+          extension_backup_dir: extensionBackupDir,
+          max_audio_upload_mb: maxAudioMB,
+          max_papelera_items: maxPapeleraItems,
+          rag_max_docs: ragMaxDocs,
+          nlp_threshold: nlpThreshold,
+          audio_silence_db: audioSilenceDb,
+          default_model: selectedModel,
+          
+          prompt_maestro_resumenes: currentAppSettings.prompt_maestro_resumenes,
+          prompt_chat_rag: currentAppSettings.prompt_chat_rag,
+          prompt_tutor_socratico: currentAppSettings.prompt_tutor_socratico,
+          prompt_generator_sys: currentAppSettings.prompt_generator_sys,
+          prompt_tarea_extractor: currentAppSettings.prompt_tarea_extractor
+        };
+
+        return fetch("/api/settings", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            obsidian_vault_path: path,
-            extension_backup_dir: extensionBackupDir,
-            max_audio_upload_mb: maxAudioMB,
-            max_papelera_items: maxPapeleraItems,
-            rag_max_docs: ragMaxDocs,
-            default_model: selectedModel,
-          }),
+          body: JSON.stringify(payload),
         })
           .then((r) => r.json())
           .then(() => {
@@ -1495,6 +1555,61 @@
             btn.innerText = originalText;
             btn.disabled = false;
           });
+      }
+
+      // ----------------------------------------------------
+      // Prompts Modal Logic
+      // ----------------------------------------------------
+      let activePromptKey = null;
+
+      function openPromptEditor(promptKey) {
+        activePromptKey = promptKey;
+        const modal = document.getElementById("prompt-modal");
+        const textarea = document.getElementById("prompt-modal-textarea");
+        
+        // Cargar el valor actual de la caché local
+        // Si no existe, al estar vacío el usuario puede clickear Restaurar Original
+        textarea.value = currentAppSettings[promptKey] || "";
+        if (!textarea.value) {
+            textarea.placeholder = "Cargando default / Vacío...";
+        }
+
+        modal.classList.remove("hidden");
+        // Trigger reflow
+        void modal.offsetWidth;
+        modal.classList.remove("opacity-0");
+        modal.querySelector("div").classList.remove("scale-95");
+      }
+
+      function closePromptModal() {
+        const modal = document.getElementById("prompt-modal");
+        modal.classList.add("opacity-0");
+        modal.querySelector("div").classList.add("scale-95");
+        setTimeout(() => {
+          modal.classList.add("hidden");
+          activePromptKey = null;
+        }, 300);
+      }
+
+      function savePromptModal() {
+        if (!activePromptKey) return;
+        const textarea = document.getElementById("prompt-modal-textarea");
+        currentAppSettings[activePromptKey] = textarea.value;
+        
+        saveAppSettings().then(() => {
+          showToast("Prompt guardado exitosamente", "success");
+          closePromptModal();
+        });
+      }
+
+      function resetPromptToDefault() {
+        if (!activePromptKey) return;
+        // Limpiamos la clave para que el backend use el default
+        currentAppSettings[activePromptKey] = null;
+        saveAppSettings().then(() => {
+          showToast("Prompt restaurado al valor por defecto", "info");
+          closePromptModal();
+        });
       }
 
       // Tab Switching
@@ -1532,24 +1647,35 @@
 
       // ====== TAB: RESUMENES ======
       function loadSummaries() {
+        const filterVal = document.getElementById("doc-materia-filter")?.value || "todas";
+        
         fetch("/api/summaries")
           .then((r) => r.json())
           .then((data) => {
             const list = document.getElementById("summaries-list");
             list.innerHTML = "";
-            if (!data.summaries.length) {
+            
+            let summaries = data.summaries;
+            if (filterVal !== "todas") {
+               summaries = summaries.filter(s => s.materia_id === filterVal);
+            }
+            
+            if (!summaries.length) {
               list.innerHTML =
                 '<p class="text-xs text-textMuted p-2 font-mono">/sin_documentos</p>';
               return;
             }
-            data.summaries.forEach((s) => {
+            
+            summaries.forEach((s) => {
               const div = document.createElement("div");
               div.className =
                 "p-2 rounded-md hover:bg-background cursor-pointer text-charcoal flex justify-between items-center group transition-colors border border-transparent hover:border-borderGray";
 
               const titleSpan = document.createElement("span");
               titleSpan.className = "flex-1 overflow-hidden pr-2";
-              titleSpan.innerHTML = `<div class="truncate font-medium text-charcoal">[ DOC ] ${s.display_name}</div><div class="text-[9px] text-textMuted font-mono mt-0.5 opacity-80">${s.created_at}</div>`;
+              
+              const materiaPill = s.materia_name !== "General" ? `<span class="inline-block px-1.5 py-0.5 rounded text-[8px] uppercase tracking-wider font-bold bg-borderGray/50 text-charcoal ml-2 shrink-0 align-middle">${s.materia_name}</span>` : '';
+              titleSpan.innerHTML = `<div class="truncate font-medium text-charcoal flex items-center"><span class="truncate">[ DOC ] ${s.display_name}</span>${materiaPill}</div><div class="text-[9px] text-textMuted font-mono mt-0.5 opacity-80">${s.created_at}</div>`;
 
               const delBtn = document.createElement("button");
               delBtn.innerHTML =
@@ -1585,7 +1711,7 @@
                   .then((r) => r.json())
                   .then((d) => {
                     document.getElementById("content-area").innerHTML =
-                      marked.parse(d.content);
+                      renderMarkdown(d.content);
                     document
                       .getElementById("content-area")
                       .classList.remove("hidden");
@@ -1622,7 +1748,7 @@
                         body: JSON.stringify({ content: newContent }),
                       }).then(() => {
                         document.getElementById("content-area").innerHTML =
-                          marked.parse(newContent);
+                          renderMarkdown(newContent);
                         document
                           .getElementById("content-area")
                           .classList.remove("hidden");
@@ -1656,7 +1782,10 @@
               list.innerHTML += `
                             <div class="bento-card p-6 flex flex-col justify-between group hover:border-charcoal/30 transition-colors duration-300 min-h-[160px]">
                                 <div class="mb-5">
-                                    <h4 class="font-serif text-lg text-charcoal mb-3 truncate" title="${m.nombre}">${m.nombre}</h4>
+                                    <div class="flex justify-between items-start mb-3">
+                                        <h4 class="font-serif text-lg text-charcoal truncate pr-2" title="${m.nombre}">${m.nombre}</h4>
+                                        <span class="text-[9px] font-bold bg-borderGray/50 text-charcoal px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0" title="Documentos procesados">${m.doc_count || 0} Docs</span>
+                                    </div>
                                     <div class="bg-background border border-borderGray rounded p-3">
                                         <p class="text-[10px] text-textMuted font-mono leading-relaxed line-clamp-3 break-words" title="${safePrompt}">${m.prompt_personalizado}</p>
                                     </div>
@@ -1680,11 +1809,15 @@
               "tarjetas-materia-filter",
             );
             const tutorSelect = document.getElementById("tutor-materia-select");
+            const docFilter = document.getElementById("doc-materia-filter");
 
             chatSelect.innerHTML =
               '<option value="todas">Todo el Semestre</option>';
             if (tarjetasSelect)
               tarjetasSelect.innerHTML =
+                '<option value="todas">Todas las materias</option>';
+            if (docFilter)
+              docFilter.innerHTML =
                 '<option value="todas">Todas las materias</option>';
             if (tutorSelect)
               tutorSelect.innerHTML =
@@ -1694,6 +1827,8 @@
               chatSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
               if (tarjetasSelect)
                 tarjetasSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
+              if (docFilter)
+                docFilter.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
               if (tutorSelect)
                 tutorSelect.innerHTML += `<option value="${m.id}">${m.nombre}</option>`;
             });
@@ -1727,7 +1862,7 @@
           .then((r) => r.json())
           .then((d) => {
             document.getElementById("mat-prompt").value = d.prompt_generado;
-            if (d.stats) updateStatsUI(d.stats);
+
           })
           .catch((e) =>
             showToast("Error generando prompt: " + e.message, "error"),
@@ -1759,6 +1894,8 @@
           document.getElementById("mat-nombre").value = "";
           document.getElementById("mat-natural").value = "";
           document.getElementById("mat-prompt").value = "";
+          document.getElementById("mat-temperatura").value = "0.3";
+          document.getElementById("mat-temperatura-val").innerText = "0.3";
         }
       }
 
@@ -1779,12 +1916,16 @@
         editingMateriaId = id;
         document.getElementById("mat-nombre").value = m.nombre;
         document.getElementById("mat-prompt").value = m.prompt_personalizado;
+        document.getElementById("mat-temperatura").value = m.temperatura || "0.3";
+        document.getElementById("mat-temperatura-val").innerText = m.temperatura || "0.3";
         openMateriaModal(true);
       }
 
       function saveMateria() {
         const nombre = document.getElementById("mat-nombre").value;
         const prompt = document.getElementById("mat-prompt").value;
+        const temperatura = parseFloat(document.getElementById("mat-temperatura").value) || 0.3;
+        
         if (!nombre || !prompt)
           return showToast(
             "El Nombre y el Prompt Final son obligatorios.",
@@ -1795,7 +1936,7 @@
           fetch(`/api/materias/${editingMateriaId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nombre, prompt_personalizado: prompt }),
+            body: JSON.stringify({ nombre, prompt_personalizado: prompt, temperatura }),
           }).then(() => {
             editingMateriaId = null;
             closeMateriaModal();
@@ -1805,7 +1946,7 @@
           fetch("/api/materias", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nombre, prompt_personalizado: prompt }),
+            body: JSON.stringify({ nombre, prompt_personalizado: prompt, temperatura }),
           }).then(() => {
             closeMateriaModal();
             loadMaterias();
@@ -2331,7 +2472,7 @@
           .then((data) => {
             chatHistory.removeChild(loadingBubble);
             addChatBubble(data.respuesta, "ai");
-            if (data.stats) updateStatsUI(data.stats);
+
           })
           .catch((e) => {
             chatHistory.removeChild(loadingBubble);
@@ -2345,7 +2486,7 @@
         bubble.className = `chat-bubble p-5 text-sm prose ${type === "user" ? "chat-user" : "chat-ai"}`;
 
         if (type === "ai") {
-          bubble.innerHTML = marked.parse(text);
+          bubble.innerHTML = renderMarkdown(text);
         } else {
           bubble.innerText = text;
         }
@@ -2397,7 +2538,7 @@
           bubble.innerHTML = escapeHTML(text);
         } else {
           bubble.className = `chat-bubble chat-ai border border-borderGray p-5 text-sm prose dark:prose-invert max-w-none`;
-          bubble.innerHTML = marked.parse(text);
+          bubble.innerHTML = renderMarkdown(text);
         }
 
         historyDiv.appendChild(bubble);
@@ -2444,7 +2585,7 @@
           tutorHistoryState.push({ role: "model", text: data.respuesta });
 
           appendTutorMessage(data.respuesta, false);
-          if (data.stats) updateStatsUI(data.stats);
+
         } catch (error) {
           console.error(error);
           appendTutorMessage(

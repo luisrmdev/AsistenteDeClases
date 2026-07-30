@@ -7,7 +7,7 @@ import subprocess
 from database import AUDIOS_DIR
 
 
-def remove_silences(input_filepath: str) -> str:
+def remove_silences(input_filepath: str, silence_threshold_db: int = -30) -> str:
     """
     Ejecuta FFmpeg para remover silencios del audio.
 
@@ -23,7 +23,7 @@ def remove_silences(input_filepath: str) -> str:
         subprocess.run(
             [
                 "ffmpeg", "-y", "-i", input_filepath,
-                "-af", "silenceremove=stop_periods=-1:stop_duration=2:stop_threshold=-30dB",
+                "-af", f"silenceremove=stop_periods=-1:stop_duration=2:stop_threshold={silence_threshold_db}dB",
                 temp_filepath,
             ],
             check=True,

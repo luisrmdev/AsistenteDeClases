@@ -49,7 +49,7 @@ Clase `JsonStore` con `asyncio.Lock()`. Cada archivo JSON del sistema tiene su p
 |---|---|
 | `settings_store` | `settings.json` |
 | `materias_store` | `materias.json` |
-| `stats_store` | `stats.json` |
+
 | `meta_store` | `resumenes/resumenes_meta.json` |
 | `tarjetas_store` | `resumenes/tarjetas_informativas.json` |
 | `cola_store` | `cola_procesamiento.json` |
@@ -86,9 +86,9 @@ Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o 
       └── ...
 
   FALLBACK (si servidor no responde o rechaza la subida):
-  → Genera un .zip (audio + imágenes) en memoria usando JSZip.
-  → Descarga el archivo de forma nativa directamente desde el contexto activo (`offscreen.js` o `popup.js`).
-  → Si JSZip no está disponible, descarga el `.webm` de audio y un `.json` con imágenes en base64 de forma separada.
+  → Se emula una carpeta en Descargas: `Descargas/Backups_Clases/[nombre]_[fecha]/`
+  → Se descarga directamente vía `chrome.downloads` el audio `.webm` y TODAS las imágenes `.jpg` en esa carpeta.
+  → Sin popups molestos y sin librerías externas. Todo 100% nativo y limpio.
 ```
 
 ### Núcleo — Cola de Procesamiento (Worker Asíncrono)
@@ -117,8 +117,8 @@ Worker (asyncio task, polling cada 5s):
 
 La función `_build_summary_prompt()` en `llm_service.py` genera un único prompt que:
 1. **CORRELACIÓN AUDIO-IMAGEN (OBLIGATORIO)**: instruye a la IA a correlacionar audio con imágenes y usar `![[captura_000_t0s.jpg]]` en el Markdown resultante.
-2. Estructura PARA de Obsidian, arquetipos de nota, Googleability, exhaustividad proporcional.
-3. Extracción de `tarjetas_informativas` y `nuevas_reglas_profesor` en bloque JSON.
+2. **ANTI-RESUMEN (EXHAUSTIVIDAD TOTAL)**: Prohíbe estrictamente comprimir información o usar frases aglutinantes. Obliga a transcribir y estructurar todos los temas, anécdotas y ejemplos cronológicamente (Estructura PARA, arquetipos de nota, Googleability).
+3. Extracción de `tarjetas_informativas` usando **Negative Prompting** estricto para bloquear falsos positivos (actividades en clase, consejos vagos) y `nuevas_reglas_profesor` en bloque JSON.
 
 ---
 
@@ -179,6 +179,8 @@ tags: [tag1, tag2]
   "max_audio_upload_mb": 500,
   "max_papelera_items": 10,
   "rag_max_docs": 8,
+  "nlp_threshold": 1.0,
+  "audio_silence_db": -30,
   "default_model": "gemini-3.1-flash-lite"
 }
 ```
@@ -207,8 +209,11 @@ tags: [tag1, tag2]
 ### 5.1 Gestión de Asignaturas (Materias)
 
 - CRUD completo: `GET/POST /api/materias`, `PUT/DELETE /api/materias/{id}`.
+- Modal UI Rediseñado: Panel de 1000px de ancho con diseño grid (2 columnas) para edición espaciosa.
+- Parámetros guardados: Nombre, Prompt Técnico y **Temperatura (0.0 a 1.0)** específica por asignatura.
 - El `prompt_personalizado` llena el slot `{prompt_usar}` del Prompt Maestro.
 - El `materia_id` (UUID) se incrusta en el nombre del .md para filtrado en el chat.
+- La `temperatura` inyecta dinámicamente la creatividad/rigurosidad al modelo Gemini por materia.
 
 ### 5.2 Memoria Dinámica del Profesor
 
@@ -261,11 +266,6 @@ Lee audio e imágenes en fragmentos. Si la suma supera el límite, borra el `ses
 - Worker (`asyncio.create_task`) hace polling cada 5 segundos.
 - Almacena `session_dir` e `image_filenames` para que el worker resuelva rutas.
 - Compatible hacia atrás: detecta tareas legacy (solo filename, sin `session_dir`) y busca el audio en subdirectorios.
-
-### 5.9 Estadísticas de Uso
-
-- `llm_service.update_stats()` usa `stats_store.update()` (con Lock) en cada llamada.
-- Se resetea automáticamente si la fecha no coincide con hoy.
 
 ### 5.10 Renderizado Matemático Universal (LaTeX)
 
@@ -349,8 +349,8 @@ La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) 
 
 | Escenario | Comportamiento |
 |---|---|
-| Backend falla durante upload | Intenta ZIP (audio + imágenes) via JSZip; si falla → audio .webm + JSON base64. El Dashboard web acepta ambos formatos (incluso .zip directo y extrae en el servidor). |
-| Browser/PC crashea | Disaster Recovery en arranque de popup: ensambla chunks huérfanos + limpia screenshots huérfanos |
+| Backend falla durante upload | Fallback Suave (offscreen.js): Crea carpeta en Descargas y descarga ahí `.webm` y múltiples `.jpg`. |
+| Browser/PC crashea | Disaster Recovery (popup.js): Al arrancar ensambla chunks huérfanos + recupera capturas. Crea carpeta en Descargas y descarga todo de forma idéntica al Fallback Suave. |
 
 **Botones del popup según estado**:
 
@@ -365,7 +365,7 @@ La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) 
 
 | Método | Ruta | Servicio |
 |---|---|---|
-| GET | `/api/stats` | `llm_service.get_or_reset_stats` |
+
 | GET | `/api/models` | `llm_service.list_available_models` |
 | GET/POST | `/api/materias` | `materias_store` |
 | PUT/DELETE | `/api/materias/{id}` | `materias_store` |

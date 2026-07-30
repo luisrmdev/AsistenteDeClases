@@ -13,20 +13,21 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Constantes de rutas de archivos ---
-AUDIOS_DIR = "audios"
+AUDIOS_DIR = "grabaciones"
 RESUMENES_DIR = "resumenes"
+ADJUNTOS_DIR = os.path.join(RESUMENES_DIR, "adjuntos")
 PAPELERA_DIR = "papelera_sesiones"
 EXPORTACIONES_DIR = "exportaciones"
 MEMORIA_DIR = "memoria_ia"
 MATERIAS_FILE = "materias.json"
-STATS_FILE = "stats.json"
+
 SETTINGS_FILE = "settings.json"
 META_FILE = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
 TARJETAS_FILE = os.path.join(RESUMENES_DIR, "tarjetas_informativas.json")
 COLA_FILE = os.path.join(RESUMENES_DIR, "cola_tareas.json")
 
 # Crear directorios necesarios al importar
-for _dir in [AUDIOS_DIR, RESUMENES_DIR, PAPELERA_DIR, EXPORTACIONES_DIR, MEMORIA_DIR]:
+for _dir in [AUDIOS_DIR, RESUMENES_DIR, ADJUNTOS_DIR, PAPELERA_DIR, EXPORTACIONES_DIR, MEMORIA_DIR]:
     os.makedirs(_dir, exist_ok=True)
 
 
@@ -84,7 +85,7 @@ settings_store = JsonStore(SETTINGS_FILE, default={
     "rag_max_docs": 8,
 })
 materias_store = JsonStore(MATERIAS_FILE, default=list)
-stats_store = JsonStore(STATS_FILE, default=dict)
+
 meta_store = JsonStore(META_FILE, default=dict)
 tarjetas_store = JsonStore(TARJETAS_FILE, default=list)
 cola_store = JsonStore(COLA_FILE, default=list)
