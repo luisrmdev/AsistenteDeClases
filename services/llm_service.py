@@ -80,6 +80,12 @@ Finalmente, extrae anuncios o tareas en el array 'tarjetas_informativas' ESTRICT
 4. Deben tener una directiva clara o fecha de entrega implícita/explícita.
 Si no hay anuncios que cumplan estos criterios, deja el array vacío []. Respeta cómo el profesor refirió el tiempo en 'referencia_temporal' e intenta deducir la fecha límite exacta en 'fecha_entrega' (YYYY-MM-DD) usando la fecha de hoy.
 
+NUEVA DIRECTIVA: TEMARIO ATÓMICO (SALA DE ESTUDIO v2)
+Debes extraer los temas o conceptos específicos que se enseñaron en la clase de forma atómica.
+Determina la "profundidad_sesion" (superficial, intermedio, profundo) y describe detalladamente cómo se abordó el tema en esta clase.
+Asigna un ID único y secuencial (ej. "tema_1", "tema_2") e inicializa "dominio" en 0.
+Incluye esto en el array 'temario_atomico' del bloque JSON. Si no hay conceptos técnicos/teóricos, déjalo vacío [].
+
 Genera tu respuesta en el siguiente formato ESTRICTO:
 ---
 tipo: [teoria o cheatsheet]
@@ -108,6 +114,14 @@ $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
     {
       "tema": "El tema del que habla",
       "metodo_paso_a_paso": "La explicación detallada o fórmula estricta que el profesor exige usar, extraída textualmente del audio."
+    }
+  ],
+  "temario_atomico": [
+    {
+      "id": "tema_1",
+      "nombre": "Conexión LAN",
+      "profundidad_sesion": "[superficial | intermedio | profundo] - Descripción exacta de lo que se abarcó hoy",
+      "dominio": 0
     }
   ]
 }
@@ -302,6 +316,12 @@ async def generate_summary_from_audio(
     
     # User trigger (simple instruction to kick off the process)
     user_trigger = f"Analiza detalladamente esta clase y genera los apuntes EXHAUSTIVOS para {materia_name}, siguiendo estrictamente todas las reglas establecidas."
+    
+    if image_paths:
+        user_trigger += "\\n\\nSe han adjuntado las siguientes imágenes (capturas de pantalla) en el mismo orden en que las recibiste:\\n"
+        for idx, img_path in enumerate(image_paths):
+            user_trigger += f"- {os.path.basename(img_path)}\n"
+        user_trigger += "\\nREGLA CRÍTICA: Cuando debas insertar una de estas imágenes en tus apuntes, DEBES usar EXACTAMENTE el nombre de archivo listado arriba. Ejemplo: ![[{os.path.basename(image_paths[0])}]]"
     
     # Build contents: [audio_file, img1, img2, ..., user_trigger]
     contents = [audio_info] + uploaded_images + [user_trigger]
@@ -644,3 +664,143 @@ async def extract_task_from_image(img_bytes: bytes, modelo: str) -> tuple[str, d
         ),
     )
     return response.text
+
+# ---------------------------------------------------------------------------
+# Tutor V2 Agentic Chat
+# ---------------------------------------------------------------------------
+
+async def tutor_v2_agentic_chat(
+    slot_id: str,
+    historial_mensajes: list,
+    pregunta_actual: str,
+    modelo: str,
+    image_data: str = None
+) -> dict:
+    from database import progreso_store, meta_store
+    import base64
+    client = genai.Client()
+    
+    slots = await progreso_store.read()
+    slot = next((s for s in slots if s["id"] == slot_id), None)
+    if not slot or "temas" not in slot:
+        return {"respuesta": "Este slot no soporta el Tutor V2 (no tiene temario atómico).", "updated": False}
+        
+    md_vinculado = slot.get("md_vinculado")
+    apunte_completo = "No hay apunte vinculado."
+    if md_vinculado:
+        meta_data = await meta_store.read()
+        f_meta = meta_data.get(md_vinculado)
+        if f_meta:
+            apunte_completo = f_meta.get("resumen", "")
+            
+    temario_str = "TEMARIO A EVALUAR:\\n"
+    for t in slot["temas"]:
+        temario_str += f"- ID: {t['id']} | Nombre: {t['nombre']} | Profundidad: {t['profundidad_sesion']} | Dominio actual: {t['dominio']}%\\n"
+        
+    sys_instruction = f"""Eres el Tutor Cognitivo V2. Tu misión es evaluar al alumno de forma proactiva para llevar el 'Dominio actual' de TODOS los temas al 100%.
+    
+    Tienes acceso a los apuntes de la clase:
+    --- APUNTES DE CLASE ---
+    {apunte_completo}
+    ------------------------
+    
+    {temario_str}
+    
+    REGLAS ESTRICTAS:
+    1. Eres proactivo. Tu objetivo es certificar que el alumno entendió la clase.
+    2. Haz una sola pregunta o reto a la vez. No abrumees.
+    3. Si el alumno demuestra entendimiento claro del concepto, ESTÁS OBLIGADO A USAR LA HERRAMIENTA `actualizar_dominio_tema` para incrementar su progreso.
+       - Tema superficial: +100% si responde bien la pregunta conceptual.
+       - Tema intermedio: +50% por buena respuesta.
+       - Tema profundo: +25% por buena respuesta o +50% por resolución completa de un problema.
+    4. NUNCA des la respuesta directamente si se equivoca, guíalo socráticamente.
+    7. Para preguntas de opción múltiple, usa SIEMPRE formato de texto plano tradicional. Cada opción debe estar en su propia línea empezando por A), B), C) o D). NO uses XML ni etiquetas HTML.
+       Ejemplo:
+       A) Primera opción
+       B) Segunda opción
+       C) Tercera opción
+    8. Usa KaTeX estricto para las matemáticas (`$$formula$$`).
+    """
+    
+    actualizar_dominio_func = types.FunctionDeclaration(
+        name="actualizar_dominio_tema",
+        description="Aumenta el dominio de un tema de la clase tras evaluar que el alumno lo entendió correctamente.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "tema_id": types.Schema(type=types.Type.STRING, description="El ID del tema (ej. tema_1)"),
+                "incremento": types.Schema(type=types.Type.INTEGER, description="Porcentaje a sumar (ej. 25, 50, 100)")
+            },
+            required=["tema_id", "incremento"]
+        )
+    )
+    
+    contents = []
+    
+    historial_limpio = [
+        msg for msg in historial_mensajes
+        if msg.get("role") in {"user", "model"} and msg.get("text")
+    ]
+    while historial_limpio and historial_limpio[0].get("role") != "user":
+        historial_limpio.pop(0)
+
+    for msg in historial_limpio:
+        contents.append(types.Content(role=msg.get("role", "user"), parts=[types.Part.from_text(text=msg.get("text", ""))]))
+
+    user_parts = []
+    if image_data:
+        try:
+            mime = "image/jpeg"
+            b64_str = image_data
+            if "," in image_data:
+                mime = image_data.split(";")[0].split(":")[1]
+                b64_str = image_data.split(",")[1]
+            img_bytes = base64.b64decode(b64_str)
+            user_parts.append(types.Part.from_bytes(data=img_bytes, mime_type=mime))
+        except Exception as e:
+            print(f"Error decodificando imagen V2: {e}")
+            
+    user_parts.append(types.Part.from_text(text=pregunta_actual))
+    contents.append(types.Content(role="user", parts=user_parts))
+    
+    res = client.models.generate_content(
+        model=modelo,
+        contents=contents,
+        config=types.GenerateContentConfig(
+            system_instruction=sys_instruction,
+            temperature=0.3,
+            tools=[types.Tool(function_declarations=[actualizar_dominio_func])]
+        ),
+    )
+    
+    tool_called = False
+    respuesta_texto = res.text or ""
+    
+    if res.function_calls:
+        for call in res.function_calls:
+            if call.name == "actualizar_dominio_tema":
+                tema_id = call.args["tema_id"]
+                incremento = int(call.args["incremento"])
+                
+                async def _update_progreso(s_list: list) -> list:
+                    for s in s_list:
+                        if s["id"] == slot_id:
+                            for t in s.get("temas", []):
+                                if t["id"] == tema_id:
+                                    t["dominio"] = min(100, t.get("dominio", 0) + incremento)
+                            
+                            total = sum(t["dominio"] for t in s["temas"])
+                            s["progreso_global"] = int(total / len(s["temas"]))
+                            if s["progreso_global"] >= 100:
+                                s["estado"] = "DOMINADO"
+                    return s_list
+                await progreso_store.update(_update_progreso)
+                tool_called = True
+                
+        if not respuesta_texto.strip():
+            respuesta_texto = "¡Excelente! Has demostrado dominio en este tema y he actualizado tu progreso en el sistema. Continuemos."
+
+    return {
+        "respuesta": respuesta_texto.strip(),
+        "updated": tool_called
+    }

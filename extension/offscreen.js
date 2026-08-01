@@ -2,7 +2,6 @@ const mediaRecorders = {};
 const recordedChunks = {};
 const audioContexts = {};
 const streams = {};
-const tempNames = {};
 const gainNodes = {};
 const cancelFlags = {};
 // Track recording start time per tab (for screenshot timestamps)
@@ -38,11 +37,11 @@ function openDB() {
 }
 
 // --- Audio chunks ---
-async function addChunkToDB(tabId, chunk, customName) {
+async function addChunkToDB(tabId, chunk) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(CHUNKS_STORE, 'readwrite');
-    tx.objectStore(CHUNKS_STORE).add({ tabId, chunk, customName, timestamp: Date.now() });
+    tx.objectStore(CHUNKS_STORE).add({ tabId, chunk, timestamp: Date.now() });
     tx.oncomplete = resolve;
     tx.onerror = reject;
   });
@@ -133,7 +132,7 @@ chrome.runtime.onMessage.addListener(async (message) => {
   if (message.type === 'START_RECORDING') {
     startRecording(message.streamId, message.tabId, message.ghostMode || false, message.intervalMin || 5);
   } else if (message.type === 'STOP_RECORDING') {
-    stopRecording(message.tabId, message.customName);
+    stopRecording(message.tabId);
   } else if (message.type === 'PAUSE_RECORDING') {
     pauseRecording(message.tabId);
   } else if (message.type === 'RESUME_RECORDING') {
@@ -267,7 +266,7 @@ async function startRecording(streamId, tabId, isGhost, intervalMin) {
     mediaRecorder.ondataavailable = async (event) => {
       if (event.data.size > 0) {
         recordedChunks[tabId].push(event.data);
-        await addChunkToDB(tabId, event.data, tempNames[tabId] || '');
+        await addChunkToDB(tabId, event.data);
       }
     };
 
@@ -314,10 +313,7 @@ async function startRecording(streamId, tabId, isGhost, intervalMin) {
         delete videoElements[tabId];
       }
 
-      const cName = tempNames[tabId];
-      delete tempNames[tabId];
-
-      await uploadAudio(audioBlob, screenshots, tabId, cName);
+      await uploadAudio(audioBlob, screenshots, tabId);
     };
 
     mediaRecorder.start(5000); // Chunking every 5 seconds
@@ -331,10 +327,7 @@ async function startRecording(streamId, tabId, isGhost, intervalMin) {
   }
 }
 
-function stopRecording(tabId, customName) {
-  if (customName) {
-    tempNames[tabId] = customName;
-  }
+function stopRecording(tabId) {
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
     mediaRecorder.stop();
@@ -354,16 +347,12 @@ function cancelRecording(tabId) {
 }
 
 // --- Upload: Audio + Screenshots ---
-async function uploadAudio(audioBlob, screenshots, tabId, customName) {
+async function uploadAudio(audioBlob, screenshots, tabId) {
   updateState(tabId, 'uploading');
 
   try {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'grabacion.webm');
-
-    if (customName && customName.trim() !== '') {
-      formData.append('custom_name', customName.trim());
-    }
 
     // Append each screenshot image as a separate file
     screenshots.forEach((shot, index) => {
@@ -384,7 +373,7 @@ async function uploadAudio(audioBlob, screenshots, tabId, customName) {
       updateState(tabId, 'completed');
     } else {
       console.error('Upload failed:', response.statusText);
-      await saveLocallyFallback(audioBlob, screenshots, customName, tabId);
+      await saveLocallyFallback(audioBlob, screenshots, tabId);
     }
   } catch (error) {
     if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
@@ -392,12 +381,12 @@ async function uploadAudio(audioBlob, screenshots, tabId, customName) {
     } else {
       console.error('Error uploading:', error);
     }
-    await saveLocallyFallback(audioBlob, screenshots, customName, tabId);
+    await saveLocallyFallback(audioBlob, screenshots, tabId);
   }
 }
 
 // --- Fallback: Save everything locally ---
-async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
+async function saveLocallyFallback(audioBlob, screenshots, tabId) {
   try {
     const rootSubfolder = 'Backups_Clases/';
     
@@ -405,7 +394,7 @@ async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
     // All files will go directly to the specific folder.
     
     const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-    const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'sesion';
+    const safeCustomName = 'sesion';
     
     // Create a unique folder for this specific session backup
     const sessionFolder = `${rootSubfolder}${safeCustomName}_${dateStr}/`;

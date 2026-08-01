@@ -25,6 +25,7 @@ async def save_markdown_and_metadata(
     tags: list,
     fecha_str: str,
     slot_id: str = None,
+    temario_atomico: list = None,
 ) -> None:
     """
     Guarda el archivo Markdown en resumenes/ y actualiza resumenes_meta.json.
@@ -65,7 +66,22 @@ async def save_markdown_and_metadata(
             for s in slots:
                 if s["id"] == slot_id:
                     s["estado"] = "AL_DIA"
-                    s["md_vinculado"] = md_filename
+                    s["md_vinculado"] = suggested_filename
+                    if temario_atomico:
+                        # Inicializar progreso en 0 para cada tema
+                        temas = []
+                        for tema in temario_atomico:
+                            tema_id = tema.get("id", f"tema_{len(temas)+1}")
+                            temas.append({
+                                "id": tema_id,
+                                "nombre": tema.get("nombre", "Tema sin nombre"),
+                                "profundidad_sesion": tema.get("profundidad_sesion", "superficial"),
+                                "dominio": 0
+                            })
+                        s["temas"] = temas
+                        # Si tiene temario, el estado se vuelve EN_PROGRESO en lugar de AL_DIA
+                        s["estado"] = "EN_PROGRESO"
+                        s["progreso_global"] = 0
             return slots
         await progreso_store.update(_update_slot)
 

@@ -643,10 +643,14 @@
               <i data-lucide="panel-left-close" class="w-4 h-4"></i>
             </button>
           </div>
-          <div class="px-4 pb-3 border-b border-borderGray">
+          <div class="px-4 pb-3 border-b border-borderGray flex flex-col gap-2">
              <select id="doc-materia-filter" onchange="loadSummaries()" class="w-full bg-background border border-borderGray rounded text-xs p-2 text-charcoal font-medium focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all">
                 <option value="todas">Todas las materias</option>
              </select>
+             <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-textMuted absolute left-2.5 top-1/2 transform -translate-y-1/2"></i>
+                <input type="text" id="doc-search-filter" oninput="filterSummariesList()" placeholder="Buscar documento..." class="w-full bg-background border border-borderGray rounded text-xs p-2 pl-8 text-charcoal font-medium focus:border-charcoal focus:ring-1 focus:ring-charcoal outline-none transition-all">
+             </div>
           </div>
           <div
             id="summaries-list"
@@ -964,14 +968,31 @@
         <div
           class="p-6 border-t border-borderGray flex justify-center bg-surface"
         >
-          <form id="tutor-form" class="flex gap-3 w-full max-w-4xl">
-            <input
-              type="text"
-              id="tutor-input"
-              disabled
-              class="flex-1 rounded-md px-4 py-3 text-sm bg-background border border-borderGray opacity-60 cursor-not-allowed"
-              placeholder="Inicia la simulación para responder..."
-            />
+          <form id="tutor-form" class="flex gap-3 w-full max-w-4xl relative">
+            <div class="relative flex flex-1 items-center">
+              <input type="file" id="tutor-image-upload" accept="image/*" class="hidden" onchange="previewTutorImage(event)" />
+              <button type="button" onclick="document.getElementById('tutor-image-upload').click()" id="tutor-img-btn" class="absolute left-3 text-textMuted hover:text-charcoal transition-colors disabled:opacity-50">
+                  <i data-lucide="image" class="w-4 h-4"></i>
+              </button>
+              
+              <!-- Image Preview -->
+              <div id="tutor-image-preview" class="absolute -top-16 left-0 hidden bg-surface border border-borderGray p-1.5 rounded-lg shadow-sm z-10">
+                  <div class="relative">
+                     <img src="" id="tutor-image-preview-img" class="h-12 w-12 rounded object-cover" />
+                     <button type="button" onclick="clearTutorImage()" class="absolute -top-2 -right-2 bg-charcoal text-white rounded-full p-0.5 hover:bg-red-500 transition-colors shadow-sm">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                     </button>
+                  </div>
+              </div>
+
+              <input
+                type="text"
+                id="tutor-input"
+                disabled
+                class="flex-1 rounded-md pl-10 pr-4 py-3 text-sm bg-background border border-borderGray opacity-60 cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-charcoal"
+                placeholder="Inicia la simulación para responder..."
+              />
+            </div>
             <button
               type="submit"
               id="tutor-send-btn"
@@ -1112,6 +1133,7 @@
             </div>
           </div>
         </div>
+
       </section>
 
       <!-- =======================
@@ -1369,6 +1391,90 @@
     </main>
     <div id="toast-container"></div>
 
+    <!-- MODAL: DETALLE SLOT -->
+    <div id="slot-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 transition-opacity duration-300">
+      <div class="bg-background rounded-xl shadow-2xl border border-borderGray w-full max-w-[800px] max-h-[90vh] flex flex-col transform scale-95 transition-transform duration-300" id="slot-modal-content">
+        <!-- Header -->
+        <div class="p-8 pb-6 border-b border-borderGray flex justify-between items-center shrink-0">
+           <div>
+              <h3 class="text-xl font-serif font-bold text-charcoal" id="slot-modal-title">Detalle de Sesión</h3>
+              <p class="text-sm text-textMuted mt-1" id="slot-modal-subtitle">Fecha</p>
+           </div>
+           <button onclick="closeSlotModal()" class="text-textMuted hover:text-charcoal transition-colors">
+              <i data-lucide="x" class="w-5 h-5"></i>
+           </button>
+        </div>
+        
+        <!-- Body -->
+        <div class="flex-1 overflow-y-auto p-8 flex flex-col gap-8">
+           
+           <!-- Estado y Acciones Principales -->
+           <div class="flex flex-col sm:flex-row sm:items-center justify-between p-6 bg-surface/50 border border-borderGray rounded-xl gap-4" id="slot-modal-status-container">
+              <div class="flex items-center gap-4">
+                 <div class="w-3 h-3 rounded-full bg-yellow-500" id="slot-modal-status-dot"></div>
+                 <div>
+                    <p class="text-xs font-bold text-textMuted uppercase tracking-wider mb-1">Estado</p>
+                    <p class="text-base font-medium text-charcoal" id="slot-modal-status-text">Pendiente</p>
+                 </div>
+              </div>
+              <div class="flex flex-wrap items-center gap-3" id="slot-modal-actions">
+                 <!-- Botones dinámicos: Abrir Documento / Subir Grabación -->
+              </div>
+           </div>
+           
+           <!-- Temario Atómico -->
+           <div id="slot-modal-temas-container" class="hidden flex flex-col gap-4 bg-surface/50 border border-borderGray rounded-xl p-6">
+              <h4 class="text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2">Temario Extraído (Nivel de Dominio)</h4>
+              <div id="slot-modal-temas-list" class="flex flex-col gap-3">
+                 <!-- Temas dinámicos -->
+              </div>
+           </div>
+
+           <!-- Controles Asistencia Rápidos -->
+           <div id="slot-modal-attendance" class="hidden">
+              <h4 class="text-[11px] font-bold text-textMuted uppercase tracking-wider mb-3">Control de Asistencia Rápido</h4>
+              <div class="flex flex-wrap gap-2">
+                 <button onclick="updateSlotStateModal('ASISTIO')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-all border-borderGray rounded-md">Asistí (Sin Grabar)</button>
+                 <button onclick="updateSlotStateModal('AUSENTE')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-all border-borderGray rounded-md">Falté</button>
+                 <button onclick="updateSlotStateModal('FERIADO')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-all border-borderGray rounded-md">Feriado / Cancelada</button>
+              </div>
+           </div>
+
+           <!-- Tareas Extraídas -->
+           <div id="slot-modal-tasks" class="hidden flex-col gap-4">
+              <div class="flex items-center justify-between">
+                 <h4 class="text-[11px] font-bold text-textMuted uppercase tracking-wider flex items-center gap-2">
+                    <i data-lucide="inbox" class="w-4 h-4"></i> Avisos de esta sesión
+                 </h4>
+                 <button id="btn-add-manual-task" class="text-[10px] uppercase font-bold tracking-wider text-accent hover:text-accent/80 transition-colors hidden">
+                    + Añadir
+                 </button>
+              </div>
+              
+              <!-- Formulario en línea para añadir tarea -->
+              <div id="slot-modal-add-task-form" class="hidden flex-col gap-2 p-4 bg-background border border-borderGray rounded-lg">
+                 <input type="text" id="manual-task-content" placeholder="Escribe el anuncio o tarea..." class="w-full bg-surface border border-borderGray rounded text-xs p-2 text-charcoal outline-none focus:border-charcoal focus:ring-1 focus:ring-charcoal">
+                 <div class="flex gap-2">
+                    <select id="manual-task-type" class="bg-surface border border-borderGray rounded text-xs p-2 text-charcoal outline-none focus:border-charcoal">
+                       <option value="tarea">Tarea</option>
+                       <option value="examen">Examen</option>
+                       <option value="aviso">Aviso</option>
+                       <option value="otro">Otro</option>
+                    </select>
+                    <input type="date" id="manual-task-date" title="Fecha (opcional)" class="flex-1 bg-surface border border-borderGray rounded text-xs p-2 text-charcoal outline-none focus:border-charcoal">
+                    <button id="btn-save-manual-task" class="btn-primary text-xs px-3 py-1 font-medium rounded">Guardar</button>
+                    <button id="btn-cancel-manual-task" class="btn-secondary text-xs px-3 py-1 font-medium rounded border border-borderGray bg-white text-textMuted hover:text-charcoal">Cancelar</button>
+                 </div>
+              </div>
+
+              <div id="slot-modal-tasks-list" class="flex flex-col gap-3">
+                 <!-- Tarjetas inyectadas dinámicamente -->
+              </div>
+           </div>
+
+        </div>
+      </div>
+    </div>
     <!-- MODAL: EDIT PROMPT -->
     <div id="prompt-modal" class="hidden fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm opacity-0 transition-opacity duration-300">
       <div class="bg-background rounded-xl shadow-2xl border border-borderGray w-full max-w-[800px] h-[80vh] flex flex-col transform scale-95 transition-transform duration-300">
@@ -1454,25 +1560,45 @@
         lucide.createIcons();
       }
 
-      function toggleBiblioteca() {
+      function toggleBiblioteca(forceState) {
         const sidebar = document.getElementById("biblioteca-sidebar");
         const showBtn = document.getElementById("btn-show-biblioteca");
-        sidebar.classList.toggle("collapsed");
+        
+        if (forceState === 'open') {
+            sidebar.classList.remove("collapsed");
+        } else if (forceState === 'closed') {
+            sidebar.classList.add("collapsed");
+        } else {
+            sidebar.classList.toggle("collapsed");
+        }
+        
         if (sidebar.classList.contains("collapsed")) {
             showBtn.classList.remove("hidden");
+            localStorage.setItem("biblioteca_state", "closed");
         } else {
             showBtn.classList.add("hidden");
+            localStorage.setItem("biblioteca_state", "open");
         }
       }
 
-      function toggleEntregables() {
+      function toggleEntregables(forceState) {
         const sidebar = document.getElementById("entregables-sidebar");
         const showBtn = document.getElementById("btn-show-entregables");
-        sidebar.classList.toggle("collapsed-right");
+        
+        if (forceState === 'open') {
+            sidebar.classList.remove("collapsed-right");
+        } else if (forceState === 'closed') {
+            sidebar.classList.add("collapsed-right");
+        } else {
+            sidebar.classList.toggle("collapsed-right");
+        }
+        
         if (sidebar.classList.contains("collapsed-right")) {
             showBtn.classList.remove("hidden");
+            localStorage.setItem("entregables_state", "closed");
         } else {
             showBtn.classList.add("hidden");
+            localStorage.setItem("entregables_state", "open");
         }
       }
 
@@ -1541,6 +1667,12 @@
            loadAudios();
         });
         loadAppSettings();
+
+        // Restore Sidebar states
+        const bibState = localStorage.getItem("biblioteca_state") || "closed";
+        toggleBiblioteca(bibState);
+        const entState = localStorage.getItem("entregables_state") || "closed";
+        toggleEntregables(entState);
 
         // Model Selector Init
         function getUiName(val) {
@@ -1783,9 +1915,93 @@
         if (tabId === "config") loadMaterias();
         if (tabId === "resumenes") loadSummaries();
         if (tabId === "tarjetas") loadTarjetas();
+        if (tabId === "progreso") loadProgreso();
       }
 
       // ====== TAB: RESUMENES ======
+      function filterSummariesList() {
+          const query = document.getElementById("doc-search-filter").value.toLowerCase();
+          const items = document.querySelectorAll("#summaries-list > div");
+          
+          items.forEach(item => {
+              const textContent = item.textContent.toLowerCase();
+              if (textContent.includes(query)) {
+                  item.style.display = "flex";
+              } else {
+                  item.style.display = "none";
+              }
+          });
+      }
+
+      function cargarYMostrarDocumento(filename) {
+          // Reset highlights in sidebar if they exist
+          document.querySelectorAll("#summaries-list div").forEach((d) => {
+              d.style.backgroundColor = "transparent";
+              d.style.borderColor = "transparent";
+          });
+          
+          // Highlight active file if it's currently rendered in the list
+          const fileItem = document.querySelector(`#summaries-list div[data-filename="${filename}"]`);
+          if (fileItem) {
+              fileItem.style.backgroundColor = "var(--color-bg)";
+              fileItem.style.borderColor = "var(--color-border)";
+              // Only scroll into view if we are on desktop or sidebar is open
+              const sidebar = document.getElementById("biblioteca-sidebar");
+              if (!sidebar.classList.contains("collapsed")) {
+                  fileItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+          }
+
+          // Fetch and Render
+          fetch(`/api/summaries/${filename}`)
+              .then((r) => r.json())
+              .then((d) => {
+                  document.getElementById("content-area").innerHTML = renderMarkdown(d.content);
+                  document.getElementById("content-area").dataset.filename = filename;
+                  attachImagePreviewToMarkdown();
+                  document.getElementById("content-area").classList.remove("hidden");
+                  document.getElementById("edit-area").classList.add("hidden");
+                  document.getElementById("edit-area").value = d.content;
+                  
+                  const header = document.getElementById("content-header");
+                  header.classList.remove("hidden");
+                  
+                  const btnEdit = document.getElementById("btn-edit-summary");
+                  const btnSave = document.getElementById("btn-save-summary");
+                  btnEdit.classList.remove("hidden");
+                  btnSave.classList.add("hidden");
+                  
+                  // Setup Edit Listeners
+                  btnEdit.onclick = () => {
+                      document.getElementById("content-area").classList.add("hidden");
+                      document.getElementById("edit-area").classList.remove("hidden");
+                      btnEdit.classList.add("hidden");
+                      btnSave.classList.remove("hidden");
+                  };
+                  
+                  btnSave.onclick = () => {
+                      const newContent = document.getElementById("edit-area").value;
+                      fetch(`/api/summaries/${filename}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ content: newContent }),
+                      }).then(() => {
+                          document.getElementById("content-area").innerHTML = renderMarkdown(newContent);
+                          attachImagePreviewToMarkdown();
+                          document.getElementById("content-area").classList.remove("hidden");
+                          document.getElementById("edit-area").classList.add("hidden");
+                          btnEdit.classList.remove("hidden");
+                          btnSave.classList.add("hidden");
+                          showToast("Documento guardado correctamente", "success");
+                      });
+                  };
+              })
+              .catch(err => {
+                  console.error(err);
+                  showToast("Error al cargar el documento", "error");
+              });
+      }
+
       function loadSummaries() {
         const filterVal = document.getElementById("doc-materia-filter")?.value || "todas";
         
@@ -1808,6 +2024,7 @@
             
             summaries.forEach((s) => {
               const div = document.createElement("div");
+              div.setAttribute("data-filename", s.filename);
               div.className =
                 "p-2 rounded-md hover:bg-background cursor-pointer text-charcoal flex justify-between items-center group transition-colors border border-transparent hover:border-borderGray";
 
@@ -1831,7 +2048,18 @@
                 ) {
                   fetch(`/api/summaries/${s.filename}`, {
                     method: "DELETE",
-                  }).then(() => loadSummaries());
+                  }).then(() => {
+                    loadSummaries();
+                    if (typeof loadProgreso === 'function') loadProgreso();
+                    
+                    if (document.getElementById("content-area").dataset.filename === s.filename) {
+                      document.getElementById("content-area").innerHTML = '<div class="flex flex-col items-center justify-center h-full text-textMuted/50 mt-20"><i data-lucide="file-x-2" class="w-16 h-16 mb-4 opacity-50"></i><p class="font-mono text-sm">Documento eliminado</p></div>';
+                      document.getElementById("content-header").classList.add("hidden");
+                      document.getElementById("edit-area").classList.add("hidden");
+                      delete document.getElementById("content-area").dataset.filename;
+                      lucide.createIcons();
+                    }
+                  });
                 }
               };
 
@@ -1839,69 +2067,7 @@
               div.appendChild(delBtn);
 
               div.onclick = () => {
-                document
-                  .querySelectorAll("#summaries-list div")
-                  .forEach((d) => {
-                    d.style.backgroundColor = "transparent";
-                    d.style.borderColor = "transparent";
-                  });
-                div.style.backgroundColor = "var(--color-bg)";
-                div.style.borderColor = "var(--color-border)";
-                fetch(`/api/summaries/${s.filename}`)
-                  .then((r) => r.json())
-                  .then((d) => {
-                    document.getElementById("content-area").innerHTML =
-                      renderMarkdown(d.content);
-                    attachImagePreviewToMarkdown();
-                    document
-                      .getElementById("content-area")
-                      .classList.remove("hidden");
-                    document
-                      .getElementById("edit-area")
-                      .classList.add("hidden");
-                    document.getElementById("edit-area").value = d.content;
-
-                    const header = document.getElementById("content-header");
-                    header.classList.remove("hidden");
-
-                    const btnEdit = document.getElementById("btn-edit-summary");
-                    const btnSave = document.getElementById("btn-save-summary");
-                    btnEdit.classList.remove("hidden");
-                    btnSave.classList.add("hidden");
-
-                    btnEdit.onclick = () => {
-                      document
-                        .getElementById("content-area")
-                        .classList.add("hidden");
-                      document
-                        .getElementById("edit-area")
-                        .classList.remove("hidden");
-                      btnEdit.classList.add("hidden");
-                      btnSave.classList.remove("hidden");
-                    };
-
-                    btnSave.onclick = () => {
-                      const newContent =
-                        document.getElementById("edit-area").value;
-                      fetch(`/api/summaries/${s.filename}`, {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ content: newContent }),
-                      }).then(() => {
-                        document.getElementById("content-area").innerHTML =
-                          renderMarkdown(newContent);
-                        attachImagePreviewToMarkdown();
-                        document
-                          .getElementById("content-area")
-                          .classList.remove("hidden");
-                        document
-                          .getElementById("edit-area")
-                          .classList.add("hidden");
-                        btnEdit.classList.remove("hidden");
-                        btnSave.classList.add("hidden");
-                      });
-                    };
-                  });
+                cargarYMostrarDocumento(s.filename);
               };
               list.appendChild(div);
             });
@@ -2174,11 +2340,18 @@
           });
       }
 
-      function deleteTarjeta(id) {
+      function deleteTarjeta(id, cardElementId = null) {
         if (confirm("¿Eliminar aviso?")) {
-          fetch(`/api/tarjetas/${id}`, { method: "DELETE" }).then(() =>
-            loadTarjetas(),
-          );
+          fetch(`/api/tarjetas/${id}`, { method: "DELETE" }).then(() => {
+            if (cardElementId) {
+                const el = document.getElementById(cardElementId);
+                if (el) el.remove();
+            } else {
+                loadTarjetas();
+            }
+            updateEntregablesSidebar();
+            showToast("Aviso eliminado", "success");
+          });
         }
       }
 
@@ -2381,6 +2554,7 @@
               } else {
                 stopColaPolling();
                 loadAudios(); // Actualizar listado cuando todo acabe
+                loadProgreso(); // Refresh the progress UI
               }
 
               data.cola.forEach((t) => {
@@ -2676,7 +2850,31 @@
         chatHistory.scrollTop = chatHistory.scrollHeight;
       }
       // ====== TAB: TUTOR SOCRÁTICO ======
+      let currentTutorV2SlotId = null;
+      let currentTutorV2ImageData = null;
+
+      function clearTutorImage() {
+         currentTutorV2ImageData = null;
+         document.getElementById('tutor-image-preview').classList.add('hidden');
+         document.getElementById('tutor-image-upload').value = "";
+      }
+
+      function previewTutorImage(event) {
+         const file = event.target.files[0];
+         if (!file) return;
+         const reader = new FileReader();
+         reader.onload = (e) => {
+            currentTutorV2ImageData = e.target.result;
+            document.getElementById('tutor-image-preview-img').src = currentTutorV2ImageData;
+            document.getElementById('tutor-image-preview').classList.remove('hidden');
+         };
+         reader.readAsDataURL(file);
+      }
+
       function iniciarSimulacionTutor() {
+        currentTutorV2SlotId = null;
+        clearTutorImage();
+        
         const select = document.getElementById("tutor-materia-select");
         if (!select.value) {
            showToast("Por favor selecciona una asignatura primero.", "error");
@@ -2710,6 +2908,42 @@
         input.focus();
       }
 
+      function iniciarSimulacionTutorV2(slotId) {
+          const slot = progresoSlots.find(s => s.id === slotId);
+          if (!slot) return;
+          
+          currentTutorV2SlotId = slotId;
+          clearTutorImage();
+          tutorHistoryState = [];
+          
+          const historyDiv = document.getElementById("tutor-history");
+          historyDiv.innerHTML = "";
+
+          const input = document.getElementById("tutor-input");
+          const btn = document.getElementById("tutor-send-btn");
+          
+          input.disabled = false;
+          input.classList.remove("opacity-60", "cursor-not-allowed");
+          input.placeholder = "Responde al Tutor V2...";
+          btn.disabled = false;
+          btn.classList.remove("opacity-60", "cursor-not-allowed");
+          
+          const mat = materias.find(m => m.id === slot.materia_id);
+          const matName = mat ? mat.nombre : "Clase";
+          
+          const temasPendientes = slot.temas ? slot.temas.filter(t => (t.dominio || 0) < 100).length : 0;
+          
+          const inicioText = `¡Hola! Soy tu **Tutor Cognitivo V2**. He analizado la sesión de **${matName}** del ${slot.fecha}. He detectado ${temasPendientes} conceptos que debemos certificar hoy. ¿Comenzamos con la evaluación?`;
+          appendTutorMessage(inicioText, false);
+
+          tutorHistoryState.push({
+            role: "model",
+            text: inicioText,
+          });
+
+          input.focus();
+      }
+
       function appendTutorMessage(text, isUser = false) {
         const historyDiv = document.getElementById("tutor-history");
         const bubble = document.createElement("div");
@@ -2719,45 +2953,87 @@
           bubble.innerHTML = escapeHTML(text);
         } else {
           bubble.className = `chat-bubble chat-ai border border-borderGray p-5 text-sm prose dark:prose-invert max-w-none`;
-          bubble.innerHTML = renderMarkdown(text);
+          
+          // Parse natural multiple choice A) B) C) to interactive UI
+          let parsedText = text;
+          
+          // Limpiar residuos de XML en caso de que Gemini se confunda
+          parsedText = parsedText.replace(/<\/?quiz\s*>/gi, '');
+          parsedText = parsedText.replace(/<\/?opcion[^>]*>/gi, '');
+
+          parsedText = parsedText.replace(/^([A-E])\)\s+(.*)$/gm, (match, optId, optText) => {
+              const cleanText = optText.replace(/"/g, '&quot;').replace(/'/g, "\\'");
+              return `<div class="mt-2 w-full not-prose"><button onclick="document.getElementById('tutor-input').value = '${optId}) ${cleanText}'; document.getElementById('tutor-send-btn').click();" class="text-left w-full px-4 py-3 rounded-lg border border-borderGray bg-surface hover:border-charcoal hover:shadow-sm transition-all flex gap-3 text-sm font-medium text-charcoal"><span class="font-bold text-textMuted">${optId})</span><span>${optText}</span></button></div>`;
+          });
+          
+          bubble.innerHTML = renderMarkdown(parsedText);
         }
 
         historyDiv.appendChild(bubble);
         historyDiv.scrollTop = historyDiv.scrollHeight;
       }
 
-      async function handleTutorSubmit() {
+      async function handleTutorSubmit(e) {
+        if (e) e.preventDefault();
         const input = document.getElementById("tutor-input");
         const btn = document.getElementById("tutor-send-btn");
         const text = input.value.trim();
-        if (!text) return;
+        
+        // We can send image only without text
+        if (!text && !currentTutorV2ImageData) return;
 
         const materiaId = document.getElementById("tutor-materia-select").value;
-        const model =
-          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+        const model = localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
 
-        appendTutorMessage(text, true);
+        if (currentTutorV2ImageData) {
+            appendTutorMessage(text ? text + "\\n*[Imagen adjunta]*" : "*[Imagen adjunta]*", true);
+        } else {
+            appendTutorMessage(text, true);
+        }
+        
         input.value = "";
         input.disabled = true;
         btn.disabled = true;
+        const imgBtn = document.getElementById("tutor-img-btn");
+        if (imgBtn) imgBtn.disabled = true;
+        
         const originalText = btn.innerHTML;
-        btn.innerHTML =
-          '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
         lucide.createIcons({ root: btn });
 
-        try {
-          const response = await fetch("/api/tutor/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              materia_id: materiaId,
-              historial: tutorHistoryState,
-              pregunta: text,
-              modelo_elegido: model,
-            }),
-          });
+        // Save image before clearing UI
+        const imageToSend = currentTutorV2ImageData;
+        clearTutorImage();
 
-          const data = await response.json();
+        try {
+          let response, data;
+          
+          if (currentTutorV2SlotId) {
+              response = await fetch("/api/tutor/v2/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  slot_id: currentTutorV2SlotId,
+                  historial: tutorHistoryState,
+                  pregunta: text,
+                  modelo_elegido: model,
+                  image_data: imageToSend
+                }),
+              });
+          } else {
+              response = await fetch("/api/tutor/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  materia_id: materiaId,
+                  historial: tutorHistoryState,
+                  pregunta: text,
+                  modelo_elegido: model,
+                }),
+              });
+          }
+
+          data = await response.json();
 
           if (!response.ok)
             throw new Error(data.detail || "Error en la conexión del tutor");
@@ -2766,6 +3042,11 @@
           tutorHistoryState.push({ role: "model", text: data.respuesta });
 
           appendTutorMessage(data.respuesta, false);
+          
+          if (data.updated && currentTutorV2SlotId) {
+             showToast("¡Dominio actualizado en la base de datos!", "success");
+             loadProgreso(); // Refresh the progress background state
+          }
 
         } catch (error) {
           console.error(error);
@@ -2776,6 +3057,7 @@
         } finally {
           input.disabled = false;
           btn.disabled = false;
+          if (imgBtn) imgBtn.disabled = false;
           btn.innerHTML = "Enviar";
           input.focus();
         }
@@ -2880,14 +3162,30 @@
                      bg = "bg-amber-50 dark:bg-amber-950/20";
                      border = "border-amber-200 dark:border-amber-900/50";
                      icon = `<i data-lucide="loader-2" class="w-4 h-4 text-amber-500 animate-spin"></i>`;
-                  } else if (slot.estado === "AL_DIA") {
+                  } else if (slot.estado === "AL_DIA") { // Legacy (Solo grabación)
+                     bg = "bg-blue-50 dark:bg-blue-950/20";
+                     border = "border-blue-200 dark:border-blue-900/50";
+                     icon = `<i data-lucide="file-audio" class="w-4 h-4 text-blue-500"></i>`;
+                  } else if (slot.estado === "EN_PROGRESO") {
+                     bg = "bg-indigo-50 dark:bg-indigo-950/20";
+                     border = "border-indigo-200 dark:border-indigo-900/50";
+                     const prog = slot.progreso_global || 0;
+                     const dashoffset = 50.2 * (1 - prog / 100);
+                     icon = `<div class="relative w-5 h-5 flex items-center justify-center">
+                               <svg class="w-5 h-5 transform -rotate-90 absolute">
+                                 <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="2" fill="transparent" class="text-indigo-200 dark:text-indigo-900/50"/>
+                                 <circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="2" fill="transparent" stroke-dasharray="50.2" stroke-dashoffset="${dashoffset}" class="text-indigo-500 transition-all duration-1000 ease-out"/>
+                               </svg>
+                               <span class="text-[7px] font-bold text-indigo-700 dark:text-indigo-300 absolute">${prog}%</span>
+                             </div>`;
+                  } else if (slot.estado === "DOMINADO") {
                      bg = "bg-emerald-50 dark:bg-emerald-950/20";
                      border = "border-emerald-200 dark:border-emerald-900/50";
-                     icon = `<i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>`;
+                     icon = `<i data-lucide="award" class="w-4 h-4 text-emerald-500"></i>`;
                   }
                   
                   html += `
-                    <div class="${bg} border ${border} p-4 rounded-xl flex flex-col gap-2 relative group hover:shadow-md transition-shadow cursor-pointer">
+                    <div onclick="openSlotModal('${slot.id}')" class="${bg} border ${border} p-4 rounded-xl flex flex-col gap-2 relative group hover:shadow-md transition-shadow cursor-pointer">
                         <div class="flex justify-between items-start">
                            <span class="text-[10px] font-bold text-textMuted font-mono">${slot.fecha}</span>
                            ${icon}
@@ -2896,7 +3194,7 @@
                         <div class="mt-auto pt-2 text-[10px] uppercase font-bold tracking-wider text-textMuted">
                            ${slot.estado}
                         </div>
-                        <button onclick="deleteSlot('${slot.id}')" class="absolute top-2 right-8 opacity-0 group-hover:opacity-100 text-textMuted hover:text-red-500 transition-opacity" title="Eliminar Slot">
+                        <button onclick="event.stopPropagation(); deleteSlot('${slot.id}')" class="absolute top-2 right-8 opacity-0 group-hover:opacity-100 text-textMuted hover:text-red-500 transition-opacity" title="Eliminar Slot">
                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
                         </button>
                     </div>
@@ -2921,7 +3219,11 @@
       function generarSemanaUI() {
          const date = document.getElementById("progreso-base-date").value;
          if(!date) return;
-         fetch(`/api/progreso/generar_semana?fecha_base=${date}`, { method: 'POST' })
+         fetch(`/api/progreso/generar_semana`, { 
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fecha_base: date })
+         })
             .then(res => res.json())
             .then(data => {
                if(data.status === "success") {
@@ -2956,6 +3258,302 @@
                console.error(err);
                showToast("Error eliminando semana", "error");
             });
+      }
+
+      let currentSlotModalId = null;
+
+      function openSlotModal(slotId) {
+          const slot = progresoSlots.find(s => s.id === slotId);
+          if (!slot) return;
+          
+          currentSlotModalId = slotId;
+          
+          const modal = document.getElementById("slot-modal");
+          const content = document.getElementById("slot-modal-content");
+          
+          // Set Header
+          const mat = materias.find(m => m.id === slot.materia_id);
+          document.getElementById("slot-modal-title").textContent = mat ? mat.nombre : "Clase";
+          
+          // Use UTC for date parsing to avoid timezone shifts
+          const parts = slot.fecha.split('-');
+          const dateObj = new Date(Date.UTC(parts[0], parts[1]-1, parts[2]));
+          const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+          document.getElementById("slot-modal-subtitle").textContent = dateObj.toLocaleDateString('es-ES', options);
+          
+          // Set Status
+          const statusText = document.getElementById("slot-modal-status-text");
+          const statusDot = document.getElementById("slot-modal-status-dot");
+          const attendanceControls = document.getElementById("slot-modal-attendance");
+          const actionsContainer = document.getElementById("slot-modal-actions");
+          
+          statusText.textContent = slot.estado;
+          actionsContainer.innerHTML = "";
+          
+          if (slot.estado === "AL_DIA" || slot.estado === "DOMINADO" || slot.estado === "EN_PROGRESO") {
+              if (slot.estado === "AL_DIA") statusDot.className = "w-3 h-3 rounded-full bg-blue-500 shrink-0";
+              else if (slot.estado === "DOMINADO") statusDot.className = "w-3 h-3 rounded-full bg-emerald-500 shrink-0";
+              else if (slot.estado === "EN_PROGRESO") statusDot.className = "w-3 h-3 rounded-full bg-indigo-500 shrink-0";
+              
+              attendanceControls.classList.add("hidden");
+              
+              if (slot.md_vinculado) {
+                  const btn = document.createElement("button");
+                  btn.className = "btn-primary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all shrink-0";
+                  btn.innerHTML = `<i data-lucide="book-open" class="w-4 h-4"></i> Abrir Apuntes`;
+                  btn.onclick = () => {
+                      closeSlotModal();
+                      abrirDocumentoDesdeSlot(slot.md_vinculado);
+                  };
+                  actionsContainer.appendChild(btn);
+                  
+                  if (slot.estado === "EN_PROGRESO") {
+                     const btnStudy = document.createElement("button");
+                     btnStudy.className = "btn-secondary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all shrink-0 bg-white border border-borderGray text-indigo-600";
+                     btnStudy.innerHTML = `<i data-lucide="brain-circuit" class="w-4 h-4"></i> Entrar a Sala`;
+                     btnStudy.onclick = () => {
+                         closeSlotModal();
+                         switchTab('tutor');
+                         setTimeout(() => iniciarSimulacionTutorV2(slot.id), 100);
+                     };
+                     actionsContainer.appendChild(btnStudy);
+                  }
+              }
+          } else {
+              if (slot.estado === "AUSENTE") statusDot.className = "w-3 h-3 rounded-full bg-red-500 shrink-0";
+              else if (slot.estado === "EN_COLA") statusDot.className = "w-3 h-3 rounded-full bg-amber-500 animate-pulse shrink-0";
+              else statusDot.className = "w-3 h-3 rounded-full bg-yellow-500 shrink-0";
+              
+              attendanceControls.classList.remove("hidden");
+              
+              const btnUpload = document.createElement("button");
+              btnUpload.className = "btn-secondary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all bg-white border border-borderGray shrink-0";
+              btnUpload.innerHTML = `<i data-lucide="upload-cloud" class="w-4 h-4"></i> Subir Grabación`;
+              btnUpload.onclick = () => {
+                  closeSlotModal();
+                  switchTab('audios');
+                  setTimeout(() => {
+                      const select = document.getElementById("backup-slot-select");
+                      if(select) {
+                          select.value = slot.id;
+                          // Scroll slightly to the upload area
+                          select.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                  }, 150);
+              };
+              actionsContainer.appendChild(btnUpload);
+          }
+          
+          // Temario Atómico
+          const temasContainer = document.getElementById("slot-modal-temas-container");
+          const temasList = document.getElementById("slot-modal-temas-list");
+          if (slot.temas && slot.temas.length > 0) {
+              temasContainer.classList.remove("hidden");
+              temasList.innerHTML = "";
+              slot.temas.forEach(tema => {
+                  const dom = tema.dominio || 0;
+                  const bgBar = dom === 100 ? "bg-emerald-500" : "bg-indigo-500";
+                  temasList.innerHTML += `
+                     <div class="flex flex-col gap-2 p-3 bg-white border border-borderGray rounded-lg">
+                        <div class="flex justify-between items-start">
+                           <span class="text-xs font-bold text-charcoal">${tema.nombre}</span>
+                           <span class="text-[10px] font-mono text-textMuted">${dom}%</span>
+                        </div>
+                        <p class="text-[10px] text-textMuted leading-tight">${tema.profundidad_sesion}</p>
+                        <div class="w-full h-1.5 bg-surface rounded-full overflow-hidden mt-1">
+                           <div class="h-full ${bgBar} transition-all duration-500" style="width: ${dom}%"></div>
+                        </div>
+                     </div>
+                  `;
+              });
+          } else {
+              temasContainer.classList.add("hidden");
+          }
+          
+          // Tareas / Avisos
+          const tasksContainer = document.getElementById("slot-modal-tasks");
+          const tasksList = document.getElementById("slot-modal-tasks-list");
+          const btnAddTask = document.getElementById("btn-add-manual-task");
+          const addTaskForm = document.getElementById("slot-modal-add-task-form");
+          const btnSaveTask = document.getElementById("btn-save-manual-task");
+          const btnCancelTask = document.getElementById("btn-cancel-manual-task");
+          
+          tasksContainer.classList.add("hidden");
+          btnAddTask.classList.add("hidden");
+          addTaskForm.classList.add("hidden");
+          tasksList.innerHTML = `<p class="text-xs text-textMuted italic">Cargando avisos...</p>`;
+          
+          if (slot.estado === "AL_DIA" || slot.estado === "EN_PROGRESO" || slot.estado === "DOMINADO") {
+              tasksContainer.classList.remove("hidden");
+              btnAddTask.classList.remove("hidden");
+              
+              // Reset Form
+              document.getElementById("manual-task-content").value = "";
+              document.getElementById("manual-task-date").value = "";
+              
+              btnAddTask.onclick = () => {
+                  addTaskForm.classList.remove("hidden");
+                  btnAddTask.classList.add("hidden");
+              };
+              
+              btnCancelTask.onclick = () => {
+                  addTaskForm.classList.add("hidden");
+                  btnAddTask.classList.remove("hidden");
+              };
+              
+              btnSaveTask.onclick = () => {
+                  const content = document.getElementById("manual-task-content").value.trim();
+                  const type = document.getElementById("manual-task-type").value;
+                  const dateStr = document.getElementById("manual-task-date").value.trim();
+                  if (!content) return;
+                  
+                  btnSaveTask.disabled = true;
+                  btnSaveTask.textContent = "Guardando...";
+                  
+                  fetch("/api/tarjetas", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                          materia_id: slot.materia_id,
+                          origen_md: slot.md_vinculado || "",
+                          origen_slot_id: slot.id,
+                          contenido: content,
+                          tipo: type,
+                          referencia_temporal: dateStr
+                      })
+                  }).then(r => r.json()).then(res => {
+                      btnSaveTask.disabled = false;
+                      btnSaveTask.textContent = "Guardar";
+                      addTaskForm.classList.add("hidden");
+                      btnAddTask.classList.remove("hidden");
+                      showToast("Anuncio creado exitosamente", "success");
+                      // Recargar la lista de tareas
+                      loadSlotTasks();
+                      // Recargar el sidebar de entregables si está abierto
+                      updateEntregablesSidebar();
+                  }).catch(err => {
+                      btnSaveTask.disabled = false;
+                      btnSaveTask.textContent = "Guardar";
+                      showToast("Error al crear el anuncio", "error");
+                  });
+              };
+              
+              const loadSlotTasks = () => {
+                  fetch('/api/tarjetas?materia_id=todas')
+                      .then(res => res.json())
+                      .then(data => {
+                          if (data.tarjetas) {
+                              const slotCards = data.tarjetas.filter(t => t.origen_slot_id === slotId);
+                              if (slotCards.length > 0) {
+                                  tasksList.innerHTML = "";
+                                  slotCards.forEach(t => {
+                                      const card = document.createElement("div");
+                                      const cardId = 'slot-card-' + t.id;
+                                      card.id = cardId;
+                                      card.className = "bg-background border border-borderGray rounded-lg p-4 flex gap-4 items-start shadow-sm group";
+                                      card.innerHTML = `
+                                          <div class="mt-0.5 shrink-0">
+                                             <i data-lucide="${t.tipo === 'aviso' ? 'bell' : 'check-square'}" class="w-4 h-4 text-textMuted"></i>
+                                          </div>
+                                          <div class="flex-1 min-w-0">
+                                              <h5 class="text-sm font-bold text-charcoal leading-tight mb-1 truncate">${t.titulo || 'Anuncio'}</h5>
+                                              <p class="text-xs text-textMuted whitespace-normal break-words">${t.descripcion || t.contenido || 'Sin descripción'}</p>
+                                          </div>
+                                          <button onclick="deleteTarjeta('${t.id}', '${cardId}')" class="text-textMuted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1">
+                                              <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                          </button>
+                                      `;
+                                      tasksList.appendChild(card);
+                                  });
+                                  lucide.createIcons({ root: tasksList });
+                              } else {
+                                  tasksList.innerHTML = `<p class="text-xs text-textMuted italic">No hay avisos extraídos para esta sesión.</p>`;
+                              }
+                          }
+                      })
+                      .catch(err => console.error("Error cargando tarjetas para modal:", err));
+              }
+              loadSlotTasks();
+          }
+          
+          modal.classList.remove("hidden");
+          // Trigger reflow for transition
+          void modal.offsetWidth;
+          modal.classList.remove("opacity-0");
+          content.classList.remove("scale-95");
+          lucide.createIcons();
+      }
+
+      function closeSlotModal() {
+          const modal = document.getElementById("slot-modal");
+          const content = document.getElementById("slot-modal-content");
+          
+          modal.classList.add("opacity-0");
+          content.classList.add("scale-95");
+          
+          setTimeout(() => {
+              modal.classList.add("hidden");
+          }, 300);
+          currentSlotModalId = null;
+      }
+
+      function updateSlotStateModal(newState) {
+          if (!currentSlotModalId) return;
+          
+          // Si cambian a FERIADO, vamos a mapearlo a AUSENTE internamente, o usar FERIADO si el backend lo soporta. 
+          // En nuestro sistema, el backend acepta string libre en `estado`.
+          
+          fetch(`/api/progreso/${currentSlotModalId}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ estado: newState })
+          })
+          .then(res => res.json())
+          .then(data => {
+              showToast("Estado actualizado correctamente.");
+              loadProgreso();
+              closeSlotModal();
+          })
+          .catch(err => showToast("Error al actualizar estado", "error"));
+      }
+
+      function abrirDocumentoDesdeSlot(md_filename) {
+          const filter = document.getElementById("doc-materia-filter");
+          if (filter) filter.value = "todas";
+          
+          // Clear any search filter if present
+          const searchFilter = document.getElementById("doc-search-filter");
+          if (searchFilter) {
+              searchFilter.value = "";
+              setTimeout(() => { if (typeof filterSummariesList === 'function') filterSummariesList(); }, 100);
+          }
+          
+          switchTab('resumenes');
+          
+          // Cargar el documento programáticamente SIN depender del DOM de la barra lateral
+          cargarYMostrarDocumento(md_filename);
+          
+          // Poll to highlight in sidebar once it renders asynchronously
+          let attempts = 0;
+          const interval = setInterval(() => {
+              const fileItem = document.querySelector(`#summaries-list div[data-filename="${md_filename}"]`);
+              if (fileItem) {
+                  clearInterval(interval);
+                  document.querySelectorAll("#summaries-list div").forEach((d) => {
+                      d.style.backgroundColor = "transparent";
+                      d.style.borderColor = "transparent";
+                  });
+                  fileItem.style.backgroundColor = "var(--color-bg)";
+                  fileItem.style.borderColor = "var(--color-border)";
+                  const sidebar = document.getElementById("biblioteca-sidebar");
+                  if (sidebar && !sidebar.classList.contains("collapsed")) {
+                      fileItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  }
+              } else if (attempts > 30) {
+                  clearInterval(interval);
+              }
+              attempts++;
+          }, 100);
       }
 
       function getMonday(dStr) {
@@ -3320,13 +3918,24 @@
         setTimeout(() => modal.classList.add("hidden"), 250);
       }
 
-      // Keyboard navigation for image preview
+      // Global Keyboard listeners
       document.addEventListener("keydown", (e) => {
-        const modal = document.getElementById("image-preview-modal");
-        if (modal.classList.contains("hidden")) return;
-        if (e.key === "Escape") closeImagePreview();
-        if (e.key === "ArrowLeft") navigatePreview(-1);
-        if (e.key === "ArrowRight") navigatePreview(1);
+        const previewModal = document.getElementById("image-preview-modal");
+        const slotModal = document.getElementById("slot-modal");
+        const materiaModal = document.getElementById("materia-modal");
+        const promptModal = document.getElementById("prompt-modal");
+
+        if (e.key === "Escape") {
+            if (previewModal && !previewModal.classList.contains("hidden")) closeImagePreview();
+            else if (slotModal && !slotModal.classList.contains("hidden")) closeSlotModal();
+            else if (materiaModal && !materiaModal.classList.contains("hidden")) closeMateriaModal();
+            else if (promptModal && !promptModal.classList.contains("hidden")) closePromptModal();
+        }
+        
+        if (previewModal && !previewModal.classList.contains("hidden")) {
+            if (e.key === "ArrowLeft") navigatePreview(-1);
+            if (e.key === "ArrowRight") navigatePreview(1);
+        }
       });
     </script>
 

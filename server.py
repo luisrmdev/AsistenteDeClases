@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -206,7 +206,14 @@ async def worker_loop():
                 tags = [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(",")] if tags_match else []
 
                 await export_service.save_markdown_and_metadata(
-                    md_filename, suggested_filename, suggested_folder, texto_limpio, tags, fecha_str, pending.get("slot_id")
+                    md_filename, 
+                    suggested_filename, 
+                    suggested_folder, 
+                    texto_limpio, 
+                    tags, 
+                    fecha_str, 
+                    pending.get("slot_id"),
+                    temario_atomico=json_data.get("temario_atomico")
                 )
 
                 # Pass image_paths so export can copy them to Obsidian Adjuntos/
@@ -352,6 +359,13 @@ class TutorChatRequest(BaseModel):
     historial: list = []
     pregunta: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
+
+class TutorV2ChatRequest(BaseModel):
+    slot_id: str
+    historial: list = []
+    pregunta: str
+    modelo_elegido: str = "gemini-3.1-flash-lite"
+    image_data: Optional[str] = None
 
 
 class SummaryUpdate(BaseModel):
@@ -1000,6 +1014,21 @@ async def tutor_chat(req: TutorChatRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/tutor/v2/chat")
+async def tutor_v2_chat(req: TutorV2ChatRequest):
+    try:
+        resultado = await llm_service.tutor_v2_agentic_chat(
+            slot_id=req.slot_id,
+            historial_mensajes=req.historial,
+            pregunta_actual=req.pregunta,
+            modelo=req.modelo_elegido,
+            image_data=req.image_data
+        )
+        return resultado
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ===========================================================================
 # Generate Task (Cola)
@@ -1233,6 +1262,31 @@ async def get_system_info():
 # ===========================================================================
 # Tarjetas Informativas
 # ===========================================================================
+
+from pydantic import BaseModel
+
+class TarjetaCreate(BaseModel):
+    materia_id: str
+    origen_md: str
+    origen_slot_id: str
+    contenido: str
+    tipo: str = "otro"
+    fecha_entrega: str = ""
+    referencia_temporal: str = ""
+
+@app.post("/api/tarjetas")
+async def create_tarjeta(req: TarjetaCreate):
+    from services.create_tarjeta import create_tarjeta_manual
+    nueva_tarjeta = await create_tarjeta_manual(
+        materia_id=req.materia_id,
+        origen_md=req.origen_md,
+        origen_slot_id=req.origen_slot_id,
+        contenido=req.contenido,
+        tipo=req.tipo,
+        fecha_entrega=req.fecha_entrega,
+        referencia_temporal=req.referencia_temporal
+    )
+    return {"message": "ok", "tarjeta": nueva_tarjeta}
 
 @app.get("/api/tarjetas")
 async def get_tarjetas(materia_id: str = None):

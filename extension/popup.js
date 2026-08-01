@@ -1,4 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize Lucide icons
+  lucide.createIcons();
+
   const recordBtn = document.getElementById('recordBtn');
   const stopBtn = document.getElementById('stopBtn');
   const pauseBtn = document.getElementById('pauseBtn');
@@ -8,7 +11,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const statusIndicator = document.getElementById('statusIndicator');
   const audioWarning = document.getElementById('audioWarning');
   const silenceTimeoutInput = document.getElementById('silenceTimeout');
-  const customFilenameInput = document.getElementById('customFilename');
   const countdownDisplay = document.getElementById('countdownDisplay');
   const countdownTimer = document.getElementById('countdownTimer');
   const durationTimer = document.getElementById('durationTimer');
@@ -17,26 +19,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   const manualScreenshotBtn = document.getElementById('manualScreenshotBtn');
   const screenshotFeedback = document.getElementById('screenshotFeedback');
 
-  const captureTaskBtn = document.getElementById('captureTaskBtn');
-  const captureStatus = document.getElementById('captureStatus');
-  const previewContainer = document.getElementById('previewContainer');
-  const capturePreviewImg = document.getElementById('capturePreviewImg');
-  const sendCaptureBtn = document.getElementById('sendCaptureBtn');
-  const cancelCaptureBtn = document.getElementById('cancelCaptureBtn');
-  const captureTaskBtnContainer = document.getElementById('captureTaskBtnContainer');
-
-  const tabBtnAudio = document.getElementById('tab-btn-audio');
-  const tabBtnCapture = document.getElementById('tab-btn-capture');
   const tabAudio = document.getElementById('tab-audio');
-  const tabCapture = document.getElementById('tab-capture');
-
+  
   const settingsBtn = document.getElementById('settingsBtn');
   const tabSettings = document.getElementById('tab-settings');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
   const screenshotIntervalMin = document.getElementById('screenshotIntervalMin');
   const backupAskAlways = document.getElementById('backupAskAlways');
 
-  let currentCaptureDataUrl = null;
   let countdownInterval = null;
 
   // --- FASE 1: Recuperacion de Desastres (v2 — limpia chunks + screenshots) ---
@@ -82,14 +72,13 @@ document.addEventListener('DOMContentLoaded', async () => {
           if (state !== 'recording' && state !== 'paused' && state !== 'uploading') {
             console.log(`Orphaned recording found for tab ${tabId}. Recovering...`);
             const chunks = byTab[tabId].sort((a, b) => a.timestamp - b.timestamp).map(c => c.chunk);
-            const customName = byTab[tabId][0].customName || '';
             const blob = new Blob(chunks, { type: 'audio/webm' });
             const url = URL.createObjectURL(blob);
 
             const rootSubfolder = 'Backups_Clases/';
             
             const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
-            const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'sesion';
+            const safeCustomName = 'sesion';
             const sessionFolder = `${rootSubfolder}${safeCustomName}_${dateStr}/`;
 
             // Download audio
@@ -200,21 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.set({ backupAskAlways: backupAskAlways.checked });
   });
 
-  // Load saved custom name
-  chrome.storage.local.get(['customNames'], (result) => {
-    const names = result.customNames || {};
-    if (names[currentTabId]) {
-      customFilenameInput.value = names[currentTabId];
-    }
-  });
 
-  customFilenameInput.addEventListener('input', () => {
-    chrome.storage.local.get(['customNames'], (result) => {
-      const names = result.customNames || {};
-      names[currentTabId] = customFilenameInput.value;
-      chrome.storage.local.set({ customNames: names });
-    });
-  });
 
   // Check current state for this specific tab
   chrome.storage.local.get(['recordingStates'], (result) => {
@@ -249,7 +224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isStarting) return;
     isStarting = true;
     recordBtn.disabled = true;
-    recordBtn.classList.add('opacity-50');
+    recordBtn.style.opacity = '0.5';
     chrome.runtime.sendMessage({ target: 'background', type: 'START_RECORDING', tabId: currentTabId });
   });
 
@@ -266,7 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   cancelBtn.addEventListener('click', () => {
-    if (confirm("Estas seguro de que deseas cancelar la grabacion? Todo el audio se perdera de forma permanente.")) {
+    if (confirm("¿Estás seguro de que deseas cancelar la grabación? Todo el audio se perderá de forma permanente.")) {
       chrome.runtime.sendMessage({ target: 'background', type: 'CANCEL_RECORDING', tabId: currentTabId });
     }
   });
@@ -330,20 +305,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     audioWarning.classList.add('hidden');
     isStarting = false;
     recordBtn.disabled = false;
-    recordBtn.classList.remove('opacity-50');
+    recordBtn.style.opacity = '1';
     silenceTimeoutInput.disabled = false;
-    silenceTimeoutInput.classList.remove('opacity-50', 'cursor-not-allowed');
-    customFilenameInput.disabled = false;
-    customFilenameInput.classList.remove('opacity-50', 'cursor-not-allowed');
 
     // Hide manual screenshot button by default
     if (manualScreenshotBtn) manualScreenshotBtn.classList.add('hidden');
 
     if (state === 'recording') {
       silenceTimeoutInput.disabled = true;
-      silenceTimeoutInput.classList.add('opacity-50', 'cursor-not-allowed');
-      customFilenameInput.disabled = true;
-      customFilenameInput.classList.add('opacity-50', 'cursor-not-allowed');
       recordBtn.classList.add('hidden');
       controlsGroup.classList.remove('hidden');
       controlsGroup.classList.add('flex-row');
@@ -353,13 +322,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       // Show manual screenshot button during active recording
       if (manualScreenshotBtn) manualScreenshotBtn.classList.remove('hidden');
 
-      statusIndicator.textContent = 'Grabacion Activa';
+      statusIndicator.textContent = 'Grabación Activa';
       statusIndicator.className = 'status-badge status-recording';
     } else if (state === 'paused') {
       silenceTimeoutInput.disabled = false;
-      silenceTimeoutInput.classList.remove('opacity-50', 'cursor-not-allowed');
-      customFilenameInput.disabled = false;
-      customFilenameInput.classList.remove('opacity-50', 'cursor-not-allowed');
 
       recordBtn.classList.add('hidden');
       controlsGroup.classList.remove('hidden');
@@ -371,11 +337,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       statusIndicator.className = 'status-badge status-idle';
     } else if (state === 'uploading') {
       silenceTimeoutInput.disabled = true;
-      silenceTimeoutInput.classList.add('opacity-50', 'cursor-not-allowed');
       recordBtn.classList.add('hidden');
       controlsGroup.classList.remove('flex-row');
       controlsGroup.classList.add('hidden');
-      statusIndicator.textContent = 'Procesando';
+      statusIndicator.textContent = 'Procesando...';
       statusIndicator.className = 'status-badge status-idle';
     } else if (state === 'completed') {
       recordBtn.classList.remove('hidden');
@@ -389,7 +354,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       recordBtn.classList.remove('hidden');
       controlsGroup.classList.remove('flex-row');
       controlsGroup.classList.add('hidden');
-      statusIndicator.textContent = 'Servidor inalcanzable. Audio guardado localmente como respaldo.';
+      statusIndicator.textContent = 'Audio guardado localmente como respaldo.';
       statusIndicator.className = 'status-badge status-warning';
 
       setTimeout(() => updateUI('idle', audible), 5000);
@@ -407,108 +372,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // --- TABS LOGIC ---
-  tabBtnAudio.addEventListener('click', () => {
-    tabAudio.classList.remove('hidden');
-    tabCapture.classList.add('hidden');
-    tabSettings.classList.add('hidden');
-    tabBtnAudio.className = 'segment-btn active';
-    tabBtnCapture.className = 'segment-btn';
-  });
-
-  tabBtnCapture.addEventListener('click', () => {
-    tabCapture.classList.remove('hidden');
-    tabAudio.classList.add('hidden');
-    tabSettings.classList.add('hidden');
-    tabBtnCapture.className = 'segment-btn active';
-    tabBtnAudio.className = 'segment-btn';
-  });
-
+  // --- TABS LOGIC (Settings vs Audio) ---
   settingsBtn.addEventListener('click', () => {
     tabAudio.classList.add('hidden');
-    tabCapture.classList.add('hidden');
     tabSettings.classList.remove('hidden');
-    tabBtnAudio.classList.remove('active');
-    tabBtnCapture.classList.remove('active');
   });
 
   closeSettingsBtn.addEventListener('click', () => {
     tabSettings.classList.add('hidden');
     tabAudio.classList.remove('hidden');
-    tabBtnAudio.classList.add('active');
-  });
-
-
-  captureTaskBtn.addEventListener('click', () => {
-    captureTaskBtn.disabled = true;
-    captureStatus.classList.add('hidden');
-    previewContainer.classList.add('hidden');
-
-    chrome.tabs.captureVisibleTab(null, { format: 'jpeg', quality: 80 }, (dataUrl) => {
-      captureTaskBtn.disabled = false;
-      if (chrome.runtime.lastError) {
-        captureStatus.textContent = 'Error: ' + chrome.runtime.lastError.message;
-        captureStatus.className = 'status-badge status-recording mt-4';
-        captureStatus.classList.remove('hidden');
-        return;
-      }
-      currentCaptureDataUrl = dataUrl;
-      capturePreviewImg.src = dataUrl;
-      captureTaskBtnContainer.classList.add('hidden');
-      previewContainer.classList.remove('hidden');
-      previewContainer.style.display = 'flex';
-    });
-  });
-
-  cancelCaptureBtn.addEventListener('click', () => {
-    currentCaptureDataUrl = null;
-    previewContainer.classList.add('hidden');
-    previewContainer.style.display = 'none';
-    captureTaskBtnContainer.classList.remove('hidden');
-    captureStatus.classList.add('hidden');
-  });
-
-  sendCaptureBtn.addEventListener('click', async () => {
-    if (!currentCaptureDataUrl) return;
-
-    try {
-      sendCaptureBtn.disabled = true;
-      captureStatus.textContent = 'Procesando Tarea...';
-      captureStatus.className = 'status-badge status-idle mt-4';
-      captureStatus.classList.remove('hidden');
-
-      const response = await fetch('http://localhost:8000/api/extract-task', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: currentCaptureDataUrl })
-      });
-
-      if (!response.ok) {
-          const errJson = await response.json().catch(() => ({}));
-          throw new Error(errJson.detail || 'Error en el servidor');
-      }
-
-      captureStatus.textContent = 'Tarea Guardada!';
-      captureStatus.className = 'status-badge status-success mt-4';
-      captureStatus.classList.remove('hidden');
-
-      setTimeout(() => {
-        captureStatus.classList.add('hidden');
-        previewContainer.classList.add('hidden');
-        previewContainer.style.display = 'none';
-        captureTaskBtnContainer.classList.remove('hidden');
-        sendCaptureBtn.disabled = false;
-        currentCaptureDataUrl = null;
-      }, 4000);
-
-    } catch (err) {
-      captureStatus.textContent = 'Error: ' + err.message;
-      captureStatus.className = 'status-badge status-recording mt-4';
-      captureStatus.classList.remove('hidden');
-      setTimeout(() => {
-          captureStatus.classList.add('hidden');
-          sendCaptureBtn.disabled = false;
-      }, 4000);
-    }
   });
 });

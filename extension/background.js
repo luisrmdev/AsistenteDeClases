@@ -25,9 +25,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     cancelRecording(message.tabId);
   } else if (message.type === 'UPDATE_STATE') {
     updateState(message.tabId, message.state);
-  } else if (message.type === 'CAPTURE_SCREENSHOT') {
-    captureTabScreenshot(message.tabId, sendResponse);
-    return true;
   } else if (message.type === 'MANUAL_SCREENSHOT_FROM_POPUP') {
     chrome.runtime.sendMessage({
       target: 'offscreen',
@@ -36,20 +33,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
   }
 });
-
-// --- Screenshot capture ---
-async function captureTabScreenshot(tabId, sendResponse) {
-  try {
-    const tab = await chrome.tabs.get(tabId);
-    const dataUrl = await chrome.tabs.captureVisibleTab(tab.windowId, { format: 'jpeg', quality: 75 });
-    sendResponse({ dataUrl });
-  } catch (e) {
-    console.warn('[Background] Screenshot capture failed:', e);
-    sendResponse({ dataUrl: null, error: e.message });
-  }
-}
-
-
 
 // Detectar silencio en las pestañas
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -171,11 +154,10 @@ async function stopRecording(tabId) {
   try {
     clearSilenceAlarm(tabId);
     chrome.alarms.clear(`screenshot_${tabId}`);
-    const result = await chrome.storage.local.get(['customNames', 'recordingTimers']);
-    const customName = (result.customNames || {})[tabId] || '';
+    const result = await chrome.storage.local.get(['recordingTimers']);
     const timers = result.recordingTimers || {};
     if (timers[tabId]) { delete timers[tabId]; await chrome.storage.local.set({ recordingTimers: timers }); }
-    await chrome.runtime.sendMessage({ target: 'offscreen', type: 'STOP_RECORDING', tabId, customName });
+    await chrome.runtime.sendMessage({ target: 'offscreen', type: 'STOP_RECORDING', tabId });
     try { chrome.scripting.executeScript({ target: { tabId }, func: () => { if (window._asistenteBeforeUnload) { window.removeEventListener('beforeunload', window._asistenteBeforeUnload); delete window._asistenteBeforeUnload; } } }); } catch(err) {}
   } catch (err) { console.warn("No se pudo contactar al offscreen. Reiniciando estado."); updateState(tabId, 'idle'); }
 }

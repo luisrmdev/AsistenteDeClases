@@ -1,5 +1,5 @@
 # Estado Actual del Proyecto — AsistenteClases
-> Última actualización: 2026-07-31. Refleja la arquitectura post-refactor modular (v3) con pipeline multi-modal completo y limpieza de Drive v1.2, así como mejoras en capturas periódicas y fallbacks hardcodeados.
+> Última actualización: 2026-08-01. Refleja la auditoría y refactorización profunda de la extensión de Chrome (v2.0), con eliminación de módulos legacy (Capturar Tarjeta), UI alineada a Asistente Identidad Visual, y limpieza total de metadatos manuales.
 
 ---
 
@@ -37,8 +37,9 @@ AsistenteClases/
     ├── manifest.json      Permisos: tabCapture, scripting, tabs, storage, downloads.
     ├── background.js      Service Worker: orquestador de grabación + silencio + fallbacks.
     ├── offscreen.js       MediaRecorder + IndexedDB (chunks + screenshots) + upload multimodal.
-    ├── popup.html         UI "Deep Midnight & Electric Cyan" con botones en píldora y tabs Grabar / Capturar Tarjeta / Ajustes.
-    └── popup.js           UI controller modular para grabación, capturas y extractor de tareas.
+    ├── popup.html         UI "Oscuro Midnight Slate" (CSS extraído), iconos Lucide locales, diseño purgado de tabs obsoletos.
+    ├── popup.css          Variables de diseño, utilidades visuales y badges de estado.
+    └── popup.js           Lógica UI enfocada exclusivamente en grabación, Disaster Recovery modularizado.
 ```
 
 ### `database.py` — Protección de Concurrencia
@@ -233,18 +234,26 @@ tags: [tag1, tag2]
 - Los `![[captura_*.jpg]]` en el Markdown generado por Gemini resuelven correctamente en Obsidian.
 - Falla silenciosamente si la ruta no está montada.
 
-### 5.5 Tablón de Tarjetas Informativas
+### 5.5 Tablón de Tarjetas Informativas (Avisos y Entregables)
 
-- `export_service.save_tarjetas_informativas()` persiste en `tarjetas_informativas.json`.
-- Dashboard: `PUT /api/tarjetas/{id}` (solo `nota_personal`) y `DELETE`.
+- **Extracción Automática**: Gemini extrae tareas automáticamente desde el audio/imágenes.
+- **Creación Manual**: Endpoint `POST /api/tarjetas` permite inyectar anuncios manualmente desde el modal de un Slot al Día, utilizando un `<input type="date">` nativo para robustez UI.
+- **Persistencia y UI**: `export_service.save_tarjetas_informativas()` persiste en `tarjetas_informativas.json`.
+- **Integración Transversal**: La eliminación (`DELETE /api/tarjetas/{id}`) actualiza en tiempo real tanto la vista principal, como el panel lateral "Entregables de la semana" y el propio modal del Slot, manteniendo la consistencia de datos sin necesidad de recargar la página.
 
-### 5.6 Extractor Visual de Tareas (Captura Directa)
+### 5.6 Extractor Visual de Tareas (Captura Directa) - [Migrado / Frontend-Only]
 
-- Pestaña "Captura" → `chrome.tabs.captureVisibleTab()` → JPEG.
-- `POST /api/extract-task { image_base64 }` → `llm_service.extract_task_from_image()`.
-- Crea .md + tarjeta informativa + copia a Obsidian.
+- Anteriormente existía una pestaña de "Captura" en la extensión. **Ha sido eliminada por completo** para reducir deuda técnica.
+- Ahora, la ingesta visual de tareas se maneja o bien subiendo imágenes al backend, o capturando de forma nativa desde la interfaz web (o delegándolo a futuras integraciones).
+- `POST /api/extract-task` sigue activo en el backend.
 
-### 5.7 Resolución de Rutas Multimedia (Seguridad)
+### 5.7 Visor Documental y Búsqueda Instantánea
+
+- Arquitectura de visualización programática (Desacoplada de la UI lateral). `cargarYMostrarDocumento(filename)` recupera asíncronamente el documento por API.
+- Búsqueda nativa (Live Filtering) incorporada en el frontend para filtrar instántaneamente documentos por título, fecha y materia sin latencia.
+- Sistema de "Deep Linking" entre los slots del "Control Semanal" y la vista de "Resúmenes", apoyado por un interval-polling puramente visual para iluminar el archivo en la barra lateral una vez renderizado.
+
+### 5.8 Resolución de Rutas Multimedia (Seguridad)
 
 - El backend usa helpers (`_media_url`, `_public_session_dir`) para exponer rutas consistentes `/media/session_.../archivo.jpg` sin filtrar rutas locales del sistema operativo.
 - El frontend utiliza `session_name` en lugar de `session_dir` para orquestar los endpoints DELETE de imágenes y sesiones, garantizando portabilidad multiplataforma.
@@ -306,15 +315,15 @@ Implementado en `llm_service.tutor_chat_with_rag()`.
 
 ---
 
-## 7. La Extensión de Chrome (v1.2)
+## 7. La Extensión de Chrome (v2.0)
 
 **Arquitectura Manifest V3 — Multi-Modal:**
 
 | Archivo | Rol |
 |---|---|
-| `background.js` | Service Worker: orquestador de grabación, silencio, fallbacks |
+| `background.js` | Service Worker: orquestador de grabación, alarmas anti-throttling |
 | `offscreen.js` | MediaRecorder + IndexedDB (chunks + screenshots) + upload multimodal |
-| `popup.html/js` | Grabar Audio / Clase Drive (guía) / Capturar Tarjeta / Ajustes |
+| `popup.html/js/css`| UI minimalista (Oscuro Midnight Slate), control de grabación, y Disaster Recovery |
 
 **Permisos** (`manifest.json` v1.2):
 - `activeTab`, `tabCapture`, `offscreen`, `storage`, `alarms`, `downloads`, `scripting`, `tabs`
@@ -333,13 +342,17 @@ La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) 
 
 **Tip integrado**: `document.querySelector('video').playbackRate = 4` para grabar a 4x velocidad.
 
-> **Por qué no se usa descarga directa**: Google Workspace con `preventDownload` bloquea yt-dlp (con cookies), fetch a URLs de videoplayback (DASH segmentado), y chrome.downloads. La reproducción en el navegador + tabCapture es la única vía funcional.
+> **Por qué no se usa descarga directa**: Google Workspace bloquea yt-dlp. La reproducción en el navegador + tabCapture es la única vía funcional.
+
+### Políticas de Seguridad (CSP) e Iconografía
+- **Lucide Icons**: Debido a la estricta CSP de Manifest V3, la extensión ya no carga scripts externos (CDNs). La librería `lucide.min.js` se aloja y distribuye localmente en el directorio de la extensión para evitar el bloqueo `script-src` y `unsafe-eval`.
+- **Desacople de Metadatos**: Se ha eliminado por completo la opción de definir "Etiquetas Personalizadas" o "Nombres de Sesión" desde el popup. Todo el upload y fallback usa el comodín estándar `sesion_YYYY-MM-DD`, delegando la clasificación semántica de las grabaciones al backend o al frontend web.
 
 ### IndexedDB — Schema v2 (`AudioRescueDB`)
 
 | Object Store | Contenido |
 |---|---|
-| `chunks` | `{ id, tabId, timestamp, customName, chunk: Blob }` — fragmentos de audio de 5s |
+| `chunks` | `{ id, tabId, timestamp, chunk: Blob }` — fragmentos de audio de 5s |
 | `screenshots` | `{ id, tabId, timestamp, image_base64 \| blob }` — capturas JPEG |
 
 **Capturas automáticas**: cada 5 minutos via `setInterval` en offscreen.js.
@@ -417,4 +430,8 @@ La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) 
 - **Puntería Sincronizada (Google Maps style)**: A diferencia del zoom clásico en HTML que expande hacia la esquina (top-left offset), este motor obliga un reflow instantáneo y calcula dinámicamente el scroll basado en el `getBoundingClientRect` para asegurar que el píxel original en el que se hizo clic/scroll permanezca perfectamente bloqueado bajo el cursor del usuario.
 - **Drag-to-Pan (Paneo inteligente)**: Bloquea agresivamente los eventos "ghost drag" nativos del navegador (`draggable="false"` + `e.preventDefault()`) permitiendo un arrastre libre y fluido, e interceptando pequeños micromovimientos (`draggedDistance > 10`) para no confundir arrastres con clics accidentales.
 
-
+### 9.3 Tutor V2 y Pruebas Dinámicas
+- **Preguntas Interactivas**: Eliminada la rigidez de las etiquetas XML `<quiz>`. El Frontend detecta automáticamente el patrón Markdown de opción múltiple (`A)`, `B)`, `C)`) y lo transforma de forma transparente en una botonera interactiva que inyecta la selección directamente al prompt.
+- **Prevención de Parsing (Codeblock)**: El motor de conversión HTML garantiza que los botones renderizados se envíen al parser `marked.js` en una sola línea y sin sangría izquierda (0-indent), evitando el encapsulamiento accidental en bloques `<pre><code>`.
+- **Estabilidad de Pydantic**: Solucionado el error `422 Unprocessable Content` configurando explícitamente `Optional[str]` para datos multimedia nulos.
+- **Sincronización Transversal**: Los endpoints asíncronos obligan recargas (`loadProgreso()`) cruzadas para propagar estados visuales en todo el dashboard.
