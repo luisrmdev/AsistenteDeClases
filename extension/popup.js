@@ -33,7 +33,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const settingsBtn = document.getElementById('settingsBtn');
   const tabSettings = document.getElementById('tab-settings');
   const closeSettingsBtn = document.getElementById('closeSettingsBtn');
-  const backupSubfolder = document.getElementById('backupSubfolder');
   const screenshotIntervalMin = document.getElementById('screenshotIntervalMin');
   const backupAskAlways = document.getElementById('backupAskAlways');
 
@@ -87,10 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const blob = new Blob(chunks, { type: 'audio/webm' });
             const url = URL.createObjectURL(blob);
 
-            const result = await chrome.storage.local.get(['backupSubfolder']);
-            let rootSubfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
-            rootSubfolder = rootSubfolder.replace(/^\/+/, ''); // Sanitize leading slash
-            if (rootSubfolder && !rootSubfolder.endsWith('/')) rootSubfolder += '/';
+            const rootSubfolder = 'Backups_Clases/';
             
             const dateStr = new Date().toISOString().replace(/[:.]/g, '-');
             const safeCustomName = customName ? customName.trim().replace(/[^a-zA-Z0-9_-]/g, '_') : 'sesion';
@@ -166,7 +162,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
   const currentTabId = tab.id;
-  const isAudible = tab.audible;
+  let isAudible = tab.audible;
 
   const ghostModeToggle = document.getElementById('ghostModeToggle');
   chrome.storage.local.get(['ghostModes'], (result) => {
@@ -188,25 +184,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.sendMessage({ target: 'offscreen', type: 'SET_GHOST_MODE', ghostMode: isGhost, tabId: currentTabId });
   });
 
-  // Load and save backup settings
-  chrome.storage.local.get(['backupSubfolder', 'backupAskAlways', 'screenshotIntervalMin'], async (result) => {
-    let subfolder = result.backupSubfolder !== undefined ? result.backupSubfolder : 'Backups_Clases/';
-    
-    // Sync con el backend si está disponible
-    try {
-      const res = await fetch('http://localhost:8000/api/settings');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.extension_backup_dir !== undefined) {
-          subfolder = data.extension_backup_dir;
-          chrome.storage.local.set({ backupSubfolder: subfolder });
-        }
-      }
-    } catch (e) {
-      console.log('Backend no disponible para sincronizar subcarpeta de backup');
-    }
-
-    backupSubfolder.value = subfolder;
+  // Load settings
+  chrome.storage.local.get(['backupAskAlways', 'screenshotIntervalMin'], async (result) => {
     backupAskAlways.checked = result.backupAskAlways || false;
     screenshotIntervalMin.value = result.screenshotIntervalMin || 5;
   });
@@ -215,10 +194,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     let val = parseInt(screenshotIntervalMin.value);
     if (isNaN(val) || val < 1) val = 5;
     chrome.storage.local.set({ screenshotIntervalMin: val });
-  });
-
-  backupSubfolder.addEventListener('input', () => {
-    chrome.storage.local.set({ backupSubfolder: backupSubfolder.value });
   });
 
   backupAskAlways.addEventListener('change', () => {
@@ -252,12 +227,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (namespace === 'local' && changes.recordingStates) {
       const states = changes.recordingStates.newValue || {};
       chrome.tabs.get(currentTabId, (updatedTab) => {
-        updateUI(states[currentTabId] || 'idle', updatedTab ? updatedTab.audible : false);
+        isAudible = updatedTab ? updatedTab.audible : false;
+        updateUI(states[currentTabId] || 'idle', isAudible);
       });
     }
   });
 
+  // Listen for audio changes in real-time while popup is open
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (tabId === currentTabId && changeInfo.audible !== undefined) {
+      isAudible = changeInfo.audible;
+      chrome.storage.local.get(['recordingStates'], (result) => {
+        const states = result.recordingStates || {};
+        updateUI(states[currentTabId] || 'idle', isAudible);
+      });
+    }
+  });
+
+  let isStarting = false;
   recordBtn.addEventListener('click', () => {
+    if (isStarting) return;
+    isStarting = true;
+    recordBtn.disabled = true;
+    recordBtn.classList.add('opacity-50');
     chrome.runtime.sendMessage({ target: 'background', type: 'START_RECORDING', tabId: currentTabId });
   });
 
@@ -336,7 +328,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function updateUI(state, audible) {
     audioWarning.classList.add('hidden');
+    isStarting = false;
     recordBtn.disabled = false;
+    recordBtn.classList.remove('opacity-50');
     silenceTimeoutInput.disabled = false;
     silenceTimeoutInput.classList.remove('opacity-50', 'cursor-not-allowed');
     customFilenameInput.disabled = false;

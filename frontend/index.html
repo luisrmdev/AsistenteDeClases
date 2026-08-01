@@ -240,6 +240,16 @@
         border-color: transparent;
       }
 
+      #entregables-sidebar {
+        transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s;
+        overflow: hidden;
+      }
+      #entregables-sidebar.collapsed-right {
+        width: 0;
+        transform: translateX(100%);
+        border-color: transparent;
+      }
+
       .btn-primary {
         background-color: var(--color-accent);
         color: var(--color-accent-text);
@@ -441,10 +451,17 @@
         border-radius: 8px;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
         transform: scale(0.92);
-        transition: transform 0.25s ease;
+        transition: transform 0.25s ease, max-width 0.25s ease, max-height 0.25s ease;
+        cursor: zoom-in;
       }
       #image-preview-modal.active img {
         transform: scale(1);
+      }
+      #image-preview-modal img.zoomed {
+        max-width: none;
+        max-height: none;
+        flex-shrink: 0;
+        /* cursor is handled dynamically by JS now */
       }
       #image-preview-modal .modal-close-btn {
         position: absolute;
@@ -563,6 +580,9 @@
         <button onclick="switchTab('resumenes')" id="nav-resumenes" class="w-full text-left px-6 py-2.5 transition-colors nav-btn active-nav flex items-center gap-3">
           <i data-lucide="file-text" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Documentos</span>
         </button>
+        <button onclick="switchTab('progreso')" id="nav-progreso" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
+          <i data-lucide="calendar" class="w-4 h-4 opacity-70 shrink-0 text-blue-500"></i> <span class="nav-text">Control Semanal</span>
+        </button>
         <button onclick="switchTab('audios')" id="nav-audios" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
           <i data-lucide="mic" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Por Procesar</span>
         </button>
@@ -669,6 +689,67 @@
       </section>
 
       <!-- =======================
+             TAB: CONTROL SEMANAL (PROGRESO)
+        ======================== -->
+      <section id="tab-progreso" class="tab-content hidden h-full flex fade-in overflow-hidden relative">
+        <!-- Main Content (Grid) -->
+        <div class="flex-1 overflow-y-auto px-16 py-12">
+          <div class="flex justify-between items-end mb-8 border-b border-borderGray pb-6">
+            <div>
+              <h2 class="text-4xl font-serif tracking-tight text-charcoal">
+                Control Semanal
+              </h2>
+              <p class="text-textMuted mt-3 text-sm">
+                Rastrea tus clases esperadas y vincula tus grabaciones.
+              </p>
+            </div>
+            <div class="flex items-center gap-4">
+                <button onclick="irASemanaActual()" class="btn-secondary text-xs px-3 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all text-textMuted hover:text-charcoal border border-borderGray rounded-md bg-white" title="Ir a la semana actual o más cercana">
+                  <i data-lucide="calendar-check" class="w-3 h-3"></i>
+                  Presente
+                </button>
+                <select id="progreso-weeks-dropdown" class="bg-surface text-xs rounded-md px-3 py-2 border border-borderGray font-medium outline-none focus:border-charcoal hidden" title="Explorar semanas generadas">
+                   <option value="">Semanas Generadas</option>
+                </select>
+                <input type="date" id="progreso-base-date" class="bg-surface text-xs rounded-md px-3 py-2 border border-borderGray font-medium outline-none focus:border-charcoal" title="Fecha base manual">
+                <button id="btn-eliminar-semana" onclick="eliminarSemanaUI()" class="btn-secondary text-red-500 hover:text-red-600 hover:bg-red-50 text-xs px-3 py-2 font-medium flex items-center gap-2 shadow-sm transition-all border border-red-200 hidden" title="Eliminar todos los slots de esta semana">
+                  <i data-lucide="trash-2" class="w-3 h-3"></i>
+                </button>
+               <button onclick="generarSemanaUI()" class="btn-primary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all">
+                 <i data-lucide="refresh-cw" class="w-3 h-3"></i>
+                 Generar Semana
+               </button>
+            </div>
+          </div>
+          
+          <div id="progreso-grid" class="grid grid-cols-1 md:grid-cols-5 gap-4">
+             <!-- Días se insertarán aquí dinámicamente -->
+          </div>
+        </div>
+
+        <!-- Sidebar: Entregables de la Semana -->
+        <div id="entregables-sidebar" class="w-80 border-l border-borderGray bg-surface flex flex-col h-full flex-shrink-0 transition-all duration-300">
+          <div class="p-6 border-b border-borderGray flex justify-between items-start">
+            <div>
+              <h3 class="text-[11px] font-bold uppercase tracking-[0.15em] text-charcoal flex items-center gap-2">
+                <i data-lucide="inbox" class="w-4 h-4 text-purple-600"></i> Entregables de la Semana
+              </h3>
+              <p class="text-[10px] text-textMuted mt-1">Tareas y exámenes inminentes</p>
+            </div>
+            <button onclick="toggleEntregables()" class="text-textMuted hover:text-charcoal transition p-1 rounded hover:bg-borderGray/50" aria-label="Ocultar entregables">
+              <i data-lucide="panel-right-close" class="w-4 h-4"></i>
+            </button>
+          </div>
+          <div id="entregables-sidebar-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+             <!-- Tarjetas tipo PENDIENTE se insertarán aquí -->
+          </div>
+        </div>
+        <button onclick="toggleEntregables()" id="btn-show-entregables" class="absolute top-4 right-4 z-10 bg-surface border border-borderGray rounded p-2 text-textMuted hover:text-charcoal shadow-sm transition-all hidden" aria-label="Mostrar entregables">
+           <i data-lucide="panel-right-open" class="w-4 h-4"></i>
+        </button>
+      </section>
+
+      <!-- =======================
              TAB: AUDIOS PENDIENTES
         ======================== -->
       <section
@@ -701,21 +782,29 @@
               Sube un archivo .zip generado por la extensión, o selecciona múltiples archivos a la vez (audio .webm + imágenes .jpg, o .json de respaldo).
             </p>
 
-            <div class="flex gap-2">
-              <input
-                type="file"
-                id="backup-audio-input"
-                accept="audio/*,video/*,image/*,.zip,.json"
-                multiple
-                class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray"
-              />
-              <button
-                onclick="uploadBackupAudio()"
-                id="btn-backup-upload"
-                class="btn-primary px-6 text-sm font-medium transition-all"
-              >
-                Subir y Encolar
-              </button>
+            <div class="flex flex-col gap-3">
+              <div class="flex gap-2">
+                <input
+                  type="file"
+                  id="backup-audio-input"
+                  accept="audio/*,video/*,image/*,.zip,.json"
+                  multiple
+                  class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray"
+                />
+              </div>
+              <div class="flex gap-2 items-center">
+                <select id="backup-slot-select" class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray outline-none focus:border-charcoal">
+                   <option value="">Vincular a Clase Pendiente (Opcional)</option>
+                   <!-- Opciones se llenarán dinámicamente -->
+                </select>
+                <button
+                  onclick="uploadBackupAudio()"
+                  id="btn-backup-upload"
+                  class="btn-primary px-6 py-2.5 text-sm font-medium transition-all"
+                >
+                  Subir y Encolar
+                </button>
+              </div>
             </div>
           </div>
 
@@ -992,6 +1081,31 @@
               </div>
             </div>
 
+            <!-- Días de Impartición -->
+            <div class="px-8 pb-4">
+              <label class="block text-[10px] font-bold text-textMuted uppercase tracking-wider mb-3">Días de Impartición (Para Control Semanal)</label>
+              <div class="flex flex-wrap gap-3" id="mat-dias-container">
+                 <label class="flex items-center gap-2 text-sm text-charcoal bg-surface px-3 py-1.5 rounded border border-borderGray cursor-pointer hover:border-charcoal transition-colors">
+                    <input type="checkbox" value="Lunes" class="mat-dia-checkbox accent-charcoal"> Lunes
+                 </label>
+                 <label class="flex items-center gap-2 text-sm text-charcoal bg-surface px-3 py-1.5 rounded border border-borderGray cursor-pointer hover:border-charcoal transition-colors">
+                    <input type="checkbox" value="Martes" class="mat-dia-checkbox accent-charcoal"> Martes
+                 </label>
+                 <label class="flex items-center gap-2 text-sm text-charcoal bg-surface px-3 py-1.5 rounded border border-borderGray cursor-pointer hover:border-charcoal transition-colors">
+                    <input type="checkbox" value="Miércoles" class="mat-dia-checkbox accent-charcoal"> Miércoles
+                 </label>
+                 <label class="flex items-center gap-2 text-sm text-charcoal bg-surface px-3 py-1.5 rounded border border-borderGray cursor-pointer hover:border-charcoal transition-colors">
+                    <input type="checkbox" value="Jueves" class="mat-dia-checkbox accent-charcoal"> Jueves
+                 </label>
+                 <label class="flex items-center gap-2 text-sm text-charcoal bg-surface px-3 py-1.5 rounded border border-borderGray cursor-pointer hover:border-charcoal transition-colors">
+                    <input type="checkbox" value="Viernes" class="mat-dia-checkbox accent-charcoal"> Viernes
+                 </label>
+                 <label class="flex items-center gap-2 text-sm text-charcoal bg-surface px-3 py-1.5 rounded border border-borderGray cursor-pointer hover:border-charcoal transition-colors">
+                    <input type="checkbox" value="Sábado" class="mat-dia-checkbox accent-charcoal"> Sábado
+                 </label>
+              </div>
+            </div>
+
             <div class="p-6 border-t border-borderGray flex gap-3 shrink-0 bg-surface/30 rounded-b-xl">
               <button onclick="closeMateriaModal()" class="btn-secondary flex-1 py-3 text-sm font-medium transition-all">Cancelar</button>
               <button id="btn-save-materia" onclick="saveMateria()" class="btn-primary flex-1 py-3 text-sm font-medium shadow-sm hover:shadow transition-all">Guardar Asignatura</button>
@@ -1191,23 +1305,6 @@
                       esta carpeta local de tu equipo.
                     </p>
                   </div>
-
-                  <div class="pt-4 border-t border-borderGray/60">
-                    <label
-                      class="block text-[11px] font-bold text-textMuted uppercase tracking-wider mb-2"
-                      >Carpeta de Respaldo de Extensión</label
-                    >
-                    <input
-                      type="text"
-                      id="config-extension-backup"
-                      class="w-full rounded-md p-3 text-sm bg-background border border-borderGray focus:border-charcoal outline-none transition-all"
-                      placeholder="Ej. Backups_Clases/"
-                    />
-                    <p class="text-xs text-textMuted mt-3 leading-relaxed">
-                      Subcarpeta dentro de tus Descargas donde la extensión guardará los respaldos de emergencia (.zip) si el servidor falla.
-                    </p>
-                  </div>
-
                 </div>
               </div>
 
@@ -1294,9 +1391,10 @@
     <script>
       // Configurar Marked para soportar KaTeX (matemáticas)
       if (window.marked && window.markedKatex) {
-        marked.use(markedKatex({
+        marked.use(window.markedKatex({
           throwOnError: false,
-          output: "html"
+          output: "html",
+          nonStandard: true
         }));
       }
 
@@ -1306,6 +1404,23 @@
           // Reemplazar ![[imagen.jpg]] con ![Adjunto](/adjuntos/imagen.jpg)
           const processedText = text.replace(/!\[\[(.*?\.(jpg|jpeg|png|webp))\]\]/gi, '![Adjunto](/adjuntos/$1)');
           return marked.parse(processedText);
+      }
+
+      // Delegación de eventos para las imágenes en el visualizador Markdown
+      function attachImagePreviewToMarkdown() {
+          const contentArea = document.getElementById("content-area");
+          if (!contentArea) return;
+          const images = Array.from(contentArea.querySelectorAll("img"));
+          if (images.length === 0) return;
+          
+          const imageSrcs = images.map(img => img.src);
+          images.forEach((img, index) => {
+              // Estilizar para indicar que es interactiva
+              img.classList.add("cursor-pointer", "hover:opacity-80", "transition-opacity", "rounded-md", "shadow-sm");
+              img.onclick = () => {
+                  openImagePreview(img.src, img.alt || "Imagen adjunta", index, imageSrcs);
+              };
+          });
       }
 
       // Theme logic
@@ -1344,6 +1459,17 @@
         const showBtn = document.getElementById("btn-show-biblioteca");
         sidebar.classList.toggle("collapsed");
         if (sidebar.classList.contains("collapsed")) {
+            showBtn.classList.remove("hidden");
+        } else {
+            showBtn.classList.add("hidden");
+        }
+      }
+
+      function toggleEntregables() {
+        const sidebar = document.getElementById("entregables-sidebar");
+        const showBtn = document.getElementById("btn-show-entregables");
+        sidebar.classList.toggle("collapsed-right");
+        if (sidebar.classList.contains("collapsed-right")) {
             showBtn.classList.remove("hidden");
         } else {
             showBtn.classList.add("hidden");
@@ -1391,9 +1517,29 @@
 
       // Init
       document.addEventListener("DOMContentLoaded", () => {
+        const progresoDateInput = document.getElementById("progreso-base-date");
+        progresoDateInput.value = localStorage.getItem("last_progreso_date") || new Date().toISOString().split('T')[0];
+        progresoDateInput.addEventListener("change", (e) => {
+           localStorage.setItem("last_progreso_date", e.target.value);
+           renderProgresoGrid();
+           if(typeof syncDropdownValue === 'function') syncDropdownValue();
+        });
+
+        const progresoDropdown = document.getElementById("progreso-weeks-dropdown");
+        progresoDropdown.addEventListener("change", (e) => {
+           if(e.target.value) {
+               progresoDateInput.value = e.target.value;
+               localStorage.setItem("last_progreso_date", e.target.value);
+               renderProgresoGrid();
+           }
+        });
+        
         loadSummaries();
-        loadMaterias();
-        loadAudios();
+        loadMaterias().then(() => {
+           return loadProgreso();
+        }).then(() => {
+           loadAudios();
+        });
         loadAppSettings();
 
         // Model Selector Init
@@ -1484,10 +1630,6 @@
             document.getElementById("config-audio-silence").value = 
               data.audio_silence_db || -30;
 
-            if (data.extension_backup_dir) {
-              document.getElementById("config-extension-backup").value =
-                data.extension_backup_dir;
-            }
             if (data.default_model) {
               document.getElementById("model-selector").value =
                 data.default_model;
@@ -1502,7 +1644,6 @@
 
       function saveAppSettings() {
         const path = document.getElementById("config-obsidian-path").value;
-        const extensionBackupDir = document.getElementById("config-extension-backup").value;
         const maxAudioMB =
           parseInt(document.getElementById("config-max-audio-mb").value) || 500;
         const maxPapeleraItems =
@@ -1522,7 +1663,6 @@
 
         const payload = {
           obsidian_vault_path: path,
-          extension_backup_dir: extensionBackupDir,
           max_audio_upload_mb: maxAudioMB,
           max_papelera_items: maxPapeleraItems,
           rag_max_docs: ragMaxDocs,
@@ -1712,6 +1852,7 @@
                   .then((d) => {
                     document.getElementById("content-area").innerHTML =
                       renderMarkdown(d.content);
+                    attachImagePreviewToMarkdown();
                     document
                       .getElementById("content-area")
                       .classList.remove("hidden");
@@ -1749,6 +1890,7 @@
                       }).then(() => {
                         document.getElementById("content-area").innerHTML =
                           renderMarkdown(newContent);
+                        attachImagePreviewToMarkdown();
                         document
                           .getElementById("content-area")
                           .classList.remove("hidden");
@@ -1769,7 +1911,7 @@
 
       // ====== TAB: CONFIGURACION ======
       function loadMaterias() {
-        fetch("/api/materias")
+        return fetch("/api/materias")
           .then((r) => r.json())
           .then((data) => {
             materias = data;
@@ -1896,6 +2038,7 @@
           document.getElementById("mat-prompt").value = "";
           document.getElementById("mat-temperatura").value = "0.3";
           document.getElementById("mat-temperatura-val").innerText = "0.3";
+          document.querySelectorAll('.mat-dia-checkbox').forEach(cb => cb.checked = false);
         }
       }
 
@@ -1918,6 +2061,11 @@
         document.getElementById("mat-prompt").value = m.prompt_personalizado;
         document.getElementById("mat-temperatura").value = m.temperatura || "0.3";
         document.getElementById("mat-temperatura-val").innerText = m.temperatura || "0.3";
+        
+        document.querySelectorAll('.mat-dia-checkbox').forEach(cb => {
+            cb.checked = (m.dias_imparticion || []).includes(cb.value);
+        });
+        
         openMateriaModal(true);
       }
 
@@ -1926,6 +2074,8 @@
         const prompt = document.getElementById("mat-prompt").value;
         const temperatura = parseFloat(document.getElementById("mat-temperatura").value) || 0.3;
         
+        const dias_imparticion = Array.from(document.querySelectorAll('.mat-dia-checkbox:checked')).map(cb => cb.value);
+
         if (!nombre || !prompt)
           return showToast(
             "El Nombre y el Prompt Final son obligatorios.",
@@ -1936,7 +2086,7 @@
           fetch(`/api/materias/${editingMateriaId}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nombre, prompt_personalizado: prompt, temperatura }),
+            body: JSON.stringify({ nombre, prompt_personalizado: prompt, temperatura, dias_imparticion }),
           }).then(() => {
             editingMateriaId = null;
             closeMateriaModal();
@@ -1946,7 +2096,7 @@
           fetch("/api/materias", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ nombre, prompt_personalizado: prompt, temperatura }),
+            body: JSON.stringify({ nombre, prompt_personalizado: prompt, temperatura, dias_imparticion }),
           }).then(() => {
             closeMateriaModal();
             loadMaterias();
@@ -2072,11 +2222,27 @@
               return;
             }
 
-            let options = '<option value="" disabled selected>Selecciona una asignatura...</option>';
-            materias.forEach(
-              (m) =>
-                (options += `<option value="${m.id}">${m.nombre}</option>`),
-            );
+            let options = '<option value="" disabled selected>Selecciona destino...</option>';
+            
+            const pending = (typeof progresoSlots !== "undefined" ? progresoSlots : []).filter(s => s.estado === "AUSENTE" || s.estado === "EN_COLA");
+            if (pending.length > 0) {
+               pending.sort((a,b) => b.fecha.localeCompare(a.fecha));
+               options += `<optgroup label="Clases Pendientes (Recomendado)">`;
+               pending.forEach(slot => {
+                  const mat = materias.find(m => m.id === slot.materia_id);
+                  const name = mat ? mat.nombre : slot.materia_id;
+                  options += `<option value="${slot.id}">${slot.fecha} - ${name}</option>`;
+               });
+               options += `</optgroup>`;
+            }
+
+            if (materias.length > 0) {
+               options += `<optgroup label="Solo Asignatura (Sin Slot)">`;
+               materias.forEach(m => {
+                  options += `<option value="${m.id}">${m.nombre}</option>`;
+               });
+               options += `</optgroup>`;
+            }
 
             window.audiosMap = {};
             data.audios.forEach((a) => {
@@ -2288,13 +2454,23 @@
         const a = window.audiosMap[filename];
 
         if (!select.value) {
-          showToast("Por favor selecciona una asignatura para extraer apuntes.", "error");
+          showToast("Por favor selecciona un destino para extraer apuntes.", "error");
           return;
+        }
+        
+        let materiaId = select.value;
+        let slotId = null;
+        
+        if (select.value.startsWith("slot_")) {
+           slotId = select.value;
+           const slot = (typeof progresoSlots !== "undefined" ? progresoSlots : []).find(s => s.id === slotId);
+           if (slot) materiaId = slot.materia_id;
         }
 
         const payload = {
           filename: filename,
-          materia_id: select.value,
+          materia_id: materiaId,
+          slot_id: slotId,
           modelo_elegido:
             localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite",
           session_name: a ? a.session_name : null,
@@ -2382,6 +2558,11 @@
               customName = parts[1];
               formData.append("custom_name", customName);
             }
+          }
+
+          const slotSelect = document.getElementById("backup-slot-select");
+          if (slotSelect && slotSelect.value) {
+            formData.append("slot_id", slotSelect.value);
           }
 
           if (zipFile) {
@@ -2600,6 +2781,340 @@
         }
       }
 
+      // ====== TAB: PROGRESO ======
+      let progresoSlots = [];
+      function loadProgreso() {
+         return fetch("/api/progreso")
+            .then(res => res.json())
+            .then(data => {
+               progresoSlots = data.slots || [];
+               renderProgresoGrid();
+               populateWeeksDropdown();
+               updateBackupSlotSelect();
+               updateEntregablesSidebar();
+            })
+            .catch(err => console.error("Error cargando progreso:", err));
+      }
+
+      function renderProgresoGrid() {
+         const grid = document.getElementById("progreso-grid");
+         grid.innerHTML = "";
+         
+         const baseDateStr = document.getElementById("progreso-base-date").value;
+         if(!baseDateStr) return;
+         
+         const [y, m, d] = baseDateStr.split('-');
+         const baseDate = new Date(y, m - 1, d);
+         const dayOfWeek = baseDate.getDay(); 
+         const diff = baseDate.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+         const monday = new Date(baseDate.setDate(diff));
+         
+         const weekDates = [];
+         for(let i=0; i<6; i++) {
+             const dt = new Date(monday);
+             dt.setDate(monday.getDate() + i);
+             const isoDate = dt.getFullYear() + "-" + String(dt.getMonth() + 1).padStart(2, '0') + "-" + String(dt.getDate()).padStart(2, '0');
+             weekDates.push(isoDate);
+         }
+         
+         const days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+         const slotsByDay = {};
+         days.forEach((day, index) => {
+             slotsByDay[day] = {
+                 date: weekDates[index],
+                 slots: []
+             };
+         });
+         
+         let totalSlotsInWeek = 0;
+         progresoSlots.forEach(s => {
+             const dayName = s.dia_semana || s.dia;
+             if(slotsByDay[dayName] && weekDates.includes(s.fecha)) {
+                 slotsByDay[dayName].slots.push(s);
+                 totalSlotsInWeek++;
+             }
+         });
+         
+         const btnEliminar = document.getElementById("btn-eliminar-semana");
+         if (btnEliminar) {
+             if (totalSlotsInWeek > 0) {
+                 btnEliminar.classList.remove("hidden");
+             } else {
+                 btnEliminar.classList.add("hidden");
+             }
+         }
+         
+         let finalHtml = "";
+         
+         days.forEach(day => {
+            const dayData = slotsByDay[day];
+            const daySlots = dayData.slots;
+            
+            daySlots.sort((a,b) => a.fecha.localeCompare(b.fecha));
+            
+            let html = `
+              <div class="flex flex-col gap-3">
+                 <div class="text-center pb-2 border-b border-borderGray">
+                    <span class="text-[11px] font-bold text-textMuted uppercase tracking-wider">${day}</span>
+                    <div class="text-[9px] text-textMuted font-mono mt-1">${dayData.date}</div>
+                 </div>
+                 <div class="flex flex-col gap-3 flex-1">
+            `;
+            
+            if(daySlots.length === 0) {
+               html += `<div class="flex-1 flex items-center justify-center text-textMuted text-xs font-serif italic border border-dashed border-borderGray rounded-lg bg-surface/30 p-4 text-center">Libre</div>`;
+            } else {
+               daySlots.forEach(slot => {
+                  const mat = materias.find(m => m.id === slot.materia_id);
+                  const matName = mat ? mat.nombre : slot.materia_id;
+                  
+                  let bg = "bg-surface";
+                  let border = "border-borderGray";
+                  let icon = `<i data-lucide="circle-dashed" class="w-4 h-4 text-textMuted"></i>`;
+                  
+                  if (slot.estado === "AUSENTE") {
+                     bg = "bg-red-50 dark:bg-red-950/20";
+                     border = "border-red-200 dark:border-red-900/50";
+                     icon = `<i data-lucide="alert-circle" class="w-4 h-4 text-red-500"></i>`;
+                  } else if (slot.estado === "EN_COLA") {
+                     bg = "bg-amber-50 dark:bg-amber-950/20";
+                     border = "border-amber-200 dark:border-amber-900/50";
+                     icon = `<i data-lucide="loader-2" class="w-4 h-4 text-amber-500 animate-spin"></i>`;
+                  } else if (slot.estado === "AL_DIA") {
+                     bg = "bg-emerald-50 dark:bg-emerald-950/20";
+                     border = "border-emerald-200 dark:border-emerald-900/50";
+                     icon = `<i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-500"></i>`;
+                  }
+                  
+                  html += `
+                    <div class="${bg} border ${border} p-4 rounded-xl flex flex-col gap-2 relative group hover:shadow-md transition-shadow cursor-pointer">
+                        <div class="flex justify-between items-start">
+                           <span class="text-[10px] font-bold text-textMuted font-mono">${slot.fecha}</span>
+                           ${icon}
+                        </div>
+                        <h4 class="text-sm font-bold text-charcoal leading-tight">${matName}</h4>
+                        <div class="mt-auto pt-2 text-[10px] uppercase font-bold tracking-wider text-textMuted">
+                           ${slot.estado}
+                        </div>
+                        <button onclick="deleteSlot('${slot.id}')" class="absolute top-2 right-8 opacity-0 group-hover:opacity-100 text-textMuted hover:text-red-500 transition-opacity" title="Eliminar Slot">
+                           <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                  `;
+               });
+            }
+            
+            html += `</div></div>`;
+            finalHtml += html;
+         });
+         grid.innerHTML = finalHtml;
+         lucide.createIcons();
+      }
+      
+      function deleteSlot(id) {
+         if(!confirm("¿Eliminar este hueco del control semanal?")) return;
+         fetch(`/api/progreso/${id}`, { method: "DELETE" })
+            .then(() => loadProgreso())
+            .catch(err => showToast("Error al eliminar slot", "error"));
+      }
+
+      function generarSemanaUI() {
+         const date = document.getElementById("progreso-base-date").value;
+         if(!date) return;
+         fetch(`/api/progreso/generar_semana?fecha_base=${date}`, { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+               if(data.status === "success") {
+                  showToast(`Semana de ${date} generada.`);
+                  loadProgreso();
+               } else {
+                  showToast("Error generando semana", "error");
+               }
+            })
+            .catch(err => {
+               console.error(err);
+               showToast("Error generando semana", "error");
+            });
+      }
+
+      function eliminarSemanaUI() {
+         const date = document.getElementById("progreso-base-date").value;
+         if(!date) return;
+         if(!confirm(`¿Estás seguro de que quieres eliminar todos los registros generados para la semana del ${date}? Esta acción no se puede deshacer.`)) return;
+         
+         fetch(`/api/progreso/eliminar_semana?fecha_base=${date}`, { method: 'DELETE' })
+            .then(res => res.json())
+            .then(data => {
+               if(data.status === "success") {
+                  showToast(`Semana eliminada (${data.slots_eliminados} registros borrados)`);
+                  loadProgreso();
+               } else {
+                  showToast("Error eliminando semana", "error");
+               }
+            })
+            .catch(err => {
+               console.error(err);
+               showToast("Error eliminando semana", "error");
+            });
+      }
+
+      function getMonday(dStr) {
+          if (!dStr) return null;
+          const [y, m, d] = dStr.split('-');
+          const dt = new Date(y, m - 1, d);
+          const day = dt.getDay();
+          const diff = dt.getDate() - day + (day === 0 ? -6 : 1);
+          return new Date(dt.setDate(diff)).toISOString().split('T')[0];
+      }
+
+      function populateWeeksDropdown() {
+          const dropdown = document.getElementById("progreso-weeks-dropdown");
+          if (!progresoSlots || progresoSlots.length === 0) {
+              dropdown.classList.add("hidden");
+              return;
+          }
+          dropdown.classList.remove("hidden");
+          
+          const mondays = [...new Set(progresoSlots.map(s => getMonday(s.fecha)))];
+          mondays.sort((a, b) => new Date(b) - new Date(a)); // Más recientes primero
+          
+          dropdown.innerHTML = `<option value="">Semanas Generadas</option>`;
+          const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+          
+          mondays.forEach(mondayStr => {
+              if(!mondayStr) return;
+              const [y1, m1, d1] = mondayStr.split('-');
+              const dt1 = new Date(y1, m1 - 1, d1);
+              
+              const dt2 = new Date(dt1);
+              dt2.setDate(dt2.getDate() + 6);
+              
+              const label = `${dt1.getDate()} ${months[dt1.getMonth()]} - ${dt2.getDate()} ${months[dt2.getMonth()]} ${dt1.getFullYear() !== new Date().getFullYear() ? dt1.getFullYear() : ''}`.trim();
+              
+              const option = document.createElement("option");
+              option.value = mondayStr;
+              option.textContent = label;
+              dropdown.appendChild(option);
+          });
+          
+          syncDropdownValue();
+      }
+
+      function syncDropdownValue() {
+          const dropdown = document.getElementById("progreso-weeks-dropdown");
+          const baseDateStr = document.getElementById("progreso-base-date").value;
+          if(baseDateStr && typeof getMonday === 'function') {
+             const monday = getMonday(baseDateStr);
+             dropdown.value = monday || "";
+          }
+      }
+
+      function irASemanaActual() {
+          const dateInput = document.getElementById("progreso-base-date");
+          const today = new Date();
+          const todayISO = today.toISOString().split('T')[0];
+          
+          if (!progresoSlots || progresoSlots.length === 0) {
+              dateInput.value = todayISO;
+              localStorage.setItem('last_progreso_date', todayISO);
+              renderProgresoGrid();
+              return;
+          }
+          
+          const todayMonday = getMonday(todayISO);
+          const hasTodayWeek = progresoSlots.some(s => getMonday(s.fecha) === todayMonday);
+          
+          if (hasTodayWeek) {
+              dateInput.value = todayISO;
+          } else {
+              let closestDateStr = null;
+              let minDiff = Infinity;
+              
+              const mondays = [...new Set(progresoSlots.map(s => getMonday(s.fecha)))];
+              const todayTime = new Date(todayMonday).getTime();
+              
+              mondays.forEach(mondayStr => {
+                  const mTime = new Date(mondayStr).getTime();
+                  const diff = Math.abs(mTime - todayTime);
+                  
+                  if (diff < minDiff) {
+                      minDiff = diff;
+                      closestDateStr = mondayStr;
+                  } else if (diff === minDiff) {
+                      if (mTime > new Date(closestDateStr).getTime()) {
+                          closestDateStr = mondayStr;
+                      }
+                  }
+              });
+              
+              dateInput.value = closestDateStr || todayISO;
+          }
+          
+          localStorage.setItem('last_progreso_date', dateInput.value);
+          renderProgresoGrid();
+          syncDropdownValue();
+          showToast("Ubicado en el Presente");
+      }
+
+      function updateBackupSlotSelect() {
+         const select = document.getElementById("backup-slot-select");
+         if(!select) return;
+         
+         const oldVal = select.value;
+         select.innerHTML = '<option value="">Vincular a Clase Pendiente (Opcional)</option>';
+         
+         progresoSlots.filter(s => s.estado === "AUSENTE").forEach(slot => {
+            const mat = materias.find(m => m.id === slot.materia_id);
+            const matName = mat ? mat.nombre : slot.materia_id;
+            select.innerHTML += `<option value="${slot.id}">${slot.fecha} - ${matName}</option>`;
+         });
+         
+         select.value = oldVal;
+      }
+
+      function updateEntregablesSidebar() {
+         const list = document.getElementById("entregables-sidebar-list");
+         if(!list) return;
+         
+         fetch(`/api/tarjetas?materia_id=todas`)
+            .then(res => res.json())
+            .then(data => {
+               list.innerHTML = "";
+               const entregables = data.tarjetas.filter(t => t.estado === "PENDIENTE" && t.tipo !== "aviso");
+               
+               if(entregables.length === 0) {
+                  list.innerHTML = `<div class="text-[11px] text-textMuted italic font-serif text-center mt-8">No hay entregables pendientes.</div>`;
+                  return;
+               }
+               
+               // Sort by fecha_entrega if available
+               entregables.sort((a,b) => (a.fecha_entrega || "ZZZ").localeCompare(b.fecha_entrega || "ZZZ"));
+               
+               entregables.forEach(t => {
+                  const mat = materias.find(m => m.id === t.materia_id);
+                  const matName = mat ? mat.nombre : t.materia_id;
+                  
+                  let badgeColor = "bg-blue-50 text-blue-700 border-blue-200";
+                  if (t.tipo === "examen") badgeColor = "bg-red-50 text-red-700 border-red-200";
+                  
+                  list.innerHTML += `
+                     <div class="bg-background border border-borderGray p-3 rounded-lg flex flex-col gap-2">
+                        <div class="flex justify-between items-start">
+                           <span class="px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${badgeColor}">
+                              ${t.tipo}
+                           </span>
+                           <span class="text-[9px] text-textMuted font-mono font-bold">${t.fecha_entrega || t.referencia_temporal}</span>
+                        </div>
+                        <p class="text-xs text-charcoal font-medium leading-snug">${t.contenido}</p>
+                        <div class="text-[9px] font-bold text-textMuted uppercase tracking-wider truncate mt-1">
+                           ${matName}
+                        </div>
+                     </div>
+                  `;
+               });
+            });
+      }
+
       // ====== IMAGE CAROUSEL & PREVIEW ======
       function scrollCarousel(carouselId, direction) {
         const track = document.getElementById(carouselId);
@@ -2623,6 +3138,9 @@
 
         img.src = src;
         cap.textContent = caption || "";
+        
+        // Reset zoom state
+        resetZoomState(modal, img);
 
         // Show/hide nav arrows
         if (currentPreviewImages.length > 1) {
@@ -2640,14 +3158,154 @@
         requestAnimationFrame(() => modal.classList.add("active"));
       }
 
+      const zoomLevels = [0, 1, 1.5, 2, 3];
+      let currentScale = 0; // 0 significa estado "ajustado" por defecto
+
+      function resetZoomState(modal, img) {
+         currentScale = 0;
+         img.style.width = "";
+         img.style.height = "";
+         img.classList.remove("zoomed");
+         modal.style.overflow = "hidden";
+         modal.style.alignItems = "center";
+         modal.style.justifyContent = "center";
+         img.style.cursor = "zoom-in";
+      }
+
+      function applyZoom(newScale, eventX, eventY) {
+         const modal = document.getElementById("image-preview-modal");
+         const img = document.getElementById("image-preview-img");
+         
+         if (newScale <= 0 || newScale < 0.5) {
+             resetZoomState(modal, img);
+             return;
+         }
+         if (newScale > 5) newScale = 5; // Límite máximo
+         
+         // Guardar la proporción relativa de donde está el ratón ANTES de escalar
+         const imgRect = img.getBoundingClientRect();
+         const clickXRatio = (eventX - imgRect.left) / imgRect.width;
+         const clickYRatio = (eventY - imgRect.top) / imgRect.height;
+         
+         currentScale = newScale;
+         
+         img.classList.add("zoomed");
+         modal.style.overflow = "auto";
+         modal.style.alignItems = "flex-start";
+         modal.style.justifyContent = "flex-start";
+         
+         const nativeWidth = img.naturalWidth || img.width;
+         const newWidth = nativeWidth * currentScale;
+         img.style.width = newWidth + "px";
+         img.style.height = "auto";
+         img.style.cursor = currentScale >= 3 ? "zoom-out" : "zoom-in";
+         
+         // Forzar reflow
+         const newHeight = img.offsetHeight;
+         
+         // Ajustar scroll para mantener el ratón en la misma posición de la imagen
+         const targetX = (newWidth * clickXRatio) - (eventX - modal.getBoundingClientRect().left);
+         const targetY = (newHeight * clickYRatio) - (eventY - modal.getBoundingClientRect().top);
+         
+         modal.scrollLeft = targetX;
+         modal.scrollTop = targetY;
+      }
+
+      let isPanning = false;
+      let startX, startY, scrollLeft, scrollTop;
+      let draggedDistance = 0;
+
+      document.addEventListener("DOMContentLoaded", () => {
+         const modal = document.getElementById("image-preview-modal");
+         
+         modal.addEventListener("mousedown", (e) => {
+             const img = document.getElementById("image-preview-img");
+             if (!img.classList.contains("zoomed")) return;
+             if (e.target !== modal && e.target !== img) return;
+             
+             e.preventDefault(); // Prevents native image ghost drag
+             isPanning = true;
+             draggedDistance = 0;
+             startX = e.pageX - modal.offsetLeft;
+             startY = e.pageY - modal.offsetTop;
+             scrollLeft = modal.scrollLeft;
+             scrollTop = modal.scrollTop;
+             modal.style.cursor = "grabbing";
+         });
+         
+         modal.addEventListener("mouseleave", () => {
+             isPanning = false;
+             modal.style.cursor = "";
+         });
+         
+         modal.addEventListener("mouseup", () => {
+             isPanning = false;
+             modal.style.cursor = "";
+         });
+         
+         modal.addEventListener("mousemove", (e) => {
+             if (!isPanning) return;
+             e.preventDefault();
+             const x = e.pageX - modal.offsetLeft;
+             const y = e.pageY - modal.offsetTop;
+             const walkX = (x - startX);
+             const walkY = (y - startY);
+             // Solo sumar distancia relativa pequeña para detectar drag vs click
+             draggedDistance = Math.abs(x - startX) + Math.abs(y - startY);
+             modal.scrollLeft = scrollLeft - walkX;
+             modal.scrollTop = scrollTop - walkY;
+         });
+         
+         // Zoom con Rueda del Ratón
+         modal.addEventListener("wheel", (e) => {
+             if (modal.classList.contains("hidden")) return;
+             e.preventDefault(); // Evitar scroll nativo
+             
+             let scale = currentScale === 0 ? 1 : currentScale;
+             const zoomSpeed = 0.15; // Velocidad del zoom
+             
+             // deltaY negativo significa que el usuario gira la rueda hacia adelante (Acercar)
+             const delta = e.deltaY < 0 ? 1 : -1;
+             
+             // Zoom multiplicativo para que se sienta natural en cualquier escala
+             scale = scale + (delta * zoomSpeed * scale);
+             
+             applyZoom(scale, e.clientX, e.clientY);
+         }, { passive: false });
+      });
+
+      function toggleZoom(event) {
+         event.stopPropagation();
+         if (draggedDistance > 10) {
+             draggedDistance = 0;
+             return; // Fue un arrastre, no un clic
+         }
+         
+         // Buscar el siguiente nivel predefinido al hacer clic
+         let nextScale = 0;
+         for (let z of zoomLevels) {
+             if (z > currentScale + 0.05) { // Margen de error por decimales
+                 nextScale = z;
+                 break;
+             }
+         }
+         
+         applyZoom(nextScale, event.clientX, event.clientY);
+      }
+
       function navigatePreview(direction) {
         const newIndex = currentPreviewIndex + direction;
         if (newIndex < 0 || newIndex >= currentPreviewImages.length) return;
         currentPreviewIndex = newIndex;
         const src = currentPreviewImages[currentPreviewIndex];
         const caption = src.split("/").pop();
-        document.getElementById("image-preview-img").src = src;
+        const modal = document.getElementById("image-preview-modal");
+        const img = document.getElementById("image-preview-img");
+        
+        img.src = src;
         document.getElementById("image-preview-caption").textContent = caption;
+        
+        resetZoomState(modal, img);
         document.getElementById("image-preview-prev").style.display =
           currentPreviewIndex > 0 ? "flex" : "none";
         document.getElementById("image-preview-next").style.display =
@@ -2745,7 +3403,8 @@
         id="image-preview-img"
         src=""
         alt="Preview"
-        onclick="event.stopPropagation()"
+        draggable="false"
+        onclick="toggleZoom(event)"
       />
       <div class="modal-caption" id="image-preview-caption"></div>
     </div>

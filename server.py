@@ -9,7 +9,7 @@ import shutil
 import uuid
 import zipfile
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import asyncio
 from contextlib import asynccontextmanager
@@ -30,6 +30,7 @@ from database import (
     settings_store,
     tarjetas_store,
     cola_store,
+    progreso_store,
 )
 from services import audio_service, export_service, llm_service
 
@@ -140,6 +141,7 @@ async def worker_loop():
                 # --- Preparar Imágenes (Renombrar y Copiar a Adjuntos) ---
                 from database import ADJUNTOS_DIR
                 renamed_image_paths = []
+                image_name_map = {}
                 if image_paths and session_dir:
                     session_id = os.path.basename(session_dir.rstrip("/\\")).replace("session_", "")
                     for img in image_paths:
@@ -148,9 +150,11 @@ async def worker_loop():
                             new_basename = f"{session_id}_{basename}"
                             new_path = os.path.join(session_dir, new_basename)
                             os.rename(img, new_path)
+                            image_name_map[basename] = new_basename
                         else:
                             new_path = img
                             new_basename = basename
+                            image_name_map[basename] = new_basename
                             
                         # Copiar a adjuntos permanentemente
                         dest = os.path.join(ADJUNTOS_DIR, new_basename)
@@ -174,6 +178,11 @@ async def worker_loop():
 
                 # Guardado automático (Pipeline Completo)
                 json_data, texto_limpio = llm_service.extract_json_block(texto)
+                
+                # Reemplazar los nombres cortos de imagen por los nombres reales con prefijo de sesión
+                for short_name, long_name in image_name_map.items():
+                    texto_limpio = texto_limpio.replace(f"![[{short_name}]]", f"![[{long_name}]]")
+
                 fecha_str = datetime.now().strftime("%Y-%m-%d")
 
                 md_filename = pending["filename"].replace(".webm", ".md")
@@ -197,7 +206,7 @@ async def worker_loop():
                 tags = [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(",")] if tags_match else []
 
                 await export_service.save_markdown_and_metadata(
-                    md_filename, suggested_filename, suggested_folder, texto_limpio, tags, fecha_str
+                    md_filename, suggested_filename, suggested_folder, texto_limpio, tags, fecha_str, pending.get("slot_id")
                 )
 
                 # Pass image_paths so export can copy them to Obsidian Adjuntos/
@@ -209,7 +218,7 @@ async def worker_loop():
                 if json_data.get("tarjetas_informativas"):
                     mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
                     await export_service.save_tarjetas_informativas(
-                        json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str
+                        json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str, pending.get("slot_id")
                     )
 
                 if json_data.get("nuevas_reglas_profesor"):
@@ -302,12 +311,14 @@ class MateriaCreate(BaseModel):
     nombre: str
     prompt_personalizado: str
     temperatura: float = 0.3
+    dias_imparticion: list[str] = []
 
 
 class MateriaUpdate(BaseModel):
     nombre: str
     prompt_personalizado: str
     temperatura: float = 0.3
+    dias_imparticion: list[str] = []
 
 
 class GenerateRequest(BaseModel):
@@ -317,6 +328,7 @@ class GenerateRequest(BaseModel):
     session_name: str = None
     session_dir: str = None
     image_filenames: list = []
+    slot_id: str = None
 
 
 class SaveRequest(BaseModel):
@@ -348,7 +360,6 @@ class SummaryUpdate(BaseModel):
 
 class SettingsUpdate(BaseModel):
     obsidian_vault_path: str
-    extension_backup_dir: str = "Backups_Clases/"
     max_audio_upload_mb: int = 500
     max_papelera_items: int = 10
     default_model: str = "gemini-3.1-flash-lite"
@@ -367,6 +378,21 @@ class SettingsUpdate(BaseModel):
 class TaskExtractRequest(BaseModel):
     image_base64: str
     modelo_elegido: str = None
+
+
+class ProgresoSlotCreate(BaseModel):
+    fecha: str
+    dia: str
+    materia_id: str
+
+
+class ProgresoSlotUpdate(BaseModel):
+    estado: str
+    md_vinculado: str = None
+
+
+class ProgresoGenerarSemanaRequest(BaseModel):
+    fecha_base: str  # YYYY-MM-DD to base the week on
 
 
 # ===========================================================================
@@ -400,6 +426,7 @@ async def create_materia(materia: MateriaCreate):
         "nombre": materia.nombre,
         "prompt_personalizado": materia.prompt_personalizado,
         "temperatura": materia.temperatura,
+        "dias_imparticion": materia.dias_imparticion,
     }
 
     async def _append(materias: list) -> list:
@@ -420,6 +447,7 @@ async def update_materia(materia_id: str, materia: MateriaUpdate):
                 m["nombre"] = materia.nombre
                 m["prompt_personalizado"] = materia.prompt_personalizado
                 m["temperatura"] = materia.temperatura
+                m["dias_imparticion"] = materia.dias_imparticion
                 found.update(m)
         return materias
 
@@ -441,6 +469,151 @@ async def delete_materia(materia_id: str):
     if len(result) == original_len[0]:
         raise HTTPException(status_code=404, detail="Materia no encontrada")
     return {"message": "Materia eliminada"}
+
+
+# ===========================================================================
+# Progreso (Tracker Semestral)
+# ===========================================================================
+
+@app.get("/api/progreso")
+async def get_progreso():
+    slots = await progreso_store.read()
+    return {"slots": slots}
+
+
+@app.post("/api/progreso/manual")
+async def create_progreso_slot(slot: ProgresoSlotCreate):
+    new_slot = {
+        "id": f"slot_{uuid.uuid4().hex[:8]}",
+        "fecha": slot.fecha,
+        "dia": slot.dia,
+        "materia_id": slot.materia_id,
+        "estado": "AUSENTE",
+        "md_vinculado": None
+    }
+    
+    async def _append(slots: list) -> list:
+        slots.append(new_slot)
+        return slots
+        
+    await progreso_store.update(_append)
+    return new_slot
+
+
+@app.post("/api/progreso/generar_semana")
+async def generar_semana(req: ProgresoGenerarSemanaRequest):
+    materias = await materias_store.read()
+    
+    # Parse input date
+    try:
+        base_date = datetime.strptime(req.fecha_base, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+        
+    # Get Monday of that week
+    monday = base_date - timedelta(days=base_date.weekday())
+    
+    # Generate days map
+    days_map = {
+        "Lunes": monday,
+        "Martes": monday + timedelta(days=1),
+        "Miércoles": monday + timedelta(days=2),
+        "Miercoles": monday + timedelta(days=2),
+        "Jueves": monday + timedelta(days=3),
+        "Viernes": monday + timedelta(days=4),
+        "Sábado": monday + timedelta(days=5),
+        "Sabado": monday + timedelta(days=5),
+        "Domingo": monday + timedelta(days=6)
+    }
+    
+    new_slots = []
+    
+    async def _generate(slots: list) -> list:
+        # Prevent duplicates
+        existing_keys = {f"{s['materia_id']}_{s['fecha']}" for s in slots}
+        
+        for mat in materias:
+            dias = mat.get("dias_imparticion", [])
+            for d in dias:
+                if d in days_map:
+                    fecha_str = days_map[d].strftime("%Y-%m-%d")
+                    key = f"{mat['id']}_{fecha_str}"
+                    if key not in existing_keys:
+                        slot = {
+                            "id": f"slot_{uuid.uuid4().hex[:8]}",
+                            "fecha": fecha_str,
+                            "dia_semana": d,
+                            "materia_id": mat["id"],
+                            "estado": "AUSENTE",
+                            "md_vinculado": None
+                        }
+                        new_slots.append(slot)
+                        slots.append(slot)
+                        existing_keys.add(key)
+        return slots
+        
+    await progreso_store.update(_generate)
+    return {"message": "Semana generada", "nuevos_slots": len(new_slots), "status": "success"}
+
+@app.delete("/api/progreso/eliminar_semana")
+async def eliminar_semana(fecha_base: str):
+    try:
+        base_date = datetime.strptime(fecha_base, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+        
+    monday = base_date - timedelta(days=base_date.weekday())
+    
+    week_dates = set()
+    for i in range(7):
+        week_dates.add((monday + timedelta(days=i)).strftime("%Y-%m-%d"))
+        
+    deleted_count = 0
+    async def _delete(slots: list) -> list:
+        nonlocal deleted_count
+        new_slots = []
+        for s in slots:
+            if s["fecha"] in week_dates:
+                deleted_count += 1
+            else:
+                new_slots.append(s)
+        return new_slots
+        
+    await progreso_store.update(_delete)
+    return {"message": "Semana eliminada", "slots_eliminados": deleted_count, "status": "success"}
+
+
+@app.put("/api/progreso/{slot_id}")
+async def update_progreso_slot(slot_id: str, update_data: ProgresoSlotUpdate):
+    found = {}
+
+    async def _update(slots: list) -> list:
+        for s in slots:
+            if s["id"] == slot_id:
+                s["estado"] = update_data.estado
+                if update_data.md_vinculado is not None:
+                    s["md_vinculado"] = update_data.md_vinculado
+                found.update(s)
+        return slots
+
+    await progreso_store.update(_update)
+    if not found:
+        raise HTTPException(status_code=404, detail="Slot no encontrado")
+    return found
+
+
+@app.delete("/api/progreso/{slot_id}")
+async def delete_progreso_slot(slot_id: str):
+    original_len = [0]
+
+    async def _delete(slots: list) -> list:
+        original_len[0] = len(slots)
+        return [s for s in slots if s["id"] != slot_id]
+
+    result = await progreso_store.update(_delete)
+    if len(result) == original_len[0]:
+        raise HTTPException(status_code=404, detail="Slot no encontrado")
+    return {"message": "Slot eliminado"}
 
 
 # ===========================================================================
@@ -478,7 +651,6 @@ async def get_settings_endpoint():
 async def update_settings_endpoint(req: SettingsUpdate):
     async def _update(settings: dict) -> dict:
         settings["obsidian_vault_path"] = req.obsidian_vault_path
-        settings["extension_backup_dir"] = req.extension_backup_dir
         settings["max_audio_upload_mb"] = req.max_audio_upload_mb
         settings["max_papelera_items"] = req.max_papelera_items
         settings["default_model"] = req.default_model
@@ -625,6 +797,7 @@ async def upload_audio(
     request: Request,
     audio: UploadFile = File(...),
     custom_name: str = Form(None),
+    slot_id: str = Form(None),
     imagenes: List[UploadFile] = File(default=[]),
 ):
     """
@@ -781,6 +954,7 @@ async def upload_audio(
         "audio_url": _media_url(session_name, audio_filename),
         "image_urls": [_media_url(session_name, img) for img in image_filenames],
         "image_filenames": image_filenames,
+        "slot_id": slot_id,
     }
 
 
@@ -884,6 +1058,7 @@ async def queue_generate_task(req: GenerateRequest):
             "session_dir": session_dir,
             "image_filenames": image_filenames,
             "materia_id": req.materia_id,
+            "slot_id": getattr(req, "slot_id", None),
             "modelo_elegido": req.modelo_elegido,
             "estado": "pending",
             "intentos": 0,
@@ -1016,7 +1191,22 @@ async def delete_summary(filename: str):
         return meta_data
 
     await meta_store.update(_remove_meta)
-    return {"message": "Resumen eliminado"}
+    
+    # Cascading delete: Reset slot
+    async def _reset_slot(slots: list) -> list:
+        for s in slots:
+            if s.get("md_vinculado") == filename:
+                s["estado"] = "AUSENTE"
+                s["md_vinculado"] = None
+        return slots
+    await progreso_store.update(_reset_slot)
+    
+    # Cascading delete: Remove related flashcards
+    async def _remove_cards(cards: list) -> list:
+        return [c for c in cards if c.get("origen_md") != filename]
+    await tarjetas_store.update(_remove_cards)
+    
+    return {"message": "Resumen eliminado y referencias limpiadas en cascada"}
 
 
 # ===========================================================================

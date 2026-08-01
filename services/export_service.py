@@ -13,6 +13,7 @@ from database import (
     meta_store,
     settings_store,
     tarjetas_store,
+    progreso_store,
 )
 
 
@@ -23,10 +24,17 @@ async def save_markdown_and_metadata(
     texto_limpio: str,
     tags: list,
     fecha_str: str,
+    slot_id: str = None,
 ) -> None:
     """
     Guarda el archivo Markdown en resumenes/ y actualiza resumenes_meta.json.
     """
+    # Inject slot_id into YAML frontmatter if exists
+    if slot_id:
+        yaml_end_idx = texto_limpio.find("---", 3)
+        if yaml_end_idx != -1:
+            texto_limpio = texto_limpio[:yaml_end_idx] + f"slot_id: {slot_id}\n" + texto_limpio[yaml_end_idx:]
+            
     # Archivo .md local con nombre sugerido por Gemini
     dest_path = os.path.join(RESUMENES_DIR, suggested_filename)
     with open(dest_path, "w", encoding="utf-8") as f:
@@ -45,10 +53,21 @@ async def save_markdown_and_metadata(
             "condensado": condensado_text,
             "fecha": fecha_str,
             "resumen": texto_limpio,
+            "slot_id": slot_id,
         }
         return meta_data
 
     await meta_store.update(_updater)
+    
+    # Update Slot state if linked
+    if slot_id:
+        async def _update_slot(slots: list) -> list:
+            for s in slots:
+                if s["id"] == slot_id:
+                    s["estado"] = "AL_DIA"
+                    s["md_vinculado"] = md_filename
+            return slots
+        await progreso_store.update(_update_slot)
 
 
 async def save_to_obsidian(
@@ -103,6 +122,7 @@ async def save_tarjetas_informativas(
     md_filename: str,
     materia_id: str,
     fecha_creacion: str,
+    slot_id: str = None,
 ) -> None:
     """
     Persiste las tarjetas informativas extraídas en tarjetas_informativas.json.
@@ -116,6 +136,9 @@ async def save_tarjetas_informativas(
             t["materia_id"] = materia_id
             t["fecha_creacion"] = fecha_creacion
             t["origen_md"] = md_filename
+            t["origen_slot_id"] = slot_id
+            t["fecha_entrega"] = t.get("fecha_entrega", "")
+            t["estado"] = "PENDIENTE"
             t["tipo"] = t.get("tipo", "otro")
             t["contenido"] = t.get("contenido", "")
             t["referencia_temporal"] = t.get("referencia_temporal", "")

@@ -1,5 +1,5 @@
 # Estado Actual del Proyecto — AsistenteClases
-> Última actualización: 2026-07-28. Refleja la arquitectura post-refactor modular (v3) con pipeline multi-modal completo y limpieza de Drive v1.2.
+> Última actualización: 2026-07-31. Refleja la arquitectura post-refactor modular (v3) con pipeline multi-modal completo y limpieza de Drive v1.2, así como mejoras en capturas periódicas y fallbacks hardcodeados.
 
 ---
 
@@ -70,7 +70,8 @@ Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o 
   → popup.js: "Iniciar Grabación"
   → background.js: streamId via chrome.tabCapture
   → offscreen.js: MediaRecorder graba audio/webm en chunks de 5s → IndexedDB (store: 'chunks')
-  → `background.js` usa `chrome.alarms` (intervalo configurable en UI) ó Alt+S (manual) → `captureVisibleTab` → IndexedDB (store: 'screenshots')
+  → background.js: gestiona temporizador con `chrome.alarms` (anti-throttling) y envía orden a offscreen.
+  → offscreen.js: extrae fotogramas directamente de un `<video>` interno en memoria hacia un `<canvas>` (bypass a `captureVisibleTab`, funciona incluso minimizado) → IndexedDB (store: 'screenshots')
   → [Al detener] offscreen.js: ensambla Blob audio + lee screenshots de IndexedDB
   → FormData: campo 'audio' (Blob webm) + N campos 'imagenes' (Blob jpeg)
   → POST http://localhost:8000/upload
@@ -79,7 +80,7 @@ Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o 
   → Si no llegan imágenes → HTTP 400 (regla del sistema)
   → Si tamaño > max_audio_upload_mb → HTTP 413
   → Se repara la duración del archivo `.webm` mediante `ffmpeg -c copy` para reconstruir los metadatos de búsqueda (`Cues`) omitidos por `MediaRecorder`.
-  → Guarda en audios/session_YYYYMMDD_HHMMSS[_nombre]/
+  → Guarda en grabaciones/session_YYYYMMDD_HHMMSS[_nombre]/
       ├── meet_TIMESTAMP.webm
       ├── captura_000_t0s.jpg
       ├── captura_001_t300s.jpg
@@ -95,7 +96,7 @@ Toda lectura/escritura en el sistema pasa por `store.read()`, `store.write()` o 
 
 ```
 POST /api/generate { filename, materia_id, modelo_elegido, session_dir, image_filenames }
-  → Encola en cola_store (cola_procesamiento.json)
+  → Encola en cola_store (resumenes/cola_tareas.json)
 
 Worker (asyncio task, polling cada 5s):
   → Lee pending task → marca como 'processing'
@@ -126,7 +127,7 @@ La función `_build_summary_prompt()` en `llm_service.py` genera un único promp
 
 ```
 AsistenteClases/
-├── audios/                 COLA DE ESPERA. Subdirectorios por sesión.
+├── grabaciones/            COLA DE ESPERA. Subdirectorios por sesión.
 │   └── session_TIMESTAMP/  Una carpeta por clase.
 │       ├── meet_*.webm     Audio de la clase.
 │       ├── captura_000_*.jpg
@@ -175,7 +176,6 @@ tags: [tag1, tag2]
 ```json
 {
   "obsidian_vault_path": "/ruta/boveda/",
-  "extension_backup_dir": "Backups_Clases/",
   "max_audio_upload_mb": 500,
   "max_papelera_items": 10,
   "rag_max_docs": 8,
@@ -185,13 +185,13 @@ tags: [tag1, tag2]
 }
 ```
 
-**`cola_procesamiento.json`** (array de tareas):
+**`resumenes/cola_tareas.json`** (array de tareas):
 ```json
 [{
   "id": "uuid",
   "filename": "meet_*.webm",
   "session_name": "session_TIMESTAMP",
-  "session_dir": "ruta/absoluta/audios/session_TIMESTAMP/",
+  "session_dir": "ruta/absoluta/grabaciones/session_TIMESTAMP/",
   "image_filenames": ["captura_000_t0s.jpg"],
   "materia_id": "uuid",
   "modelo_elegido": "gemini-3.1-flash-lite",
@@ -262,7 +262,7 @@ Lee audio e imágenes en fragmentos. Si la suma supera el límite, borra el `ses
 
 ### 5.8 Cola de Procesamiento Asíncrona (Worker)
 
-- `cola_procesamiento.json` persiste entre reinicios del servidor.
+- `resumenes/cola_tareas.json` persiste entre reinicios del servidor.
 - Worker (`asyncio.create_task`) hace polling cada 5 segundos.
 - Almacena `session_dir` e `image_filenames` para que el worker resuelva rutas.
 - Compatible hacia atrás: detecta tareas legacy (solo filename, sin `session_dir`) y busca el audio en subdirectorios.
@@ -401,6 +401,20 @@ La pestaña "Clase Drive" del popup es una **guía estática** (sin lógica JS) 
 | Tablón de Avisos | `tab-tarjetas` | Grid de tarjetas informativas filtradas por materia |
 | Sala de Estudio | `tab-tutor` | Tutor Socrático: selector de materia + botón "Iniciar Simulación" + chat |
 | Asignaturas | `tab-materias` | CRUD de asignaturas con generación de prompt asistida |
-| Preferencias | `tab-config` | Ruta Obsidian, modelo, límites RAG, carpeta de respaldo de extensión |
+| Preferencias | `tab-config` | Ruta Obsidian, modelo, límites RAG, límites de papelera |
+
+### 9.1 Control Semanal (Progreso)
+- **Generación en Lote (Batching)**: Genera slots de clase de Lunes a Domingo escaneando las asignaturas y sus días de impartición configurados.
+- **Memoria de Estado**: Persiste la semana seleccionada en `localStorage` (como `last_progreso_date`) para no perder contexto al recargar la app.
+- **Navegación Dinámica**: 
+  - **Dropdown de Semanas**: Muestra únicamente las semanas que tienen clases generadas (ej. `14 Ago - 20 Ago`), parseadas dinámicamente desde la base de datos sin necesidad de entidades "Semana" reales en el backend.
+  - **Botón "Presente"**: Matemática de distancias para localizar y auto-seleccionar la semana más cercana a la fecha actual, priorizando semanas futuras en caso de empate.
+- **Eliminación Modular**: Endpoint `DELETE /api/progreso/eliminar_semana` que permite extirpar una semana entera mediante bulk-delete atómico, protegiendo contra clics accidentales en la interfaz (el botón de basura inteligente se auto-oculta en semanas vacías).
+
+### 9.2 Visor de Imágenes Multi-Modal (Lightbox Nativo)
+- Implementación 100% nativa en JavaScript sin dependencias externas (cero jQuery, cero librerías de lightbox).
+- **Zoom Continuo e Infinito**: Permite escalar imágenes utilizando una arquitectura híbrida de interacciones (clicks predefinidos `1x, 1.5x, 2x, 3x` y scroll del ratón continuo `+15%`).
+- **Puntería Sincronizada (Google Maps style)**: A diferencia del zoom clásico en HTML que expande hacia la esquina (top-left offset), este motor obliga un reflow instantáneo y calcula dinámicamente el scroll basado en el `getBoundingClientRect` para asegurar que el píxel original en el que se hizo clic/scroll permanezca perfectamente bloqueado bajo el cursor del usuario.
+- **Drag-to-Pan (Paneo inteligente)**: Bloquea agresivamente los eventos "ghost drag" nativos del navegador (`draggable="false"` + `e.preventDefault()`) permitiendo un arrastre libre y fluido, e interceptando pequeños micromovimientos (`draggedDistance > 10`) para no confundir arrastres con clics accidentales.
 
 

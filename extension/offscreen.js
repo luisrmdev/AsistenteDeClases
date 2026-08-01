@@ -7,6 +7,7 @@ const gainNodes = {};
 const cancelFlags = {};
 // Track recording start time per tab (for screenshot timestamps)
 const recordingStartTimes = {};
+const videoElements = {};
 
 // --- IndexedDB Helper ---
 // Schema v2: 'chunks' store (audio) + 'screenshots' store (images)
@@ -130,13 +131,13 @@ chrome.runtime.onMessage.addListener(async (message) => {
   if (message.target !== 'offscreen') return;
 
   if (message.type === 'START_RECORDING') {
-    startRecording(message.streamId, message.tabId, message.ghostMode || false);
+    startRecording(message.streamId, message.tabId, message.ghostMode || false, message.intervalMin || 5);
   } else if (message.type === 'STOP_RECORDING') {
     stopRecording(message.tabId, message.customName);
   } else if (message.type === 'PAUSE_RECORDING') {
     pauseRecording(message.tabId);
   } else if (message.type === 'RESUME_RECORDING') {
-    resumeRecording(message.tabId);
+    resumeRecording(message.tabId, message.intervalMin || 5);
   } else if (message.type === 'CANCEL_RECORDING') {
     cancelRecording(message.tabId);
   } else if (message.type === 'SET_GHOST_MODE') {
@@ -162,7 +163,7 @@ function pauseRecording(tabId) {
   }
 }
 
-function resumeRecording(tabId) {
+function resumeRecording(tabId, intervalMin) {
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state === 'paused') {
     mediaRecorder.resume();
@@ -190,29 +191,33 @@ async function captureAndStoreScreenshot(tabId, isManual = false) {
     const startTime = recordingStartTimes[tabId] || Date.now();
     const tiempoSegundos = Math.floor((Date.now() - startTime) / 1000);
 
-    // Request background to capture and send back dataUrl
-    const response = await chrome.runtime.sendMessage({
-      target: 'background',
-      type: 'CAPTURE_SCREENSHOT',
-      tabId: tabId
-    });
-
-    if (response && response.dataUrl) {
-      // Convert dataUrl → Blob
-      const res = await fetch(response.dataUrl);
-      const imageBlob = await res.blob();
-      await addScreenshotToDB(tabId, imageBlob, tiempoSegundos);
-      console.log(`[Screenshot] t=${tiempoSegundos}s stored for tab ${tabId} (manual=${isManual})`);
+    const video = videoElements[tabId];
+    if (!video) {
+      console.warn('[Screenshot] No video element found for tab', tabId);
+      return;
     }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1920;
+    canvas.height = video.videoHeight || 1080;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    canvas.toBlob(async (imageBlob) => {
+      if (imageBlob) {
+        await addScreenshotToDB(tabId, imageBlob, tiempoSegundos);
+        console.log(`[Screenshot] t=${tiempoSegundos}s stored for tab ${tabId} (manual=${isManual})`);
+      }
+    }, 'image/jpeg', 0.75);
   } catch (e) {
     console.warn('[Screenshot] Capture failed:', e);
   }
 }
 
-// Removed startScreenshotInterval as it was migrated to chrome.alarms in background.js
+// Removed startScreenshotInterval as it was migrated to chrome.alarms in background.js (and now back to setInterval in offscreen.js)
 
 // --- Recording Core ---
-async function startRecording(streamId, tabId, isGhost) {
+async function startRecording(streamId, tabId, isGhost, intervalMin) {
   try {
     // Clear any previous orphaned data for this tab
     await deleteChunksFromDB(tabId);
@@ -224,11 +229,25 @@ async function startRecording(streamId, tabId, isGhost) {
           chromeMediaSource: 'tab',
           chromeMediaSourceId: streamId
         }
+      },
+      video: {
+        mandatory: {
+          chromeMediaSource: 'tab',
+          chromeMediaSourceId: streamId
+        }
       }
     });
 
+    // Create a hidden video element to keep the visual stream alive for canvas capturing
+    const videoEl = document.createElement('video');
+    videoEl.srcObject = new MediaStream(stream.getVideoTracks());
+    videoEl.muted = true;
+    await videoEl.play();
+    videoElements[tabId] = videoEl;
+
+    const audioStream = new MediaStream(stream.getAudioTracks());
     const audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(stream);
+    const source = audioContext.createMediaStreamSource(audioStream);
 
     const gainNode = audioContext.createGain();
     gainNode.gain.value = isGhost ? 0 : 1;
@@ -236,13 +255,13 @@ async function startRecording(streamId, tabId, isGhost) {
     source.connect(gainNode);
     gainNode.connect(audioContext.destination);
 
-    streams[tabId] = stream;
+    streams[tabId] = stream; // Keep original stream to stop all tracks later
     audioContexts[tabId] = audioContext;
     gainNodes[tabId] = gainNode;
     recordedChunks[tabId] = [];
     recordingStartTimes[tabId] = Date.now();
 
-    const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+    const mediaRecorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
     mediaRecorders[tabId] = mediaRecorder;
 
     mediaRecorder.ondataavailable = async (event) => {
@@ -263,9 +282,12 @@ async function startRecording(streamId, tabId, isGhost) {
         delete gainNodes[tabId];
         delete recordedChunks[tabId];
         delete mediaRecorders[tabId];
-        delete tempNames[tabId];
-        delete cancelFlags[tabId];
         delete recordingStartTimes[tabId];
+        if (videoElements[tabId]) {
+          videoElements[tabId].pause();
+          videoElements[tabId].srcObject = null;
+          delete videoElements[tabId];
+        }
 
         await deleteChunksFromDB(tabId);
         await deleteScreenshotsFromDB(tabId);
@@ -285,9 +307,12 @@ async function startRecording(streamId, tabId, isGhost) {
       delete streams[tabId];
       delete audioContexts[tabId];
       delete gainNodes[tabId];
-      delete recordedChunks[tabId];
-      delete mediaRecorders[tabId];
       delete recordingStartTimes[tabId];
+      if (videoElements[tabId]) {
+        videoElements[tabId].pause();
+        videoElements[tabId].srcObject = null;
+        delete videoElements[tabId];
+      }
 
       const cName = tempNames[tabId];
       delete tempNames[tabId];
@@ -317,6 +342,10 @@ function stopRecording(tabId, customName) {
 }
 
 function cancelRecording(tabId) {
+  if (screenshotIntervals[tabId]) {
+    clearInterval(screenshotIntervals[tabId]);
+    delete screenshotIntervals[tabId];
+  }
   cancelFlags[tabId] = true;
   const mediaRecorder = mediaRecorders[tabId];
   if (mediaRecorder && mediaRecorder.state !== 'inactive') {
@@ -370,10 +399,7 @@ async function uploadAudio(audioBlob, screenshots, tabId, customName) {
 // --- Fallback: Save everything locally ---
 async function saveLocallyFallback(audioBlob, screenshots, customName, tabId) {
   try {
-    const result = await chrome.storage.local.get(['backupSubfolder', 'backupAskAlways']);
-    let rootSubfolder = (result.backupSubfolder !== undefined) ? result.backupSubfolder : 'Backups_Clases/';
-    rootSubfolder = rootSubfolder.replace(/^\/+/, ''); // Sanitize leading slash
-    if (rootSubfolder && !rootSubfolder.endsWith('/')) rootSubfolder += '/';
+    const rootSubfolder = 'Backups_Clases/';
     
     // We ignore askAlways for backups to prevent spamming the user with 20 popups
     // All files will go directly to the specific folder.

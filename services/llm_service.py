@@ -35,6 +35,7 @@ Tu tarea es crear una nota de estudio de calidad profesional que cumpla ESTRICTA
 
 1. CORRELACIÓN AUDIO-IMAGEN Y CONCIENCIA TEMPORAL (OBLIGATORIO): 
    El nombre de cada imagen contiene el momento exacto en el que fue tomada. El formato incluye `_t[SEGUNDOS]s` (ej. `captura_000_t120s.jpg` indica que fue tomada en el segundo 120, es decir, el minuto 2:00 del audio).
+   IMPORTANTE: **NO INVENTES NOMBRES DE IMÁGENES**. Solo puedes usar los nombres EXACTOS de las imágenes que se te pasaron adjuntas.
    Cuando el profesor explique algo que coincida con lo que se ve en una captura, descríbelo en detalle E INSERTA LA IMAGEN con la sintaxis Obsidian: `![[nombre_exacto_del_archivo.jpg]]`.
    REGLA DE CONTEXTO: SIEMPRE que insertes una imagen, debes escribir una referencia de tiempo en minutos y segundos. Ejemplo: *"En el minuto 2:00, el profesor mostró el siguiente diagrama: ![[captura_000_t120s.jpg]]"*.
    Solo inserta imágenes que sean realmente relevantes.
@@ -77,7 +78,7 @@ Finalmente, extrae anuncios o tareas en el array 'tarjetas_informativas' ESTRICT
 2. EXCLUYE actividades dentro de la clase (ej. "hagan este ejercicio ahora", "vean este video en 10 mins").
 3. EXCLUYE consejos generales o vagos (ej. "estudien con tiempo").
 4. Deben tener una directiva clara o fecha de entrega implícita/explícita.
-Si no hay anuncios que cumplan estos criterios, deja el array vacío []. Respeta cómo el profesor refirió el tiempo en 'referencia_temporal'.
+Si no hay anuncios que cumplan estos criterios, deja el array vacío []. Respeta cómo el profesor refirió el tiempo en 'referencia_temporal' e intenta deducir la fecha límite exacta en 'fecha_entrega' (YYYY-MM-DD) usando la fecha de hoy.
 
 Genera tu respuesta en el siguiente formato ESTRICTO:
 ---
@@ -99,7 +100,8 @@ $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
     {
       "tipo": "tarea|examen|aviso|otro",
       "contenido": "Información detallada...",
-      "referencia_temporal": "ej. próxima clase, 15 de mayo, la otra semana"
+      "referencia_temporal": "ej. próxima clase, 15 de mayo, la otra semana",
+      "fecha_entrega": "YYYY-MM-DD (Deducida a partir de la referencia temporal y la fecha actual, o vacío si es imposible saberlo)"
     }
   ],
   "nuevas_reglas_profesor": [

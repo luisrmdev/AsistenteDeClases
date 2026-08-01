@@ -81,11 +81,11 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     stopRecording(tabId);
   } else if (alarm.name.startsWith('screenshot_')) {
     const tabId = parseInt(alarm.name.replace('screenshot_', ''));
-    chrome.runtime.sendMessage({
-      target: 'offscreen',
-      type: 'AUTO_SCREENSHOT',
-      tabId: tabId
-    }).catch(() => {});
+    chrome.storage.local.get(['recordingStates'], (res) => {
+      if (res.recordingStates && res.recordingStates[tabId] === 'recording') {
+        chrome.runtime.sendMessage({ target: 'offscreen', type: 'AUTO_SCREENSHOT', tabId: tabId }).catch(() => {});
+      }
+    });
   }
 });
 
@@ -120,15 +120,20 @@ async function startRecording(tabId) {
     const isGhost = ghostModes[tabId] || false;
     const intervalMin = configRes.screenshotIntervalMin || 5;
 
-    chrome.runtime.sendMessage({ target: 'offscreen', type: 'START_RECORDING', streamId, tabId, ghostMode: isGhost });
-    updateState(tabId, 'recording');
-    clearSilenceAlarm(tabId);
-    chrome.alarms.create(`screenshot_${tabId}`, { periodInMinutes: intervalMin });
-
+    // Fix: Setup state and timers BEFORE sending message to avoid race conditions 
+    // if offscreen document fails and immediately sends back 'error' state.
     const timerRes = await chrome.storage.local.get(['recordingTimers']);
     const timers = timerRes.recordingTimers || {};
     timers[tabId] = { startTime: Date.now(), elapsed: 0, paused: false };
     await chrome.storage.local.set({ recordingTimers: timers });
+
+    await updateState(tabId, 'recording');
+    clearSilenceAlarm(tabId);
+
+    // Fix: Use chrome.alarms instead of setInterval for screenshots (bypasses background throttling)
+    chrome.alarms.create(`screenshot_${tabId}`, { periodInMinutes: intervalMin });
+
+    chrome.runtime.sendMessage({ target: 'offscreen', type: 'START_RECORDING', streamId, tabId, ghostMode: isGhost, intervalMin });
 
     try {
       chrome.scripting.executeScript({
@@ -158,8 +163,8 @@ async function resumeRecording(tabId) {
   const intervalMin = configRes.screenshotIntervalMin || 5;
   const t = timers[tabId];
   if (t && t.paused) { t.startTime = Date.now(); t.paused = false; await chrome.storage.local.set({ recordingTimers: timers }); }
-  try { await chrome.runtime.sendMessage({ target: 'offscreen', type: 'RESUME_RECORDING', tabId }); } catch (err) { console.warn("Error enviando reanudar al offscreen", err); }
   chrome.alarms.create(`screenshot_${tabId}`, { periodInMinutes: intervalMin });
+  try { await chrome.runtime.sendMessage({ target: 'offscreen', type: 'RESUME_RECORDING', tabId, intervalMin }); } catch (err) { console.warn("Error enviando reanudar al offscreen", err); }
 }
 
 async function stopRecording(tabId) {
@@ -199,7 +204,7 @@ async function setupOffscreenDocument(path) {
   const existingContexts = await chrome.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'], documentUrls: [chrome.runtime.getURL(path)] });
   if (existingContexts.length > 0) return;
   if (creating) { await creating; } else {
-    creating = chrome.offscreen.createDocument({ url: path, reasons: ['USER_MEDIA'], justification: 'Recording tab audio' });
+    creating = chrome.offscreen.createDocument({ url: path, reasons: ['USER_MEDIA', 'DISPLAY_MEDIA'], justification: 'Recording tab audio and video for screenshots' });
     await creating; creating = null;
   }
 }

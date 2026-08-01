@@ -25,6 +25,7 @@ SETTINGS_FILE = "settings.json"
 META_FILE = os.path.join(RESUMENES_DIR, "resumenes_meta.json")
 TARJETAS_FILE = os.path.join(RESUMENES_DIR, "tarjetas_informativas.json")
 COLA_FILE = os.path.join(RESUMENES_DIR, "cola_tareas.json")
+PROGRESO_FILE = os.path.join(RESUMENES_DIR, "progreso_semestral.json")
 
 # Crear directorios necesarios al importar
 for _dir in [AUDIOS_DIR, RESUMENES_DIR, ADJUNTOS_DIR, PAPELERA_DIR, EXPORTACIONES_DIR, MEMORIA_DIR]:
@@ -78,7 +79,6 @@ class JsonStore:
 # --- Instancias globales (una por archivo) ---
 settings_store = JsonStore(SETTINGS_FILE, default={
     "obsidian_vault_path": os.getenv("OBSIDIAN_VAULT_PATH", ""),
-    "extension_backup_dir": "Backups_Clases/",
     "max_audio_upload_mb": 500,
     "max_papelera_items": 10,
     "default_model": "gemini-3.1-flash-lite",
@@ -89,3 +89,4 @@ materias_store = JsonStore(MATERIAS_FILE, default=list)
 meta_store = JsonStore(META_FILE, default=dict)
 tarjetas_store = JsonStore(TARJETAS_FILE, default=list)
 cola_store = JsonStore(COLA_FILE, default=list)
+progreso_store = JsonStore(PROGRESO_FILE, default=list)
