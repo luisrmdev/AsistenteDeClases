@@ -163,6 +163,37 @@ async def save_to_obsidian(
         except Exception as e:
             print(f"[Obsidian] Error copiando imagen {img_path}: {e}")
 
+async def delete_from_obsidian(filename: str, folder: str, image_names: list) -> None:
+    """
+    Borra físicamente el archivo Markdown y sus imágenes de la bóveda de Obsidian si existe.
+    """
+    import os
+    settings = await settings_store.read()
+    obsidian_path = settings.get("obsidian_vault_path", "")
+    if not obsidian_path or not os.path.exists(obsidian_path):
+        return
+
+    # Borrar archivo .md
+    target_dir = os.path.join(obsidian_path, folder) if folder else obsidian_path
+    obs_file = os.path.join(target_dir, filename)
+    if os.path.exists(obs_file):
+        try:
+            os.remove(obs_file)
+            print(f"[ExportService] Borrado físico de Obsidian: {obs_file}")
+        except Exception as e:
+            print(f"[ExportService] Error borrando MD de Obsidian: {e}")
+
+    # Borrar imágenes de Adjuntos
+    adjuntos_dir = os.path.join(obsidian_path, "Adjuntos")
+    for img in image_names:
+        img_path = os.path.join(adjuntos_dir, img)
+        if os.path.exists(img_path):
+            try:
+                os.remove(img_path)
+                print(f"[ExportService] Borrado físico de imagen de Obsidian: {img_path}")
+            except Exception as e:
+                print(f"[ExportService] Error borrando imagen de Obsidian: {e}")
+
 
 async def save_tarjetas_informativas(
     tarjetas: list,

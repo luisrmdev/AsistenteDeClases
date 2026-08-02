@@ -1417,20 +1417,21 @@ async def delete_summary(filename: str):
     meta_data = await meta_store.read()
     internal_id = filename
     content = ""
+    folder = ""
     for k, v in meta_data.items():
         if v.get("filename") == filename:
             internal_id = k
             content = v.get("resumen", "")
+            folder = v.get("folder", "")
             break
             
-    # Borrar imágenes de GridFS
+    # 1. Borrar imágenes de GridFS
     import re
     from database import get_fs
     fs = get_fs()
     images = re.findall(r'!\[\[(.*?)\]\]', content)
     for img in images:
         try:
-            # Buscar el archivo en GridFS para obtener su _id
             cursor = fs.find({"filename": img})
             docs = await cursor.to_list(length=10)
             for doc in docs:
@@ -1438,15 +1439,36 @@ async def delete_summary(filename: str):
         except Exception as e:
             print(f"Error al borrar imagen {img} de GridFS: {e}")
 
+    # 2. Borrar del sistema local (Backend/Render efímero)
+    local_path = os.path.join(RESUMENES_DIR, filename)
+    if os.path.exists(local_path):
+        try:
+            os.remove(local_path)
+            print(f"Borrado local: {local_path}")
+        except Exception as e:
+            pass
+
+    # 3. Borrar de Obsidian Bóveda (si está configurado)
+    from services.export_service import delete_from_obsidian
+    await delete_from_obsidian(filename, folder, images)
+
+    # 4. Borrar de ChromaDB (Memoria Vectorial RAG)
+    try:
+        from services.vector_store import delete_document
+        doc_id = internal_id.replace(".md", "")
+        delete_document(doc_id)
+        print(f"Borrado de ChromaDB el doc: {doc_id}")
+    except Exception as e:
+        print(f"Error borrando de ChromaDB: {e}")
+
+    # 5. Borrar Metadata MongoDB
     async def _remove_meta(m_data: dict) -> dict:
         m_data.pop(internal_id, None)
-        # Por si acaso la clave era el filename
         m_data.pop(filename, None)
         return m_data
-
     await meta_store.update(_remove_meta)
     
-    # Cascading delete: Reset slot
+    # 6. Cascading delete: Reset slot (Progreso)
     async def _reset_slot(slots: list) -> list:
         for s in slots:
             if s.get("md_vinculado") == filename:
@@ -1455,13 +1477,12 @@ async def delete_summary(filename: str):
         return slots
     await progreso_store.update(_reset_slot)
     
-    # Cascading delete: Remove related flashcards
+    # 7. Cascading delete: Remove related flashcards
     async def _remove_cards(cards: list) -> list:
-        # Borrar si el origen coincide con la clave interna (UUID) o el filename visual
         return [c for c in cards if c.get("origen_md") != internal_id and c.get("origen_md") != filename]
     await tarjetas_store.update(_remove_cards)
     
-    return {"message": "Resumen eliminado y referencias limpiadas en cascada"}
+    return {"message": "Resumen eliminado en cascada profunda (MongoDB, GridFS, Pinecone, Archivos locales)"}
 
 
 # ===========================================================================

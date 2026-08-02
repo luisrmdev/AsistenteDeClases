@@ -110,6 +110,24 @@ def upsert_document(doc_id: str, markdown_text: str, materia_id: str, fecha: str
         batch = vectors[i:i + batch_size]
         index.upsert(vectors=batch)
 
+def delete_document(doc_id: str):
+    """
+    Elimina los chunks asociados a un documento en Pinecone.
+    """
+    if not index or not doc_id:
+        return
+    try:
+        # Intentar borrado por filtro de metadatos (funciona en índices Serverless)
+        index.delete(filter={"doc_id": {"$eq": doc_id}})
+    except Exception as e:
+        print(f"Error borrando por filtro en Pinecone, intentando por IDs fijos: {e}")
+        # Fallback: borrar por IDs (doc_id_0 hasta doc_id_100 asumiendo un máximo seguro)
+        ids_to_delete = [f"{doc_id}_{i}" for i in range(150)]
+        try:
+            index.delete(ids=ids_to_delete)
+        except Exception as e2:
+            print(f"Error final al borrar de Pinecone: {e2}")
+
 
 def semantic_search(query: str, materia_id: str = "todas", max_results: int = 5, where_filter: dict = None) -> list[dict]:
     """
