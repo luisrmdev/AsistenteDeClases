@@ -45,10 +45,15 @@ class MongoStore:
         self.collection = db[collection_name]
         self.doc_id = "singleton"
         self._default = default if default is not None else {}
-        self._lock = asyncio.Lock()
+        self._lock = None
+
+    def _get_lock(self) -> asyncio.Lock:
+        if self._lock is None:
+            self._lock = asyncio.Lock()
+        return self._lock
 
     async def read(self) -> Any:
-        async with self._lock:
+        async with self._get_lock():
             doc = await self.collection.find_one({"_id": self.doc_id})
             if not doc:
                 default_val = self._default() if callable(self._default) else self._default
@@ -56,7 +61,7 @@ class MongoStore:
             return doc.get("data", self._default() if callable(self._default) else self._default)
 
     async def write(self, data: Any) -> None:
-        async with self._lock:
+        async with self._get_lock():
             await self.collection.update_one(
                 {"_id": self.doc_id},
                 {"$set": {"data": data}},
@@ -65,7 +70,7 @@ class MongoStore:
 
     async def update(self, updater_fn) -> Any:
         """Lee, aplica updater_fn(data) -> new_data, y escribe atómicamente."""
-        async with self._lock:
+        async with self._get_lock():
             doc = await self.collection.find_one({"_id": self.doc_id})
             if not doc:
                 data = self._default() if callable(self._default) else self._default
