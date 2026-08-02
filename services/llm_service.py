@@ -151,7 +151,10 @@ Genera tu respuesta en Markdown, seguida ESTRICTAMENTE por este bloque JSON:
 async def list_available_models() -> list:
     try:
         client = genai.Client()
-        modelos = client.models.list()
+        def _sync_list():
+            return list(client.models.list())
+            
+        modelos = await asyncio.to_thread(_sync_list)
         valid_models = []
         for model in modelos:
             if (
@@ -176,10 +179,7 @@ async def list_available_models() -> list:
         return valid_models
     except Exception as e:
         print("Error fetching models:", e)
-        return [
-            {"id": "gemini-3.5-flash", "name": "Gemini 3.5 Flash", "description": "Modelo rápido."},
-            {"id": "gemini-3.1-flash-lite", "name": "Gemini 3.1 Flash Lite", "description": "Modelo ligero."},
-        ]
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -328,18 +328,39 @@ def extract_json_block(texto: str) -> tuple[dict, str]:
     Returns:
         (json_data dict, texto_limpio sin el bloque JSON)
     """
+    import json
     json_data = {}
     texto_limpio = texto
 
+    # Attempt 1: Standard markdown json block
     json_match = re.search(r"```json\s*(\{.*?\})\s*```", texto, re.DOTALL | re.IGNORECASE)
+    
+    # Attempt 2: Any markdown block with braces
     if not json_match:
-        json_match = re.search(r'(\{[\s\n]*"filename".*?\})', texto, re.DOTALL | re.IGNORECASE)
+        json_match = re.search(r"```\s*(\{.*?\})\s*```", texto, re.DOTALL)
+        
+    # Attempt 3: Just the braces (heuristics for raw JSON output)
+    if not json_match:
+        # Search for first { and last }
+        start = texto.find("{")
+        end = texto.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            json_str = texto[start:end+1]
+            try:
+                # Validate it's parseable before accepting it as the match
+                json.loads(json_str)
+                # Create a mock match object-like structure for the replacement logic
+                class MockMatch:
+                    def group(self, i): return json_str if i == 1 else json_str
+                json_match = MockMatch()
+            except Exception:
+                pass
 
     if json_match:
         json_str = json_match.group(1)
         texto_limpio = texto.replace(json_match.group(0), "").strip()
         try:
-            json_data = __import__("json").loads(json_str)
+            json_data = json.loads(json_str)
         except Exception as e:
             print("Error parseando JSON de Gemini:", e)
 
