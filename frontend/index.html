@@ -2665,7 +2665,7 @@
 
       // ====== TAB: AUDIOS PENDIENTES ======
       function loadAudios() {
-        fetch("/api/audios")
+        fetch("/api/grabaciones")
           .then((r) => r.json())
           .then((data) => {
             const list = document.getElementById("audios-list");
@@ -2789,7 +2789,7 @@
           if (a && a.session_name) {
             pathToDelete = `${a.session_name}/${filename}`;
           }
-          fetch(`/api/audios/${pathToDelete}`, { method: "DELETE" }).then(() =>
+          fetch(`/api/grabaciones/${pathToDelete}`, { method: "DELETE" }).then(() =>
             loadAudios(),
           );
         }
@@ -2809,7 +2809,7 @@
           if (a && a.session_name) {
             pathToDelete = `${a.session_name}/${imgFilename}`;
           }
-          fetch(`/api/audios/${pathToDelete}`, { method: "DELETE" }).then(
+          fetch(`/api/grabaciones/${pathToDelete}`, { method: "DELETE" }).then(
             (res) => {
               if (res.ok) {
                 loadAudios();
@@ -2941,7 +2941,7 @@
           
           showToast("Procesando fusión. Por favor espera...", "info");
           
-          fetch("/api/audios/merge", {
+          fetch("/api/grabaciones/merge", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ session1: sessions[0], session2: sessions[1] })
@@ -3101,7 +3101,7 @@
             }
           }
 
-          const token = localStorage.getItem("jwt_token");
+          const token = localStorage.getItem("synq_token");
           const response = await fetch("/upload", {
             method: "POST",
             headers: token ? { "Authorization": `Bearer ${token}` } : {},

@@ -74,7 +74,7 @@ body {
     letter-spacing: 0.5px;
 }
 
-input[type="text"], input[type="number"] {
+input[type="text"], input[type="number"], input[type="password"] {
     width: 100%;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-gray);

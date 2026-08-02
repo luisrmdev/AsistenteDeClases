@@ -848,7 +848,7 @@ async def get_available_models():
 # Audios pendientes
 # ===========================================================================
 
-@app.get("/api/audios")
+@app.get("/api/grabaciones")
 async def list_pending_audios():
     if not os.path.exists(AUDIOS_DIR):
         return {"audios": []}
@@ -916,7 +916,7 @@ async def list_pending_audios():
     return {"audios": audios}
 
 
-@app.delete("/api/audios/{path:path}")
+@app.delete("/api/grabaciones/{path:path}")
 async def delete_audio_or_image(path: str):
     target_path = os.path.join(AUDIOS_DIR, path)
     if not os.path.exists(target_path):
@@ -955,7 +955,7 @@ class MergeRequest(BaseModel):
     session1: str
     session2: str
 
-@app.post("/api/audios/merge")
+@app.post("/api/grabaciones/merge")
 async def merge_audios_endpoint(req: MergeRequest):
     # Validar que no estén en la cola
     cola = await cola_store.read()
