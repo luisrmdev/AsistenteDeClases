@@ -139,7 +139,8 @@ async def worker_loop():
                 silence_db = settings.get("audio_silence_db", -30)
                 
                 # --- Preparar Imágenes (Renombrar y Subir a GridFS) ---
-                from database import fs
+                from database import get_fs
+                fs = get_fs()
                 renamed_image_paths = []
                 image_name_map = {}
                 if image_paths and session_dir:
@@ -381,13 +382,14 @@ app.add_middleware(
 
 # Servir archivos de audio y adjuntos
 app.mount("/media", StaticFiles(directory=AUDIOS_DIR), name="media")
-from database import fs
+from database import get_fs
 from fastapi.responses import StreamingResponse
 import mimetypes
 
 @app.get("/adjuntos/{filename}")
 async def get_adjunto(filename: str):
     try:
+        fs = get_fs()
         grid_out = await fs.open_download_stream_by_name(filename)
         mime_type, _ = mimetypes.guess_type(filename)
         
@@ -1374,7 +1376,8 @@ async def delete_summary(filename: str):
             
     # Borrar imágenes de GridFS
     import re
-    from database import fs
+    from database import get_fs
+    fs = get_fs()
     images = re.findall(r'!\[\[(.*?)\]\]', content)
     for img in images:
         try:

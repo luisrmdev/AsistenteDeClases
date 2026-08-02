@@ -31,9 +31,22 @@ from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
 
 # ... (other imports stay the same)
 
-client = AsyncIOMotorClient(MONGODB_URI)
-db = client.synq_db
-fs = AsyncIOMotorGridFSBucket(db, bucket_name='adjuntos')
+client = None
+db = None
+fs_bucket = None
+
+def get_db():
+    global client, db
+    if client is None:
+        client = AsyncIOMotorClient(MONGODB_URI)
+        db = client.synq_db
+    return db
+
+def get_fs():
+    global fs_bucket
+    if fs_bucket is None:
+        fs_bucket = AsyncIOMotorGridFSBucket(get_db(), bucket_name='adjuntos')
+    return fs_bucket
 
 class MongoStore:
     """
@@ -42,7 +55,7 @@ class MongoStore:
     con la base de código existente.
     """
     def __init__(self, collection_name: str, default: Any = None):
-        self.collection = db[collection_name]
+        self.collection_name = collection_name
         self.doc_id = "singleton"
         self._default = default if default is not None else {}
         self._lock = None
@@ -51,6 +64,10 @@ class MongoStore:
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
+
+    @property
+    def collection(self):
+        return get_db()[self.collection_name]
 
     async def read(self) -> Any:
         async with self._get_lock():
