@@ -620,13 +620,20 @@ async def update_materia(materia_id: str, materia: MateriaUpdate):
 async def delete_materia(materia_id: str):
     original_len = [0]
 
-    async def _delete(materias: list) -> list:
+    async def _delete_materia(materias: list) -> list:
         original_len[0] = len(materias)
         return [m for m in materias if m["id"] != materia_id]
 
-    result = await materias_store.update(_delete)
+    result = await materias_store.update(_delete_materia)
     if len(result) == original_len[0]:
         raise HTTPException(status_code=404, detail="Materia no encontrada")
+        
+    # Cascading delete: Remove all slots associated with this materia
+    async def _delete_slots(slots: list) -> list:
+        return [s for s in slots if s.get("materia_id") != materia_id]
+        
+    await progreso_store.update(_delete_slots)
+    
     return {"message": "Materia eliminada"}
 
 
