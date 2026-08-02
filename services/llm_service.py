@@ -6,6 +6,7 @@ Absorbe también la funcionalidad de nlp_engine.py.
 import os
 import re
 import time
+import asyncio
 from datetime import datetime
 
 from google import genai
@@ -242,13 +243,13 @@ async def generate_summary_from_audio(
 
     # --- Upload audio ---
     print(f"Subiendo audio a Gemini Files API...", flush=True)
-    audio_file = client.files.upload(file=upload_path, config={"mime_type": "audio/webm"})
+    audio_file = await asyncio.to_thread(client.files.upload, file=upload_path, config={"mime_type": "audio/webm"})
 
     print("Esperando a que Gemini procese el audio...", flush=True)
-    audio_info = client.files.get(name=audio_file.name)
+    audio_info = await asyncio.to_thread(client.files.get, name=audio_file.name)
     while audio_info.state.name == "PROCESSING":
-        time.sleep(3)
-        audio_info = client.files.get(name=audio_file.name)
+        await asyncio.sleep(3)
+        audio_info = await asyncio.to_thread(client.files.get, name=audio_file.name)
 
     if audio_info.state.name == "FAILED":
         raise RuntimeError("Gemini falló al procesar el archivo de audio.")
@@ -264,13 +265,13 @@ async def generate_summary_from_audio(
         mime_type = mime_map.get(ext, "image/jpeg")
         try:
             print(f"Subiendo imagen {os.path.basename(img_path)}...", flush=True)
-            img_file = client.files.upload(file=img_path, config={"mime_type": mime_type})
+            img_file = await asyncio.to_thread(client.files.upload, file=img_path, config={"mime_type": mime_type})
             # Images process fast — brief wait
-            img_info = client.files.get(name=img_file.name)
+            img_info = await asyncio.to_thread(client.files.get, name=img_file.name)
             retries = 0
             while img_info.state.name == "PROCESSING" and retries < 10:
-                time.sleep(2)
-                img_info = client.files.get(name=img_file.name)
+                await asyncio.sleep(2)
+                img_info = await asyncio.to_thread(client.files.get, name=img_file.name)
                 retries += 1
             if img_info.state.name != "FAILED":
                 uploaded_images.append(img_info)
@@ -295,22 +296,24 @@ async def generate_summary_from_audio(
     contents = [audio_info] + uploaded_images + [user_trigger]
 
     @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=5, max=60))
-    def _call_gemini():
-        print("Solicitando generación a Gemini...", flush=True)
-        res = client.models.generate_content(
-            model=modelo,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=sys_instruction,
-                max_output_tokens=8192, 
-                temperature=temperatura
-            ),
-        )
+    async def _call_gemini():
+        print(f"Solicitando generación a Gemini (Modelo: {modelo})...", flush=True)
+        def _sync_generate():
+            return client.models.generate_content(
+                model=modelo,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=sys_instruction,
+                    max_output_tokens=8192, 
+                    temperature=temperatura
+                ),
+            )
+        res = await asyncio.to_thread(_sync_generate)
         if not res.text or len(res.text.strip()) < 50:
             raise ValueError("Respuesta vacía o corta. Forzando reintento.")
         return res
 
-    response = _call_gemini()
+    response = await _call_gemini()
     return response.text
 
 
@@ -343,7 +346,7 @@ def extract_json_block(texto: str) -> tuple[dict, str]:
     return json_data, texto_limpio
 
 
-async def force_extract_metadata_from_markdown(markdown_text: str, modelo: str = "gemini-3.1-flash-lite") -> dict:
+async def force_extract_metadata_from_markdown(markdown_text: str, modelo: str = "gemini-1.5-flash") -> dict:
     """
     Segunda pasada de seguridad (Two-Pass Fallback).
     Toma un Markdown puro y le exige a Gemini que devuelva EXCLUSIVAMENTE el JSON
@@ -373,14 +376,16 @@ async def force_extract_metadata_from_markdown(markdown_text: str, modelo: str =
     )
     
     try:
-        res = client.models.generate_content(
-            model=modelo,
-            contents=[f"Extrae el JSON de este documento:\n\n{markdown_text[:15000]}"], # Cap a 15k chars por si es gigante
-            config=types.GenerateContentConfig(
-                system_instruction=sys_prompt,
-                temperature=0.1 # Muy bajo para asegurar formato
-            ),
-        )
+        def _sync_extract():
+            return client.models.generate_content(
+                model=modelo,
+                contents=[f"Extrae el JSON de este documento:\n\n{markdown_text[:15000]}"], # Cap a 15k chars por si es gigante
+                config=types.GenerateContentConfig(
+                    system_instruction=sys_prompt,
+                    temperature=0.1 # Muy bajo para asegurar formato
+                ),
+            )
+        res = await asyncio.to_thread(_sync_extract)
         
         fallback_data, _ = extract_json_block(res.text)
         return fallback_data

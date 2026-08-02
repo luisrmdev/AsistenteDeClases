@@ -735,7 +735,7 @@
         btn.disabled = true;
 
         const modelStr =
-          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+          localStorage.getItem("modelo_elegido") || "gemini-1.5-flash";
         fetch("/api/generate-prompt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1270,7 +1270,7 @@
           materia_id: materiaId,
           slot_id: slotId,
           modelo_elegido:
-            localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite",
+            localStorage.getItem("modelo_elegido") || "gemini-1.5-flash",
           session_name: a ? a.session_name : null,
           session_dir: a ? a.session_dir : null,
           image_filenames: a ? a.image_filenames || [] : [],
@@ -1434,7 +1434,7 @@
         chatHistory.scrollTop = chatHistory.scrollHeight;
 
         const modelStr =
-          localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+          localStorage.getItem("modelo_elegido") || "gemini-1.5-flash";
         fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1604,7 +1604,7 @@
         if (!text && !currentTutorV2ImageData) return;
 
         const materiaId = document.getElementById("tutor-materia-select").value;
-        const model = localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
+        const model = localStorage.getItem("modelo_elegido") || "gemini-1.5-flash";
 
         if (currentTutorV2ImageData) {
             appendTutorMessage(text ? text + "\\n*[Imagen adjunta]*" : "*[Imagen adjunta]*", true);

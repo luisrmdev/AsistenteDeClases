@@ -172,7 +172,7 @@ async def worker_loop():
                     texto = await llm_service.generate_summary_from_audio(
                         upload_path,
                         prompt_usar,
-                        pending.get("modelo_elegido", "gemini-3.1-flash-lite"),
+                        pending.get("modelo_elegido", "gemini-1.5-flash"),
                         image_paths=image_paths,
                         materia_name=materia_name,
                         temperatura=temperatura
@@ -195,7 +195,7 @@ async def worker_loop():
                     print("[Worker] JSON incompleto o ausente. Ejecutando fallback (Two-Pass Extraction)...")
                     fallback_data = await llm_service.force_extract_metadata_from_markdown(
                         texto_limpio, 
-                        modelo=pending.get("modelo_elegido", "gemini-3.1-flash-lite")
+                        modelo=pending.get("modelo_elegido", "gemini-1.5-flash")
                     )
                     
                     if not json_data:
@@ -474,7 +474,7 @@ class MateriaUpdate(BaseModel):
 class GenerateRequest(BaseModel):
     filename: str
     materia_id: str
-    modelo_elegido: str = "gemini-3.1-flash-lite"
+    modelo_elegido: str = "gemini-1.5-flash"
     session_name: str = None
     session_dir: str = None
     image_filenames: list = []
@@ -489,27 +489,27 @@ class SaveRequest(BaseModel):
 
 class PromptGenRequest(BaseModel):
     descripcion: str
-    modelo_elegido: str = "gemini-3.1-flash-lite"
+    modelo_elegido: str = "gemini-1.5-flash"
 
 
 class ChatRequest(BaseModel):
     mensaje: str
     materia_id: str
-    modelo_elegido: str = "gemini-3.1-flash-lite"
+    modelo_elegido: str = "gemini-1.5-flash"
     image_data: Optional[str] = None
 
 class TutorChatRequest(BaseModel):
     materia_id: str
     historial: list = []
     pregunta: str
-    modelo_elegido: str = "gemini-3.1-flash-lite"
+    modelo_elegido: str = "gemini-1.5-flash"
     image_data: Optional[str] = None
 
 class TutorV2ChatRequest(BaseModel):
     slot_id: str
     historial: list = []
     pregunta: str
-    modelo_elegido: str = "gemini-3.1-flash-lite"
+    modelo_elegido: str = "gemini-1.5-flash"
     image_data: Optional[str] = None
 
 
@@ -521,7 +521,7 @@ class SettingsUpdate(BaseModel):
     obsidian_vault_path: str
     max_audio_upload_mb: int = 500
     max_papelera_items: int = 10
-    default_model: str = "gemini-3.1-flash-lite"
+    default_model: str = "gemini-1.5-flash"
     rag_max_docs: int = 8
     nlp_threshold: float = 1.0
     audio_silence_db: int = -30
@@ -1357,11 +1357,18 @@ async def get_summary(filename: str):
         return {"error": "Solo se permiten archivos markdown."}
     
     meta_data = await meta_store.read()
-    if filename not in meta_data:
-        return {"error": "Archivo no encontrado en la base de datos."}
+    
+    # Buscar por clave interna (UUID)
+    if filename in meta_data:
+        content = meta_data[filename].get("resumen", "")
+        return {"content": content}
         
-    content = meta_data[filename].get("resumen", "")
-    return {"content": content}
+    # Buscar por filename visual
+    for k, v in meta_data.items():
+        if v.get("filename") == filename:
+            return {"content": v.get("resumen", "")}
+            
+    return {"error": "Archivo no encontrado en la base de datos."}
 
 
 @app.put("/api/summaries/{filename}")
@@ -1370,11 +1377,21 @@ async def update_summary(filename: str, req: SummaryUpdate):
         raise HTTPException(status_code=400, detail="Solo archivos markdown.")
         
     meta_data = await meta_store.read()
+    
+    internal_id = filename
     if filename not in meta_data:
-        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
+        # Search by visual filename
+        found = False
+        for k, v in meta_data.items():
+            if v.get("filename") == filename:
+                internal_id = k
+                found = True
+                break
+        if not found:
+            raise HTTPException(status_code=404, detail="Archivo no encontrado.")
 
     # Guardar en local si la carpeta existe (Backup local)
-    filepath = os.path.join(RESUMENES_DIR, filename)
+    filepath = os.path.join(RESUMENES_DIR, internal_id)
     if os.path.exists(RESUMENES_DIR):
         try:
             with open(filepath, "w", encoding="utf-8") as f:
@@ -1383,26 +1400,26 @@ async def update_summary(filename: str, req: SummaryUpdate):
             pass
 
     async def _update_meta(md_data: dict) -> dict:
-        if filename in md_data:
-            md_data[filename]["resumen"] = req.content
+        if internal_id in md_data:
+            md_data[internal_id]["resumen"] = req.content
             # Re-vectorizar en Pinecone
             try:
                 from services.vector_store import upsert_document
                 materia_id = "default"
-                match = re.search(r"__(.*?)__", filename)
+                match = re.search(r"__(.*?)__", internal_id)
                 if match:
                     materia_id = match.group(1)
                 
-                doc_id = filename.replace(".md", "")
+                doc_id = internal_id.replace(".md", "")
                 upsert_document(
                     doc_id=doc_id,
                     markdown_text=req.content,
                     materia_id=materia_id,
-                    fecha=md_data[filename].get("fecha", "desconocida"),
-                    filename=filename
+                    fecha=md_data[internal_id].get("fecha", "desconocida"),
+                    filename=md_data[internal_id].get("filename", internal_id)
                 )
             except Exception as e:
-                print(f"Error al re-vectorizar {filename}: {e}")
+                print(f"Error al re-vectorizar {internal_id}: {e}")
         return md_data
 
     await meta_store.update(_update_meta)
@@ -1580,7 +1597,7 @@ async def extract_task_from_image(req: TaskExtractRequest):
     modelo = req.modelo_elegido
     if not modelo:
         settings = await settings_store.read()
-        modelo = settings.get("default_model", "gemini-3.1-flash-lite")
+        modelo = settings.get("default_model", "gemini-1.5-flash")
 
     try:
         texto, _ = await llm_service.extract_task_from_image(img_bytes, modelo)
