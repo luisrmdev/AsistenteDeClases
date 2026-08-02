@@ -173,10 +173,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.sendMessage({ target: 'offscreen', type: 'SET_GHOST_MODE', ghostMode: isGhost, tabId: currentTabId });
   });
 
+  const apiUrlInput = document.getElementById('apiUrlInput');
+  const jwtTokenInput = document.getElementById('jwtTokenInput');
+
   // Load settings
-  chrome.storage.local.get(['backupAskAlways', 'screenshotIntervalMin'], async (result) => {
+  chrome.storage.local.get(['backupAskAlways', 'screenshotIntervalMin', 'apiUrl', 'jwtToken'], async (result) => {
     backupAskAlways.checked = result.backupAskAlways || false;
     screenshotIntervalMin.value = result.screenshotIntervalMin || 5;
+    apiUrlInput.value = result.apiUrl || 'http://localhost:8000';
+    jwtTokenInput.value = result.jwtToken || '';
   });
 
   screenshotIntervalMin.addEventListener('change', () => {
@@ -187,6 +192,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   backupAskAlways.addEventListener('change', () => {
     chrome.storage.local.set({ backupAskAlways: backupAskAlways.checked });
+  });
+
+  apiUrlInput.addEventListener('change', () => {
+    let val = apiUrlInput.value.trim();
+    if (val.endsWith('/')) val = val.slice(0, -1);
+    chrome.storage.local.set({ apiUrl: val });
+  });
+
+  jwtTokenInput.addEventListener('change', () => {
+    chrome.storage.local.set({ jwtToken: jwtTokenInput.value.trim() });
   });
 
 

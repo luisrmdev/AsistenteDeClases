@@ -1776,6 +1776,32 @@
            fetchMaterias();
            fetchResumenes();
            fetchAudiosCola();
+           
+           // Boot other modules
+           loadSummaries();
+           loadMaterias().then(() => {
+              return loadProgreso();
+           }).then(() => {
+              loadAudios();
+           });
+           loadAppSettings();
+
+           fetch("/api/models")
+             .then((r) => r.json())
+             .then((data) => {
+               const modelSelector = document.getElementById("model-selector");
+               modelSelector.innerHTML = "";
+               data.models.forEach((m) => {
+                 const option = document.createElement("option");
+                 option.value = m.id;
+                 option.textContent = `${m.name} - ${m.description.substring(0, 50)}${m.description.length > 50 ? "..." : ""}`;
+                 modelSelector.appendChild(option);
+               });
+               
+               // Re-apply settings after models are loaded to ensure the selected model exists
+               loadAppSettings(); 
+             })
+             .catch(console.error);
         }
       }
 
@@ -1804,14 +1830,6 @@
                renderProgresoGrid();
            }
         });
-        
-        loadSummaries();
-        loadMaterias().then(() => {
-           return loadProgreso();
-        }).then(() => {
-           loadAudios();
-        });
-        loadAppSettings();
 
         // Restore Sidebar states
         const bibState = localStorage.getItem("biblioteca_state") || "closed";
@@ -1819,40 +1837,6 @@
         const entState = localStorage.getItem("entregables_state") || "closed";
         toggleEntregables(entState);
 
-        // Model Selector Init
-        function getUiName(val) {
-          if (val.includes("3.5-flash")) return "Flash 3.5";
-          if (val.includes("lite")) return "Flash Lite";
-          if (val.includes("pro")) return "Pro";
-          return val.split("-")[1] || val; // simple fallback
-        }
-
-        fetch("/api/models")
-          .then((r) => r.json())
-          .then((data) => {
-            const modelSelector = document.getElementById("model-selector");
-            modelSelector.innerHTML = "";
-            data.models.forEach((m) => {
-              const option = document.createElement("option");
-              option.value = m.id;
-              option.textContent = `${m.name} - ${m.description.substring(0, 50)}${m.description.length > 50 ? "..." : ""}`;
-              modelSelector.appendChild(option);
-            });
-
-            let savedModel =
-              localStorage.getItem("modelo_elegido") || "gemini-3.1-flash-lite";
-            const exists = data.models.find((x) => x.id === savedModel);
-            if (!exists && data.models.length > 0) {
-              savedModel = data.models[0].id;
-            }
-
-            modelSelector.value = savedModel;
-            localStorage.setItem("modelo_elegido", savedModel);
-            document.getElementById("ui-current-model").innerText =
-              getUiName(savedModel);
-
-          })
-          .catch((e) => console.error("Error cargando modelos:", e));
 
         const modelSelector = document.getElementById("model-selector");
         modelSelector.addEventListener("change", (e) => {

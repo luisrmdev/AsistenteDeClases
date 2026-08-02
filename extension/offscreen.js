@@ -361,8 +361,21 @@ async function uploadAudio(audioBlob, screenshots, tabId) {
       formData.append('imagenes', shot.image_blob, filename);
     });
 
-    const response = await fetch('http://localhost:8000/upload', {
+    const storage = await new Promise(resolve => {
+      chrome.storage.local.get(['apiUrl', 'jwtToken'], resolve);
+    });
+    
+    const baseUrl = storage.apiUrl || 'http://localhost:8000';
+    const jwtToken = storage.jwtToken || '';
+
+    const headers = {};
+    if (jwtToken) {
+        headers['Authorization'] = `Bearer ${jwtToken}`;
+    }
+
+    const response = await fetch(`${baseUrl}/upload`, {
       method: 'POST',
+      headers: headers,
       body: formData
     });
 
