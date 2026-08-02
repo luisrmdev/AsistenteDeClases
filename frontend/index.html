@@ -565,27 +565,53 @@
     </script>
   </head>
   <body class="flex h-screen overflow-hidden bg-background">
-    <!-- Login Modal -->
-    <div id="login-modal" class="fixed inset-0 bg-background/95 backdrop-blur-md z-[100] flex items-center justify-center hidden">
-      <div class="bg-surface border border-borderGray p-8 rounded-xl shadow-glass w-full max-w-sm">
-        <h2 class="text-3xl font-serif text-charcoal mb-2">Synq.</h2>
-        <p class="text-textMuted text-sm mb-6">Ingresa tus credenciales para acceder.</p>
-        <form onsubmit="handleLogin(event)" class="space-y-4">
-          <div>
-            <label class="block text-xs font-medium text-textMuted mb-1">Usuario</label>
-            <input name="username" type="text" class="w-full bg-background border border-borderGray rounded-lg p-2.5 text-charcoal focus:border-charcoal outline-none transition-colors" required>
+    <!-- Login View (SPA Split Screen) -->
+    <div id="login-view" class="w-full h-full flex flex-col md:flex-row hidden">
+      <!-- Left Panel (Brand/Logo) -->
+      <div class="hidden md:flex flex-col justify-center items-center w-1/2 bg-surface border-r border-borderGray relative overflow-hidden">
+        <!-- Abstract decorative element -->
+        <div class="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style="background-image: radial-gradient(circle at 2px 2px, var(--color-text-main) 1px, transparent 0); background-size: 24px 24px;"></div>
+        
+        <div class="relative z-10 flex flex-col items-center text-center px-12 fade-in">
+          <img src="logo.png" alt="Synq Logo" class="w-32 h-32 mb-8 rounded-2xl shadow-glass shadow-black/10 dark:shadow-white/5">
+          <h1 class="text-4xl font-serif text-charcoal tracking-tight mb-4">Synq.</h1>
+          <p class="text-textMuted text-lg max-w-sm">The Stateless Academic Engine. Inteligencia enfocada para un flujo de estudio sin fricción.</p>
+        </div>
+      </div>
+
+      <!-- Right Panel (Form) -->
+      <div class="flex-1 flex items-center justify-center bg-background relative">
+        <div class="w-full max-w-sm px-8 py-10 fade-in fade-in-delay-1">
+          <!-- Mobile Header (Visible only on small screens) -->
+          <div class="md:hidden flex flex-col items-center mb-8">
+            <img src="logo.png" alt="Synq Logo" class="w-16 h-16 mb-4 rounded-xl shadow-glass">
+            <h2 class="text-2xl font-serif text-charcoal">Synq.</h2>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-textMuted mb-1">Contraseña</label>
-            <input name="password" type="password" class="w-full bg-background border border-borderGray rounded-lg p-2.5 text-charcoal focus:border-charcoal outline-none transition-colors" required>
-          </div>
-          <button type="submit" class="w-full bg-charcoal text-white rounded-lg py-2.5 font-medium hover:bg-gray-800 transition-colors mt-2">
-            Entrar
-          </button>
-        </form>
+
+          <h2 class="text-2xl font-semibold text-charcoal mb-2 hidden md:block">Bienvenido de nuevo</h2>
+          <p class="text-textMuted text-sm mb-8 text-center md:text-left">Ingresa tus credenciales para acceder a tu entorno.</p>
+          
+          <form onsubmit="handleLogin(event)" class="space-y-5">
+            <div>
+              <label class="block text-xs font-bold text-textMuted uppercase tracking-wider mb-2">Usuario</label>
+              <input name="username" type="text" class="w-full bg-surface border border-borderGray rounded-xl p-3.5 text-charcoal focus:border-charcoal outline-none transition-colors shadow-sm" required placeholder="admin">
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-textMuted uppercase tracking-wider mb-2">Contraseña</label>
+              <input name="password" type="password" class="w-full bg-surface border border-borderGray rounded-xl p-3.5 text-charcoal focus:border-charcoal outline-none transition-colors shadow-sm" required placeholder="••••••••">
+            </div>
+            <button type="submit" class="w-full bg-charcoal text-background rounded-xl py-3.5 font-bold tracking-wide hover:opacity-90 transition-opacity mt-4 shadow-md flex justify-center items-center gap-2">
+              <span>Iniciar Sesión</span>
+              <i data-lucide="arrow-right" class="w-4 h-4"></i>
+            </button>
+          </form>
+        </div>
       </div>
     </div>
-    <aside
+
+    <!-- Main App Container -->
+    <div id="app-container" class="flex w-full h-full hidden">
+      <aside
       id="main-sidebar"
       class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0"
     >
@@ -1703,23 +1729,55 @@
       async function handleLogin(e) {
         e.preventDefault();
         const fd = new FormData(e.target);
-        const res = await fetch('/api/login', {
-          method: 'POST',
-          body: fd
-        });
-        if(res.ok) {
-           const data = await res.json();
-           localStorage.setItem('synq_token', data.access_token);
-           document.getElementById('login-modal').classList.add('hidden');
-           window.location.reload();
-        } else {
-           showToast("Credenciales inválidas", "error");
+        const btn = e.target.querySelector('button[type="submit"]');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>';
+        btn.disabled = true;
+        lucide.createIcons({ root: btn });
+        
+        try {
+            const res = await fetch('/api/login', {
+              method: 'POST',
+              body: fd
+            });
+            if(res.ok) {
+               const data = await res.json();
+               localStorage.setItem('synq_token', data.access_token);
+               // Refresh UI
+               checkAuthAndBoot();
+            } else {
+               showToast("Credenciales inválidas", "error");
+            }
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+            lucide.createIcons({ root: btn });
         }
       }
 
       function logout() {
         localStorage.removeItem('synq_token');
-        window.location.reload();
+        checkAuthAndBoot();
+      }
+
+      function checkAuthAndBoot() {
+        const token = localStorage.getItem('synq_token');
+        const loginView = document.getElementById('login-view');
+        const appContainer = document.getElementById('app-container');
+        
+        if (!token) {
+           // Show Login
+           appContainer.classList.add('hidden');
+           loginView.classList.remove('hidden');
+        } else {
+           // Show App
+           loginView.classList.add('hidden');
+           appContainer.classList.remove('hidden');
+           // Initialize app data if needed
+           fetchMaterias();
+           fetchResumenes();
+           fetchAudiosCola();
+        }
       }
 
       // State
