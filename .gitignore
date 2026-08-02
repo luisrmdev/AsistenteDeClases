@@ -32,3 +32,12 @@ resumenes/cola_tareas.json
 # Dev / Audit artifacts
 model_output.txt
 estado_actual_proyecto.md
+
+# Scratch & Test files
+test_*.py
+test_*.js
+clean_*.py
+inspect_*.py
+migrate_*.py
+migrar_*.py
+*.log
