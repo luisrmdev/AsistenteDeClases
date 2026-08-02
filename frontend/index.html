@@ -1721,9 +1721,8 @@
       };
 
       function showLoginScreen() {
-        const modal = document.getElementById('login-modal');
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        localStorage.removeItem('synq_token');
+        checkAuthAndBoot();
       }
       
       async function handleLogin(e) {
