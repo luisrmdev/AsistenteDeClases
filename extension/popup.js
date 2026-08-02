@@ -173,15 +173,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.runtime.sendMessage({ target: 'offscreen', type: 'SET_GHOST_MODE', ghostMode: isGhost, tabId: currentTabId });
   });
 
-  const apiUrlInput = document.getElementById('apiUrlInput');
-  const jwtTokenInput = document.getElementById('jwtTokenInput');
+  const tabLogin = document.getElementById('tab-login');
+  const loginApiUrl = document.getElementById('loginApiUrl');
+  const loginUsername = document.getElementById('loginUsername');
+  const loginPassword = document.getElementById('loginPassword');
+  const loginBtn = document.getElementById('loginBtn');
+  const loginErrorMsg = document.getElementById('loginErrorMsg');
+  const logoutBtn = document.getElementById('logoutBtn');
 
-  // Load settings
+  // Load settings and Auth State
   chrome.storage.local.get(['backupAskAlways', 'screenshotIntervalMin', 'apiUrl', 'jwtToken'], async (result) => {
     backupAskAlways.checked = result.backupAskAlways || false;
     screenshotIntervalMin.value = result.screenshotIntervalMin || 5;
-    apiUrlInput.value = result.apiUrl || 'http://localhost:8000';
-    jwtTokenInput.value = result.jwtToken || '';
+    
+    if (result.apiUrl) {
+      loginApiUrl.value = result.apiUrl;
+    } else {
+      loginApiUrl.value = 'http://localhost:8000';
+    }
+
+    if (result.jwtToken) {
+      tabLogin.classList.add('hidden');
+      tabAudio.classList.remove('hidden');
+    } else {
+      tabLogin.classList.remove('hidden');
+      tabAudio.classList.add('hidden');
+    }
   });
 
   screenshotIntervalMin.addEventListener('change', () => {
@@ -194,17 +211,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     chrome.storage.local.set({ backupAskAlways: backupAskAlways.checked });
   });
 
-  apiUrlInput.addEventListener('change', () => {
-    let val = apiUrlInput.value.trim();
-    if (val.endsWith('/')) val = val.slice(0, -1);
-    chrome.storage.local.set({ apiUrl: val });
+  // Login Logic
+  loginBtn.addEventListener('click', async () => {
+    let apiUrl = loginApiUrl.value.trim();
+    if (apiUrl.endsWith('/')) apiUrl = apiUrl.slice(0, -1);
+    
+    const username = loginUsername.value.trim();
+    const password = loginPassword.value.trim();
+
+    if (!apiUrl || !username || !password) {
+      loginErrorMsg.textContent = 'Rellena todos los campos';
+      loginErrorMsg.classList.remove('hidden');
+      return;
+    }
+
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Conectando...';
+    loginErrorMsg.classList.add('hidden');
+
+    try {
+      const formData = new URLSearchParams();
+      formData.append('username', username);
+      formData.append('password', password);
+
+      const res = await fetch(`${apiUrl}/api/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: formData.toString()
+      });
+
+      if (!res.ok) {
+        throw new Error('Credenciales incorrectas o servidor inalcanzable');
+      }
+
+      const data = await res.json();
+      if (data.access_token) {
+        chrome.storage.local.set({ 
+          jwtToken: data.access_token,
+          apiUrl: apiUrl
+        }, () => {
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Conectar';
+          tabLogin.classList.add('hidden');
+          tabAudio.classList.remove('hidden');
+        });
+      } else {
+        throw new Error('Respuesta inválida del servidor');
+      }
+    } catch (err) {
+      loginErrorMsg.textContent = err.message;
+      loginErrorMsg.classList.remove('hidden');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Conectar';
+    }
   });
 
-  jwtTokenInput.addEventListener('change', () => {
-    chrome.storage.local.set({ jwtToken: jwtTokenInput.value.trim() });
+  // Logout Logic
+  logoutBtn.addEventListener('click', () => {
+    chrome.storage.local.remove(['jwtToken'], () => {
+      tabSettings.classList.add('hidden');
+      tabAudio.classList.add('hidden');
+      tabLogin.classList.remove('hidden');
+      loginPassword.value = '';
+    });
   });
-
-
 
   // Check current state for this specific tab
   chrome.storage.local.get(['recordingStates'], (result) => {
