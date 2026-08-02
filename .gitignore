@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 venv/
 env/
+test_env/
 .env
 
 # Media and Generated Data
