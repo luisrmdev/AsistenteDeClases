@@ -1433,11 +1433,13 @@ async def delete_summary(filename: str):
         
     meta_data = await meta_store.read()
     internal_id = filename
+    visual_filename = filename
     content = ""
     folder = ""
     for k, v in meta_data.items():
-        if v.get("filename") == filename:
+        if v.get("filename") == filename or k == filename:
             internal_id = k
+            visual_filename = v.get("filename", filename)
             content = v.get("resumen", "")
             folder = v.get("folder", "")
             break
@@ -1488,9 +1490,11 @@ async def delete_summary(filename: str):
     # 6. Cascading delete: Reset slot (Progreso)
     async def _reset_slot(slots: list) -> list:
         for s in slots:
-            if s.get("md_vinculado") == filename:
+            if s.get("md_vinculado") in [filename, internal_id, visual_filename]:
                 s["estado"] = "AUSENTE"
                 s["md_vinculado"] = None
+                if "temas" in s:
+                    s["temas"] = []
         return slots
     await progreso_store.update(_reset_slot)
     
