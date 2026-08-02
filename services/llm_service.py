@@ -150,7 +150,7 @@ Genera tu respuesta en Markdown, seguida ESTRICTAMENTE por este bloque JSON:
 
 async def list_available_models() -> list:
     try:
-        client = genai.Client()
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
         def _sync_list():
             return list(client.models.list())
             
@@ -188,7 +188,7 @@ async def list_available_models() -> list:
 
 async def generate_prompt_for_materia(descripcion: str, modelo: str) -> tuple[str, dict]:
     """Genera un prompt estructurado a partir de una descripción natural."""
-    client = genai.Client()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     settings = await settings_store.read()
     sys_prompt = settings.get("prompt_generator_sys", DEFAULT_PROMPT_GENERATOR)
     
@@ -231,7 +231,7 @@ async def generate_summary_from_audio(
         texto_generado
     """
     image_paths = image_paths or []
-    client = genai.Client()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     fecha_actual = datetime.now().strftime("%Y-%m-%d")
     
     settings = await settings_store.read()
@@ -373,7 +373,7 @@ async def force_extract_metadata_from_markdown(markdown_text: str, modelo: str =
     Toma un Markdown puro y le exige a Gemini que devuelva EXCLUSIVAMENTE el JSON
     de los metadatos de las tarjetas informativas, reglas del profesor y temario.
     """
-    client = genai.Client()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     
     sys_prompt = (
         "Eres un analizador de metadatos estricto. "
@@ -493,7 +493,7 @@ async def chat_with_rag(
     m_data = next((m for m in materias if m["id"] == materia_id), None)
     temperatura = m_data.get("temperatura", 0.3) if m_data else 0.3
 
-    client = genai.Client()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
 
     user_parts = []
     if image_data:
@@ -569,7 +569,7 @@ async def tutor_chat_with_rag(
                 )
 
     # 3. Llamada a Gemini con historial
-    client = genai.Client()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
 
     # Formatear el historial para pasarlo a contents
     contents = []
@@ -632,7 +632,7 @@ async def extract_task_from_image(img_bytes: bytes, modelo: str) -> tuple[str, d
     """Envía una imagen a Gemini y extrae la información de la tarea académica."""
     settings = await settings_store.read()
     prompt = settings.get("prompt_tarea_extractor", DEFAULT_PROMPT_EXTRACTOR)
-    client = genai.Client()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     response = client.models.generate_content(
         model=modelo,
         contents=[
@@ -658,7 +658,7 @@ async def tutor_v2_agentic_chat(
 ) -> dict:
     from database import progreso_store, meta_store
     import base64
-    client = genai.Client()
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"))
     
     slots = await progreso_store.read()
     slot = next((s for s in slots if s["id"] == slot_id), None)
