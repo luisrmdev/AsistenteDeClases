@@ -336,8 +336,8 @@ def _media_url(*parts: str) -> str:
 
 from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi import Depends
-from services.auth_service import verify_password, create_access_token, decode_token
+from fastapi import Depends, Body
+from services.auth_service import verify_password, create_access_token, decode_token, oauth2_scheme, get_password_hash
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -370,6 +370,52 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
         
     access_token = create_access_token(data={"sub": user["username"]})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = decode_token(token)
+        username: str = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Token no contiene usuario")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    
+    from database import usuarios_store
+    users = await usuarios_store.read()
+    user = next((u for u in users if u["username"] == username), None)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+    return user
+
+@app.get("/api/users/me")
+async def read_users_me(current_user: dict = Depends(get_current_user)):
+    user_info = current_user.copy()
+    user_info.pop("password_hash", None)
+    return user_info
+
+@app.put("/api/users/me/password")
+async def update_password(req: dict = Body(...), current_user: dict = Depends(get_current_user)):
+    from database import usuarios_store
+    current_password = req.get("current_password")
+    new_password = req.get("new_password")
+
+    if not current_password or not new_password:
+        raise HTTPException(status_code=400, detail="Se requiere la contraseña actual y la nueva")
+
+    if not verify_password(current_password, current_user["password_hash"]):
+        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta")
+
+    new_hash = get_password_hash(new_password)
+
+    async def _update_pwd(users: list) -> list:
+        for u in users:
+            if u["username"] == current_user["username"]:
+                u["password_hash"] = new_hash
+        return users
+
+    await usuarios_store.update(_update_pwd)
+    return {"message": "Contraseña actualizada exitosamente"}
 
 
 app.add_middleware(
