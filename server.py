@@ -283,11 +283,12 @@ async def worker_loop():
                     await move_session_to_trash(filepath)
 
             except Exception as e:
+                error_msg = str(e)
                 def set_failed(ts):
                     for t in ts:
                         if t["id"] == task_id:
                             t["estado"] = "failed"
-                            t["error_msg"] = str(e)
+                            t["error_msg"] = error_msg
                             t["intentos"] = t.get("intentos", 0) + 1
                     return ts
                 await cola_store.update(set_failed)
