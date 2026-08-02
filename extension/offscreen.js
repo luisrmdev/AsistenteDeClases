@@ -365,7 +365,7 @@ async function uploadAudio(audioBlob, screenshots, tabId) {
       chrome.storage.local.get(['apiUrl', 'jwtToken'], resolve);
     });
     
-    const baseUrl = storage.apiUrl || 'http://localhost:8000';
+    const baseUrl = storage.apiUrl || 'https://synq-backend-vgxr.onrender.com';
     const jwtToken = storage.jwtToken || '';
 
     const headers = {};

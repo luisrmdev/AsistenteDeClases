@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (result.apiUrl) {
       loginApiUrl.value = result.apiUrl;
     } else {
-      loginApiUrl.value = 'http://localhost:8000';
+      loginApiUrl.value = 'https://synq-backend-vgxr.onrender.com';
     }
 
     if (result.jwtToken) {
