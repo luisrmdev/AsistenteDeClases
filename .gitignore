@@ -3,13 +3,15 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+.venv/
 env/
 test_env/
 .env
 
 # Media and Generated Data
-# grabaciones/ contiene sesiones (audio + screenshots) pendientes de procesar
+# grabaciones/ y audios/ contienen sesiones pendientes de procesar
 grabaciones/
+audios/
 resumenes/
 memoria_ia/
 
