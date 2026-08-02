@@ -138,8 +138,8 @@ async def worker_loop():
                 settings = await settings_store.read()
                 silence_db = settings.get("audio_silence_db", -30)
                 
-                # --- Preparar Imágenes (Renombrar y Copiar a Adjuntos) ---
-                from database import ADJUNTOS_DIR
+                # --- Preparar Imágenes (Renombrar y Subir a GridFS) ---
+                from database import fs
                 renamed_image_paths = []
                 image_name_map = {}
                 if image_paths and session_dir:
@@ -156,9 +156,12 @@ async def worker_loop():
                             new_basename = basename
                             image_name_map[basename] = new_basename
                             
-                        # Copiar a adjuntos permanentemente
-                        dest = os.path.join(ADJUNTOS_DIR, new_basename)
-                        shutil.copy2(new_path, dest)
+                        # Subir a GridFS permanentemente
+                        with open(new_path, "rb") as f_img:
+                            grid_in = fs.open_upload_stream(new_basename)
+                            await grid_in.write(f_img.read())
+                            await grid_in.close()
+                            
                         renamed_image_paths.append(new_path)
                     image_paths = renamed_image_paths
 
@@ -378,9 +381,26 @@ app.add_middleware(
 
 # Servir archivos de audio y adjuntos
 app.mount("/media", StaticFiles(directory=AUDIOS_DIR), name="media")
-from database import ADJUNTOS_DIR
-app.mount("/adjuntos", StaticFiles(directory=ADJUNTOS_DIR), name="adjuntos")
+from database import fs
+from fastapi.responses import StreamingResponse
+import mimetypes
 
+@app.get("/adjuntos/{filename}")
+async def get_adjunto(filename: str):
+    try:
+        grid_out = await fs.open_download_stream_by_name(filename)
+        mime_type, _ = mimetypes.guess_type(filename)
+        
+        async def iterfile():
+            while True:
+                chunk = await grid_out.read(1024 * 1024)
+                if not chunk:
+                    break
+                yield chunk
+                
+        return StreamingResponse(iterfile(), media_type=mime_type or "application/octet-stream")
+    except Exception:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
 
 # ===========================================================================
 # Pydantic Models
@@ -1345,10 +1365,26 @@ async def delete_summary(filename: str):
         
     meta_data = await meta_store.read()
     internal_id = filename
+    content = ""
     for k, v in meta_data.items():
         if v.get("filename") == filename:
             internal_id = k
+            content = v.get("resumen", "")
             break
+            
+    # Borrar imágenes de GridFS
+    import re
+    from database import fs
+    images = re.findall(r'!\[\[(.*?)\]\]', content)
+    for img in images:
+        try:
+            # Buscar el archivo en GridFS para obtener su _id
+            cursor = fs.find({"filename": img})
+            docs = await cursor.to_list(length=10)
+            for doc in docs:
+                await fs.delete(doc["_id"])
+        except Exception as e:
+            print(f"Error al borrar imagen {img} de GridFS: {e}")
 
     async def _remove_meta(m_data: dict) -> dict:
         m_data.pop(internal_id, None)

@@ -27,8 +27,13 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 if not MONGODB_URI:
     raise ValueError("Falta MONGODB_URI en .env")
 
+from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorGridFSBucket
+
+# ... (other imports stay the same)
+
 client = AsyncIOMotorClient(MONGODB_URI)
 db = client.synq_db
+fs = AsyncIOMotorGridFSBucket(db, bucket_name='adjuntos')
 
 class MongoStore:
     """

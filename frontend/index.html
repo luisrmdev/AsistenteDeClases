@@ -590,9 +590,9 @@
       class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0"
     >
       <div id="main-sidebar-header" class="p-6 border-b border-borderGray flex justify-between items-center transition-all">
-        <h1 class="text-lg font-serif tracking-tight flex items-center gap-2 text-charcoal">
-          <i data-lucide="layers" class="w-5 h-5 shrink-0"></i>
-          <span class="nav-text">Asistente IA</span>
+        <h1 class="text-xl font-serif tracking-tight flex items-center gap-3 text-charcoal">
+          <img src="logo.png" alt="Synq Logo" class="w-7 h-7 rounded-md shadow-sm shrink-0">
+          <span class="nav-text font-semibold">Synq.</span>
         </h1>
         <button
           id="theme-toggle"
@@ -639,10 +639,14 @@
       <div class="p-6 border-t border-borderGray mt-auto resource-monitor">
         <h3 class="text-[10px] font-bold text-textMuted uppercase tracking-[0.05em] mb-3">Monitor de Recursos</h3>
         <div class="flex flex-col gap-2">
-          <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5">
+          <div class="flex justify-between items-center bg-background border border-borderGray rounded-full px-3 py-1.5 mb-2">
             <span class="text-[10px] font-medium text-textMuted">Red neuronal</span>
             <span id="ui-current-model" class="text-[10px] bg-surface text-charcoal border border-borderGray px-2 py-0.5 rounded-full uppercase tracking-wider font-bold">Flash 3.5</span>
           </div>
+          <button onclick="logout()" class="w-full text-left px-3 py-2 transition-colors flex items-center gap-3 text-danger hover:bg-dangerBg rounded-lg">
+            <i data-lucide="log-out" class="w-4 h-4 shrink-0"></i> 
+            <span class="nav-text text-xs font-medium">Cerrar sesión</span>
+          </button>
         </div>
       </div>
       
@@ -1711,6 +1715,11 @@
         } else {
            showToast("Credenciales inválidas", "error");
         }
+      }
+
+      function logout() {
+        localStorage.removeItem('synq_token');
+        window.location.reload();
       }
 
       // State
