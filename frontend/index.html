@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Asistente de Clases - Dashboard IA</title>
+    <title>Synq - Dashboard IA</title>
     <link rel="icon" type="image/png" href="favicon.png" />
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -103,14 +103,14 @@
       }
 
       .dark {
-        --color-bg: #090e17; /* Slate/Navy profundo, elimina el negro puro penetrante */
-        --color-surface: #131d2e; /* Tarjetas sutilmente elevadas con un tinte azul-gris */
-        --color-surface-hover: #1e293b; 
-        --color-border: #1e293b; /* Bordes suaves que no distraen */
-        --color-text-main: #e2e8f0; /* Blanco roto suave (Slate 200) para evitar fatiga visual */
-        --color-text-muted: #94a3b8; /* Gris azulado para textos secundarios */
-        --color-accent: #3b82f6; /* Azul vibrante (Blue 500) adaptado para fondos oscuros */
-        --color-accent-hover: #60a5fa; /* Blue 400 */
+        --color-bg: #0f172a; /* Slate 900 - Mejor contraste y legibilidad */
+        --color-surface: #1e293b; /* Slate 800 - Superficies claras y definidas */
+        --color-surface-hover: #334155; /* Slate 700 */
+        --color-border: #334155; /* Slate 700 - Bordes visibles que separan el contenido */
+        --color-text-main: #f8fafc; /* Slate 50 - Blanco nítido para no forzar la vista */
+        --color-text-muted: #cbd5e1; /* Slate 300 - Texto secundario altamente legible */
+        --color-accent: #3b82f6; 
+        --color-accent-hover: #60a5fa; 
         --color-accent-text: #ffffff;
         --color-accent-rgb: 59, 130, 246;
         --color-danger: #ef4444;
@@ -305,6 +305,14 @@
       .prose strong,
       .prose {
         color: var(--color-text-main);
+      }
+      .dark .prose h1,
+      .dark .prose h2,
+      .dark .prose h3,
+      .dark .prose h4,
+      .dark .prose strong,
+      .dark .prose {
+        color: #e2e8f0; /* Slate 200 - Gris suave exclusivo para lectura larga */
       }
       .prose h1,
       .prose h2,
@@ -557,6 +565,26 @@
     </script>
   </head>
   <body class="flex h-screen overflow-hidden bg-background">
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 bg-background/95 backdrop-blur-md z-[100] flex items-center justify-center hidden">
+      <div class="bg-surface border border-borderGray p-8 rounded-xl shadow-glass w-full max-w-sm">
+        <h2 class="text-3xl font-serif text-charcoal mb-2">Synq.</h2>
+        <p class="text-textMuted text-sm mb-6">Ingresa tus credenciales para acceder.</p>
+        <form onsubmit="handleLogin(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-textMuted mb-1">Usuario</label>
+            <input name="username" type="text" class="w-full bg-background border border-borderGray rounded-lg p-2.5 text-charcoal focus:border-charcoal outline-none transition-colors" required>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-textMuted mb-1">Contraseña</label>
+            <input name="password" type="password" class="w-full bg-background border border-borderGray rounded-lg p-2.5 text-charcoal focus:border-charcoal outline-none transition-colors" required>
+          </div>
+          <button type="submit" class="w-full bg-charcoal text-white rounded-lg py-2.5 font-medium hover:bg-gray-800 transition-colors mt-2">
+            Entrar
+          </button>
+        </form>
+      </div>
+    </div>
     <aside
       id="main-sidebar"
       class="w-64 bg-surface border-r border-borderGray flex flex-col h-full flex-shrink-0"
@@ -587,7 +615,7 @@
           <i data-lucide="mic" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Por Procesar</span>
         </button>
         <button onclick="switchTab('chat')" id="nav-chat" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
-          <i data-lucide="message-square" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Tutor Virtual</span>
+          <i data-lucide="message-square" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Chat General</span>
         </button>
         <button onclick="switchTab('tarjetas')" id="nav-tarjetas" class="w-full text-left px-6 py-2.5 transition-colors nav-btn flex items-center gap-3 mt-1">
           <i data-lucide="clipboard-list" class="w-4 h-4 opacity-70 shrink-0"></i> <span class="nav-text">Tablón de Avisos</span>
@@ -708,7 +736,7 @@
               </p>
             </div>
             <div class="flex items-center gap-4">
-                <button onclick="irASemanaActual()" class="btn-secondary text-xs px-3 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all text-textMuted hover:text-charcoal border border-borderGray rounded-md bg-white" title="Ir a la semana actual o más cercana">
+                <button onclick="irASemanaActual()" class="btn-secondary text-xs px-3 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all text-textMuted hover:text-charcoal border border-borderGray rounded-md bg-surface" title="Ir a la semana actual o más cercana">
                   <i data-lucide="calendar-check" class="w-3 h-3"></i>
                   Presente
                 </button>
@@ -716,7 +744,7 @@
                    <option value="">Semanas Generadas</option>
                 </select>
                 <input type="date" id="progreso-base-date" class="bg-surface text-xs rounded-md px-3 py-2 border border-borderGray font-medium outline-none focus:border-charcoal" title="Fecha base manual">
-                <button id="btn-eliminar-semana" onclick="eliminarSemanaUI()" class="btn-secondary text-red-500 hover:text-red-600 hover:bg-red-50 text-xs px-3 py-2 font-medium flex items-center gap-2 shadow-sm transition-all border border-red-200 hidden" title="Eliminar todos los slots de esta semana">
+                <button id="btn-eliminar-semana" onclick="eliminarSemanaUI()" class="btn-secondary text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 text-xs px-3 py-2 font-medium flex items-center gap-2 shadow-sm transition-all border border-red-200 dark:border-red-900/50 hidden" title="Eliminar todos los slots de esta semana">
                   <i data-lucide="trash-2" class="w-3 h-3"></i>
                 </button>
                <button onclick="generarSemanaUI()" class="btn-primary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all">
@@ -797,10 +825,7 @@
                 />
               </div>
               <div class="flex gap-2 items-center">
-                <select id="backup-slot-select" class="flex-1 rounded-md p-2.5 text-sm bg-background border border-borderGray outline-none focus:border-charcoal">
-                   <option value="">Vincular a Clase Pendiente (Opcional)</option>
-                   <!-- Opciones se llenarán dinámicamente -->
-                </select>
+
                 <button
                   onclick="uploadBackupAudio()"
                   id="btn-backup-upload"
@@ -817,7 +842,15 @@
             class="flex flex-col gap-4 max-w-5xl mx-auto mb-8"
           ></div>
 
-          <div id="audios-list" class="grid gap-6 max-w-5xl mx-auto"></div>
+          <div id="merge-fab" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-charcoal text-white rounded-full shadow-2xl px-6 py-4 flex items-center gap-4 transition-all translate-y-24 opacity-0 pointer-events-none duration-300">
+            <i data-lucide="git-merge" class="w-5 h-5"></i>
+            <span class="text-sm font-bold tracking-wide" id="merge-fab-text">2 seleccionadas</span>
+            <button onclick="mergeSelectedSessions()" class="bg-surface text-charcoal text-xs font-bold px-4 py-2 rounded-full hover:bg-surfaceHover transition-colors border border-borderGray">
+              FUSIONAR
+            </button>
+          </div>
+
+          <div id="audios-list" class="grid gap-6 max-w-5xl mx-auto pb-24"></div>
         </div>
       </section>
 
@@ -830,7 +863,7 @@
         >
           <div>
             <h2 class="text-3xl font-serif tracking-tight text-charcoal">
-              Tutor Virtual
+              Chat General
             </h2>
             <p class="text-textMuted text-sm mt-2">
               Interactúa de forma aislada con tus propios apuntes de clase.
@@ -1184,7 +1217,7 @@
                     </option>
                   </select>
                   <p class="text-xs text-textMuted mt-3 leading-relaxed">
-                    Este modelo alimentará el procesamiento del Tutor Virtual,
+                    Este modelo alimentará el procesamiento del Chat General,
                     RAG y extracción de resúmenes.
                   </p>
                   
@@ -1434,9 +1467,9 @@
            <div id="slot-modal-attendance" class="hidden">
               <h4 class="text-[11px] font-bold text-textMuted uppercase tracking-wider mb-3">Control de Asistencia Rápido</h4>
               <div class="flex flex-wrap gap-2">
-                 <button onclick="updateSlotStateModal('ASISTIO')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-green-50 hover:text-green-700 hover:border-green-200 transition-all border-borderGray rounded-md">Asistí (Sin Grabar)</button>
-                 <button onclick="updateSlotStateModal('AUSENTE')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-all border-borderGray rounded-md">Falté</button>
-                 <button onclick="updateSlotStateModal('FERIADO')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-200 transition-all border-borderGray rounded-md">Feriado / Cancelada</button>
+                 <button onclick="updateSlotStateModal('ASISTIO')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-900/30 dark:hover:text-green-400 transition-all border-borderGray rounded-md">Asistí (Sin Grabar)</button>
+                 <button onclick="updateSlotStateModal('AUSENTE')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-900/30 dark:hover:text-red-400 transition-all border-borderGray rounded-md">Falté</button>
+                 <button onclick="updateSlotStateModal('FERIADO')" class="btn-secondary text-xs px-3 py-2 flex-1 hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-900/30 dark:hover:text-blue-400 transition-all border-borderGray rounded-md">Feriado / Cancelada</button>
               </div>
            </div>
 
@@ -1463,7 +1496,7 @@
                     </select>
                     <input type="date" id="manual-task-date" title="Fecha (opcional)" class="flex-1 bg-surface border border-borderGray rounded text-xs p-2 text-charcoal outline-none focus:border-charcoal">
                     <button id="btn-save-manual-task" class="btn-primary text-xs px-3 py-1 font-medium rounded">Guardar</button>
-                    <button id="btn-cancel-manual-task" class="btn-secondary text-xs px-3 py-1 font-medium rounded border border-borderGray bg-white text-textMuted hover:text-charcoal">Cancelar</button>
+                    <button id="btn-cancel-manual-task" class="btn-secondary text-xs px-3 py-1 font-medium rounded border border-borderGray bg-surface text-textMuted hover:text-charcoal">Cancelar</button>
                  </div>
               </div>
 
@@ -1632,6 +1665,52 @@
         const element = document.createElement("div");
         element.textContent = text;
         return element.innerHTML;
+      }
+
+      // Auth Interceptor
+      const originalFetch = window.fetch;
+      window.fetch = async function () {
+        let [resource, config] = arguments;
+        
+        if (typeof resource === 'string' && resource.startsWith('/api/') && !resource.startsWith('/api/login')) {
+          config = config || {};
+          config.headers = config.headers || {};
+          const token = localStorage.getItem('synq_token');
+          if (token) {
+            config.headers['Authorization'] = `Bearer ${token}`;
+          }
+        }
+        
+        const response = await originalFetch(resource, config);
+        
+        if (response.status === 401 && resource !== '/api/login') {
+          showLoginScreen();
+        }
+        
+        return response;
+      };
+
+      function showLoginScreen() {
+        const modal = document.getElementById('login-modal');
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+      }
+      
+      async function handleLogin(e) {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          body: fd
+        });
+        if(res.ok) {
+           const data = await res.json();
+           localStorage.setItem('synq_token', data.access_token);
+           document.getElementById('login-modal').classList.add('hidden');
+           window.location.reload();
+        } else {
+           showToast("Credenciales inválidas", "error");
+        }
       }
 
       // State
@@ -2298,13 +2377,13 @@
               card.className =
                 "bento-card p-6 flex flex-col gap-4 relative group hover:border-textMuted transition-colors";
 
-              let badgeColor = "bg-gray-100 text-gray-700 border-gray-200";
+              let badgeColor = "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700";
               if (t.tipo === "tarea")
-                badgeColor = "bg-blue-50 text-blue-700 border-blue-200";
+                badgeColor = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
               if (t.tipo === "examen")
-                badgeColor = "bg-red-50 text-red-700 border-red-200";
+                badgeColor = "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
               if (t.tipo === "aviso")
-                badgeColor = "bg-amber-50 text-amber-700 border-amber-200";
+                badgeColor = "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800";
 
               card.innerHTML = `
                             <button onclick="deleteTarjeta('${t.id}')" class="absolute top-4 right-4 text-textMuted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Eliminar aviso">
@@ -2454,10 +2533,18 @@
                 }
               }
 
+              let checkboxHtml = "";
+              if (a.session_name) {
+                  checkboxHtml = `<input type="checkbox" class="session-merge-checkbox mr-3 accent-accent cursor-pointer w-4 h-4 mt-0.5" data-session="${a.session_name}" onchange="handleMergeCheckboxChange()">`;
+              }
+
               list.innerHTML += `
-                            <div class="bento-card p-6 flex flex-col md:flex-row gap-6">
+                            <div class="bento-card p-6 flex flex-col md:flex-row gap-6 relative">
                                 <div class="flex-1 w-full md:border-r border-borderGray pr-0 md:pr-6">
-                                    <h4 class="font-bold text-sm text-charcoal mb-3 truncate font-mono">${a.display_name}</h4>
+                                    <div class="flex items-start">
+                                        ${checkboxHtml}
+                                        <h4 class="font-bold text-sm text-charcoal mb-3 truncate font-mono pt-0.5">${a.display_name}</h4>
+                                    </div>
                                     <audio controls src="${mediaSrc}" class="h-8 w-full outline-none opacity-80 filter contrast-125 rounded"></audio>
                                     ${imagesHtml}
                                 </div>
@@ -2622,6 +2709,45 @@
         fetch(`/api/cola/${id}`, { method: "DELETE" }).then(() => loadCola());
       }
 
+      function handleMergeCheckboxChange() {
+          const checkboxes = document.querySelectorAll('.session-merge-checkbox:checked');
+          const fab = document.getElementById('merge-fab');
+          if (checkboxes.length === 2) {
+              fab.classList.remove('translate-y-24', 'opacity-0', 'pointer-events-none');
+          } else {
+              fab.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+          }
+      }
+
+      function mergeSelectedSessions() {
+          const checkboxes = document.querySelectorAll('.session-merge-checkbox:checked');
+          if (checkboxes.length !== 2) return;
+
+          // Ordenar alfabéticamente asegura que la sesión más vieja sea la 1 y la más nueva la 2
+          const sessions = Array.from(checkboxes).map(cb => cb.dataset.session).sort();
+          
+          if(!confirm(`¿Fusionar permanentemente estas dos grabaciones?\n\n1. ${sessions[0]}\n2. ${sessions[1]}`)) return;
+          
+          showToast("Procesando fusión. Por favor espera...", "info");
+          
+          fetch("/api/audios/merge", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ session1: sessions[0], session2: sessions[1] })
+          }).then(res => {
+              if(!res.ok) {
+                  res.json().then(d => showToast(d.detail || "Error al fusionar", "error"));
+                  return;
+              }
+              res.json().then(data => {
+                  showToast(data.message);
+                  const fab = document.getElementById('merge-fab');
+                  fab.classList.add('translate-y-24', 'opacity-0', 'pointer-events-none');
+                  loadAudios();
+              });
+          });
+      }
+
       // ====== HUMAN IN THE LOOP ======
       function processAudio(filename) {
         const select = document.getElementById(`sel-${filename}`);
@@ -2734,10 +2860,7 @@
             }
           }
 
-          const slotSelect = document.getElementById("backup-slot-select");
-          if (slotSelect && slotSelect.value) {
-            formData.append("slot_id", slotSelect.value);
-          }
+
 
           if (zipFile) {
             formData.append("audio", zipFile, zipFile.name);
@@ -3309,7 +3432,7 @@
                   
                   if (slot.estado === "EN_PROGRESO") {
                      const btnStudy = document.createElement("button");
-                     btnStudy.className = "btn-secondary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all shrink-0 bg-white border border-borderGray text-indigo-600";
+                     btnStudy.className = "btn-secondary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all shrink-0 bg-surface border border-borderGray text-accent";
                      btnStudy.innerHTML = `<i data-lucide="brain-circuit" class="w-4 h-4"></i> Entrar a Sala`;
                      btnStudy.onclick = () => {
                          closeSlotModal();
@@ -3327,17 +3450,15 @@
               attendanceControls.classList.remove("hidden");
               
               const btnUpload = document.createElement("button");
-              btnUpload.className = "btn-secondary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all bg-white border border-borderGray shrink-0";
+              btnUpload.className = "btn-secondary text-xs px-4 py-2 font-medium flex items-center gap-2 shadow-sm hover:shadow transition-all bg-surface border border-borderGray shrink-0";
               btnUpload.innerHTML = `<i data-lucide="upload-cloud" class="w-4 h-4"></i> Subir Grabación`;
               btnUpload.onclick = () => {
                   closeSlotModal();
                   switchTab('audios');
                   setTimeout(() => {
-                      const select = document.getElementById("backup-slot-select");
-                      if(select) {
-                          select.value = slot.id;
-                          // Scroll slightly to the upload area
-                          select.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      const uploadSection = document.getElementById("backup-audio-input");
+                      if(uploadSection) {
+                          uploadSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
                       }
                   }, 150);
               };
@@ -3354,7 +3475,7 @@
                   const dom = tema.dominio || 0;
                   const bgBar = dom === 100 ? "bg-emerald-500" : "bg-indigo-500";
                   temasList.innerHTML += `
-                     <div class="flex flex-col gap-2 p-3 bg-white border border-borderGray rounded-lg">
+                     <div class="flex flex-col gap-2 p-3 bg-surface border border-borderGray rounded-lg">
                         <div class="flex justify-between items-start">
                            <span class="text-xs font-bold text-charcoal">${tema.nombre}</span>
                            <span class="text-[10px] font-mono text-textMuted">${dom}%</span>
@@ -3655,19 +3776,7 @@
       }
 
       function updateBackupSlotSelect() {
-         const select = document.getElementById("backup-slot-select");
-         if(!select) return;
-         
-         const oldVal = select.value;
-         select.innerHTML = '<option value="">Vincular a Clase Pendiente (Opcional)</option>';
-         
-         progresoSlots.filter(s => s.estado === "AUSENTE").forEach(slot => {
-            const mat = materias.find(m => m.id === slot.materia_id);
-            const matName = mat ? mat.nombre : slot.materia_id;
-            select.innerHTML += `<option value="${slot.id}">${slot.fecha} - ${matName}</option>`;
-         });
-         
-         select.value = oldVal;
+         // Dropdown removed as per user request (linking happens in queue UI instead)
       }
 
       function updateEntregablesSidebar() {
@@ -3692,8 +3801,8 @@
                   const mat = materias.find(m => m.id === t.materia_id);
                   const matName = mat ? mat.nombre : t.materia_id;
                   
-                  let badgeColor = "bg-blue-50 text-blue-700 border-blue-200";
-                  if (t.tipo === "examen") badgeColor = "bg-red-50 text-red-700 border-red-200";
+                  let badgeColor = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800";
+                  if (t.tipo === "examen") badgeColor = "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800";
                   
                   list.innerHTML += `
                      <div class="bg-background border border-borderGray p-3 rounded-lg flex flex-col gap-2">

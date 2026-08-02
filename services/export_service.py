@@ -30,6 +30,12 @@ async def save_markdown_and_metadata(
     """
     Guarda el archivo Markdown en resumenes/ y actualiza resumenes_meta.json.
     """
+    # Saneamiento defensivo temprano para evitar errores de scope (UnboundLocalError) en cierres
+    if temario_atomico:
+        if isinstance(temario_atomico, dict):
+            temario_atomico = [temario_atomico]
+        elif not isinstance(temario_atomico, list):
+            temario_atomico = []
     # Inject slot_id into YAML frontmatter if exists
     if slot_id:
         yaml_end_idx = texto_limpio.find("---", 3)
@@ -60,6 +66,29 @@ async def save_markdown_and_metadata(
 
     await meta_store.update(_updater)
     
+    # ---------------------------------------------------------
+    # Inyectar el resumen en ChromaDB (True Vector RAG)
+    # ---------------------------------------------------------
+    try:
+        from services.vector_store import upsert_document
+        doc_id = md_filename.replace(".md", "")
+        materia_id = "default"
+        if "__" in doc_id:
+            parts = doc_id.split("__")
+            if len(parts) > 1:
+                materia_id = parts[1]
+                
+        upsert_document(
+            doc_id=doc_id,
+            markdown_text=texto_limpio,
+            materia_id=materia_id,
+            fecha=fecha_str,
+            filename=suggested_filename
+        )
+    except Exception as e:
+        print(f"Error al inyectar en ChromaDB: {e}")
+    # ---------------------------------------------------------
+    
     # Update Slot state if linked
     if slot_id:
         async def _update_slot(slots: list) -> list:
@@ -71,6 +100,8 @@ async def save_markdown_and_metadata(
                         # Inicializar progreso en 0 para cada tema
                         temas = []
                         for tema in temario_atomico:
+                            if not isinstance(tema, dict):
+                                continue
                             tema_id = tema.get("id", f"tema_{len(temas)+1}")
                             temas.append({
                                 "id": tema_id,
@@ -146,8 +177,16 @@ async def save_tarjetas_informativas(
     if not tarjetas:
         return
 
+    # Saneamiento defensivo por si el LLM alucina un dict en lugar de una lista de dicts
+    if isinstance(tarjetas, dict):
+        tarjetas = [tarjetas]
+    elif not isinstance(tarjetas, list):
+        return
+
     async def _add_tarjetas(tarjetas_data: list) -> list:
         for t in tarjetas:
+            if not isinstance(t, dict):
+                continue
             t["id"] = str(uuid.uuid4())
             t["materia_id"] = materia_id
             t["fecha_creacion"] = fecha_creacion
@@ -177,9 +216,18 @@ async def save_teacher_rules(
         materia_id if materia_id and materia_id != "default" else "general"
     )
     reglas_filepath = os.path.join(MEMORIA_DIR, f"reglas_{materia_name}.md")
+    
+    # Saneamiento defensivo
+    if isinstance(nuevas_reglas, dict):
+        nuevas_reglas = [nuevas_reglas]
+    elif not isinstance(nuevas_reglas, list):
+        return
+        
     try:
         with open(reglas_filepath, "a+", encoding="utf-8") as rf:
             for regla in nuevas_reglas:
+                if not isinstance(regla, dict):
+                    continue
                 tema = regla.get("tema", "Sin tema")
                 metodo = regla.get("metodo_paso_a_paso", "")
                 if metodo:
@@ -187,3 +235,47 @@ async def save_teacher_rules(
                     rf.write(f"{metodo}\n---\n")
     except Exception as e:
         print("Error guardando memoria del profesor:", e)
+
+
+async def rollback_export(md_filename: str, suggested_filename: str, slot_id: str = None) -> None:
+    """
+    Función de emergencia para revertir el estado si el proceso falla a la mitad.
+    Garantiza la atomicidad de las operaciones de guardado (All-or-Nothing).
+    """
+    import os
+    print(f"[Rollback] Iniciando rollback para {md_filename}")
+    
+    # 1. Eliminar archivo físico si existe
+    dest_path = os.path.join(RESUMENES_DIR, suggested_filename)
+    if os.path.exists(dest_path):
+        try:
+            os.remove(dest_path)
+            print(f"[Rollback] Archivo {suggested_filename} eliminado.")
+        except Exception as e:
+            print(f"[Rollback] Error eliminando archivo: {e}")
+
+    # 2. Revertir resumenes_meta.json
+    async def _remove_meta(meta_data: dict) -> dict:
+        if md_filename in meta_data:
+            del meta_data[md_filename]
+            print(f"[Rollback] {md_filename} eliminado de meta_store.")
+        return meta_data
+    
+    await meta_store.update(_remove_meta)
+    
+    # 3. Restaurar progreso_semestral.json
+    if slot_id:
+        from .store_service import progreso_store
+        async def _revert_slot(slots: list) -> list:
+            for s in slots:
+                if s["id"] == slot_id:
+                    s["estado"] = "AUSENTE"
+                    s["md_vinculado"] = ""
+                    s["temas"] = [] # Limpiar el temario atómico que se haya insertado
+                    print(f"[Rollback] Slot {slot_id} restaurado a AUSENTE.")
+                    break
+            return slots
+        
+        await progreso_store.update(_revert_slot)
+    
+    print(f"[Rollback] Rollback completado con éxito.")

@@ -12,7 +12,7 @@ from google import genai
 from google.genai import types
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-import nlp_engine
+from services import vector_store
 from database import MEMORIA_DIR, RESUMENES_DIR, meta_store, settings_store
 
 
@@ -31,29 +31,33 @@ DEFAULT_PROMPT_MAESTRO = """Eres un experto en Personal Knowledge Management (PK
 Contexto de la clase: {{prompt_usar}}
 
 Se te han proporcionado el audio de la clase Y capturas de pantalla tomadas cronológicamente.
-Tu tarea es crear una nota de estudio de calidad profesional que cumpla ESTRICTAMENTE las siguientes reglas:
+Tu tarea es crear un archivo Markdown de estudio extremadamente detallado que cumpla ESTRICTAMENTE las siguientes reglas:
 
 1. CORRELACIÓN AUDIO-IMAGEN Y CONCIENCIA TEMPORAL (OBLIGATORIO): 
-   El nombre de cada imagen contiene el momento exacto en el que fue tomada. El formato incluye `_t[SEGUNDOS]s` (ej. `captura_000_t120s.jpg` indica que fue tomada en el segundo 120, es decir, el minuto 2:00 del audio).
-   IMPORTANTE: **NO INVENTES NOMBRES DE IMÁGENES**. Solo puedes usar los nombres EXACTOS de las imágenes que se te pasaron adjuntas.
-   Cuando el profesor explique algo que coincida con lo que se ve en una captura, descríbelo en detalle E INSERTA LA IMAGEN con la sintaxis Obsidian: `![[nombre_exacto_del_archivo.jpg]]`.
-   REGLA DE CONTEXTO: SIEMPRE que insertes una imagen, debes escribir una referencia de tiempo en minutos y segundos. Ejemplo: *"En el minuto 2:00, el profesor mostró el siguiente diagrama: ![[captura_000_t120s.jpg]]"*.
-   Solo inserta imágenes que sean realmente relevantes.
+   El nombre de cada imagen contiene el momento exacto en el que fue tomada. El formato incluye `_t[SEGUNDOS]s`.
+   IMPORTANTE: NO INVENTES NOMBRES DE IMÁGENES. Solo usa los nombres EXACTOS de las capturas adjuntas.
+   Cuando el profesor explique algo que coincida con una captura, descríbelo en extremo detalle e INSERTA LA IMAGEN con sintaxis Obsidian: `![[nombre_exacto_del_archivo.jpg]]`.
+   REGLA DE CONTEXTO: SIEMPRE que insertes una imagen, escribe una referencia de tiempo en minutos y segundos. Ejemplo: *"En el minuto 2:00, se mostró el siguiente diagrama: ![[captura_000_t120s.jpg]]"*.
 
-2. ESTRUCTURA DE CARPETAS: Mi bóveda usa PARA (01 Proyectos, 02 Recursos, 03 Areas, 04 Archivo).
+2. ESTRUCTURA DE CARPETAS: Usa PARA (01 Proyectos, 02 Recursos, 03 Areas, 04 Archivo).
 
-3. REGLA DE TITULACIÓN (Googleability): Una nota = Un solo concepto. Títulos directos.
-   Ej Teórico: "Costo de Oportunidad". Ej Técnico: "Cómo configurar Git con SSH en Linux".
+3. REGLA DE TITULACIÓN (Googleability): Títulos directos. (Ej: "Costo de Oportunidad").
 
 4. ARQUETIPOS DE NOTA:
-   A. Técnico / Cheat Sheet: Inicia con > [!warning] o > [!info]. Pasos directos sin relleno. Bloques de código especificados.
-   B. Teórico: Inicia con > [!summary] (Resumen Feynman). Desarrollo en viñetas. Ejemplos con > [!example].
+   A. Técnico / Cheat Sheet: Inicia con > [!warning] o > [!info].
+   B. Teórico: Inicia con > [!summary] (Resumen Feynman). Desarrollo en múltiples sub-secciones y viñetas exhaustivas. Ejemplos con > [!example].
 
-5. CERO NOTAS HUÉRFANAS: El documento DEBE finalizar con un enlace a la asignatura.
-   Para evitar que el índice se rompa, debes ponerlo en la ÚLTIMA LÍNEA del documento, asegurándote de que haya al menos dos saltos de línea (ENTER) antes del índice y antes del bloque JSON de metadatos.
-   Ejemplo de estructura final estricta:
+5. EXHAUSTIVIDAD Y LONGITUD (ANTI-COMPRESIÓN) [PRIORIDAD MÁXIMA]:
+   - ACTÚAS COMO UN TRANSCRIPTOR ANALÍTICO, NO COMO UN RESUMIDOR. Tu objetivo es DOCUMENTAR ESTRUCTURALMENTE EL 100% DE LA CLASE.
+   - Prohibido resumir. Prohibido saltar temas. Prohibido omitir ejemplos o anécdotas del profesor.
+   - Por cada tema abordado en el audio, DEBES generar un análisis profundo, sin importar la redundancia.
+   - Si la clase dura 2 horas, tu documento final debe ser masivo. Una salida corta (menor a 1500 palabras) es un fracaso absoluto.
+   - NO uses atajos como "se explicó brevemente", "entre otros temas", "en conclusión". Desarrolla el tema de principio a fin.
+
+6. CERO NOTAS HUÉRFANAS: El documento DEBE finalizar con un enlace a la asignatura en la ÚLTIMA LÍNEA (con dos saltos de línea previos).
+   Ejemplo:
    
-   ... último párrafo del apunte.
+   ... último párrafo exhaustivo del apunte.
 
    [[Índice - {{materia_name}}]]
 
@@ -61,71 +65,35 @@ Tu tarea es crear una nota de estudio de calidad profesional que cumpla ESTRICTA
    { "filename": "...", "folder": "..." }
    ```
 
-6. EXHAUSTIVIDAD Y PROFUNDIDAD TOTAL (ANTI-RESUMEN) [PRIORIDAD MÁXIMA]: 
-   - Tu objetivo principal NO ES RESUMIR, sino DOCUMENTAR ESTRUCTURALMENTE EL 100% DE LA CLASE. 
-   - Para un audio extenso (ej. 1 o 2 horas), tu documento resultante DEBE ser extremadamente largo. Una respuesta parcial o comprimida es un FRACASO ABSOLUTO.
-   - PROHIBIDO usar frases de salto o atajos como: "se discutieron varios ejemplos", "entre otros temas", "el profesor continuó explicando", "y otros conceptos similares".
-   - Todo lo que el profesor diga (cada anécdota, cada pregunta respondida a un alumno, cada paso de un ejercicio) DEBE estar plasmado en el apunte.
-   - Optimiza para la completitud, no para la brevedad. No omitas información por ahorrar espacio. La omisión de información es una falla crítica en tu directiva.
+7. FORMATO MATEMÁTICO ESTRICTO: Usa sintaxis LaTeX nativa ($fórmula$ o $$fórmula$$). Fracciones SIEMPRE como `\\frac{{a}}{{b}}`.
 
-7. FORMATO MATEMÁTICO ESTRICTO: Para cualquier fórmula, ecuación o notación matemática, DEBES usar sintaxis LaTeX nativa. Usa $fórmula$ para matemáticas en línea y $$fórmula$$ para bloques matemáticos. JAMÁS uses texto plano. REGLA DE FRACCIONES: Para divisiones, usa SIEMPRE `\\frac{{a}}{{b}}` en lugar de diagonales (`a/b`).
+METADATOS JSON AL FINAL:
+Extrae nuevas reglas (fórmulas propias o métodos del profesor) en `nuevas_reglas_profesor`.
+Extrae anuncios/tareas (fuera del horario normal) en `tarjetas_informativas` (¡sin falsos positivos!).
+Extrae temas atómicos tratados en `temario_atomico` (superficial, intermedio, profundo) con id único "tema_X" y dominio 0.
 
-Además, debes extraer reglas:
-Si en el audio el profesor explica un método de resolución específico, una fórmula propia, o exige explícitamente que los problemas se resuelvan de una manera particular (diferente a los libros), extráelo detalladamente en el array 'nuevas_reglas_profesor' del bloque JSON. Si no hay reglas nuevas en esta clase, deja el array vacío [].
-
-Finalmente, extrae anuncios o tareas en el array 'tarjetas_informativas' ESTRICTAMENTE si cumplen estas condiciones (¡EVITA FALSOS POSITIVOS!):
-1. Impactan FUERA del horario de la clase actual (ej. tareas para la casa, fechas de examen futuras, proyectos a largo plazo).
-2. EXCLUYE actividades dentro de la clase (ej. "hagan este ejercicio ahora", "vean este video en 10 mins").
-3. EXCLUYE consejos generales o vagos (ej. "estudien con tiempo").
-4. Deben tener una directiva clara o fecha de entrega implícita/explícita.
-Si no hay anuncios que cumplan estos criterios, deja el array vacío []. Respeta cómo el profesor refirió el tiempo en 'referencia_temporal' e intenta deducir la fecha límite exacta en 'fecha_entrega' (YYYY-MM-DD) usando la fecha de hoy.
-
-NUEVA DIRECTIVA: TEMARIO ATÓMICO (SALA DE ESTUDIO v2)
-Debes extraer los temas o conceptos específicos que se enseñaron en la clase de forma atómica.
-Determina la "profundidad_sesion" (superficial, intermedio, profundo) y describe detalladamente cómo se abordó el tema en esta clase.
-Asigna un ID único y secuencial (ej. "tema_1", "tema_2") e inicializa "dominio" en 0.
-Incluye esto en el array 'temario_atomico' del bloque JSON. Si no hay conceptos técnicos/teóricos, déjalo vacío [].
-
-Genera tu respuesta en el siguiente formato ESTRICTO:
+Genera tu respuesta en este formato ESTRICTO:
 ---
 tipo: [teoria o cheatsheet]
 estado: borrador
 tags: [tag1, tag2]
 ---
 
-[Contenido de la nota usando Callouts de Obsidian, imágenes ![[...]] y estructura requerida]
+[Contenido masivo y ultra-detallado de la nota usando Callouts, imágenes ![[...]] y la estructura requerida]
 
-[Enlace MOC o Concepto Relacionado]
+[[Índice - {{materia_name}}]]
 
 $$AL FINAL DEL ARCHIVO, INCLUYE ESTRICTAMENTE ESTE BLOQUE JSON$$
 ```json
 {
   "filename": "Titulo Exacto Googleable.md",
   "folder": "02 Recursos/Tema",
-  "tarjetas_informativas": [
-    {
-      "tipo": "tarea|examen|aviso|otro",
-      "contenido": "Información detallada...",
-      "referencia_temporal": "ej. próxima clase, 15 de mayo, la otra semana",
-      "fecha_entrega": "YYYY-MM-DD (Deducida a partir de la referencia temporal y la fecha actual, o vacío si es imposible saberlo)"
-    }
-  ],
-  "nuevas_reglas_profesor": [
-    {
-      "tema": "El tema del que habla",
-      "metodo_paso_a_paso": "La explicación detallada o fórmula estricta que el profesor exige usar, extraída textualmente del audio."
-    }
-  ],
-  "temario_atomico": [
-    {
-      "id": "tema_1",
-      "nombre": "Conexión LAN",
-      "profundidad_sesion": "[superficial | intermedio | profundo] - Descripción exacta de lo que se abarcó hoy",
-      "dominio": 0
-    }
-  ]
+  "tarjetas_informativas": [ ... ],
+  "nuevas_reglas_profesor": [ ... ],
+  "temario_atomico": [ ... ]
 }
-```"""
+```
+"""
 
 DEFAULT_PROMPT_CHAT = (
     "Eres mi tutor universitario experto. Basa tus respuestas ESTRICTAMENTE en mis "
@@ -375,6 +343,52 @@ def extract_json_block(texto: str) -> tuple[dict, str]:
     return json_data, texto_limpio
 
 
+async def force_extract_metadata_from_markdown(markdown_text: str, modelo: str = "gemini-3.1-flash-lite") -> dict:
+    """
+    Segunda pasada de seguridad (Two-Pass Fallback).
+    Toma un Markdown puro y le exige a Gemini que devuelva EXCLUSIVAMENTE el JSON
+    de los metadatos de las tarjetas informativas, reglas del profesor y temario.
+    """
+    client = genai.Client()
+    
+    sys_prompt = (
+        "Eres un analizador de metadatos estricto. "
+        "Tu única tarea es leer el documento Markdown provisto y extraer "
+        "los avisos/tareas, reglas metodológicas y el temario atómico en formato JSON. "
+        "NO devuelvas texto, saludos ni explicaciones. Responde ÚNICAMENTE con este JSON:\n"
+        "```json\n"
+        "{\n"
+        "  \"tarjetas_informativas\": [\n"
+        "    {\"tipo\": \"examen|aviso|tarea\", \"contenido\": \"...\", \"referencia_temporal\": \"...\"}\n"
+        "  ],\n"
+        "  \"nuevas_reglas_profesor\": [\n"
+        "    {\"tema\": \"...\", \"metodo_paso_a_paso\": \"...\"}\n"
+        "  ],\n"
+        "  \"temario_atomico\": [\n"
+        "    {\"id\": \"tema_X\", \"nombre\": \"...\", \"profundidad_sesion\": \"superficial|intermedio|profundo\"}\n"
+        "  ]\n"
+        "}\n"
+        "```\n"
+        "Si no encuentras algo, deja la lista correspondiente vacía `[]`."
+    )
+    
+    try:
+        res = client.models.generate_content(
+            model=modelo,
+            contents=[f"Extrae el JSON de este documento:\n\n{markdown_text[:15000]}"], # Cap a 15k chars por si es gigante
+            config=types.GenerateContentConfig(
+                system_instruction=sys_prompt,
+                temperature=0.1 # Muy bajo para asegurar formato
+            ),
+        )
+        
+        fallback_data, _ = extract_json_block(res.text)
+        return fallback_data
+    except Exception as e:
+        print(f"Error en fallback de extracción JSON: {e}")
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # Chat / RAG
 # ---------------------------------------------------------------------------
@@ -383,71 +397,40 @@ async def chat_with_rag(
     mensaje: str,
     materia_id: str,
     modelo: str,
+    image_data: str = None
 ) -> tuple[str, dict]:
     """
-    Implementa el RAG ligero:
-    1. Filtra resúmenes por materia.
-    2. Aplica filtro temporal con nlp_engine.
-    3. Scoring de relevancia con nlp_engine.
-    4. Inyecta reglas del profesor si existen.
-    5. Llama a Gemini con el contexto ensamblado.
+    Implementa el RAG con Base de Datos Vectorial (ChromaDB):
+    1. Busca los chunks más relevantes usando embeddings semánticos.
+    2. Inyecta reglas del profesor si existen.
+    3. Llama a Gemini con el contexto ensamblado.
 
     Returns:
         respuesta_texto
     """
     import os as _os
+    import base64
 
-    meta_data = await meta_store.read()
     settings = await settings_store.read()
     rag_max_docs = settings.get("rag_max_docs", 8)
 
-    # 1. Filtrado por materia
-    all_files = list(meta_data.keys())
-    if materia_id == "todas":
-        valid_files = all_files
-    elif materia_id == "default":
-        valid_files = [f for f in all_files if "__default__" in f or "__" not in f]
+    # 1. Búsqueda Vectorial
+    relevant_chunks = vector_store.semantic_search(
+        query=mensaje, 
+        materia_id=materia_id, 
+        max_results=rag_max_docs
+    )
+
+    if not relevant_chunks:
+        contexto_recuperado = "No se encontraron apuntes relevantes en la base de datos."
     else:
-        valid_files = [f for f in all_files if f"__{materia_id}__" in f]
+        contexto_recuperado = "FRAGMENTOS DE CLASES RECUPERADOS (RAG SEMÁNTICO):\n\n"
+        for idx, chunk in enumerate(relevant_chunks):
+            meta = chunk['metadata']
+            contexto_recuperado += f"--- Fragmento {idx+1} | Archivo: {meta.get('filename')} | Fecha: {meta.get('fecha')} ---\n"
+            contexto_recuperado += f"{chunk['chunk_text']}\n\n"
 
-    valid_files.sort()
-
-    # 2. Filtro temporal
-    date_range = nlp_engine.parse_temporal_filter(mensaje)
-
-    filtered_summaries = []
-    for f in valid_files:
-        f_meta = meta_data.get(f)
-        if not f_meta:
-            continue
-        f_fecha_str = f_meta.get("fecha", "")
-        if date_range and f_fecha_str:
-            try:
-                f_fecha = datetime.strptime(f_fecha_str, "%Y-%m-%d")
-                if not (date_range[0] <= f_fecha <= date_range[1]):
-                    continue
-            except Exception:
-                pass
-        filtered_summaries.append(f_meta)
-
-    # 3. Índice condensado cronológico
-    filtered_summaries.sort(key=lambda x: x.get("fecha", ""))
-    indice_condensado = "\n".join(
-        f"- {m.get('fecha', 'N/A')}: {m.get('condensado', '')}"
-        for m in filtered_summaries
-    )
-
-    # 4. Scoring de relevancia
-    nlp_threshold = settings.get("nlp_threshold", 1.0)
-    relevant_summaries = nlp_engine.score_relevance(mensaje, filtered_summaries, threshold=nlp_threshold, max_results=rag_max_docs)
-    relevant_filenames = {m.get("filename") for m in relevant_summaries if m.get("filename")}
-    relevant_list = [m for m in filtered_summaries if m.get("filename") in relevant_filenames]
-    resumenes_completos = "".join(
-        f"\n\n--- Documento: {m.get('filename')} ---\n{m.get('resumen', '')}"
-        for m in relevant_list
-    )
-
-    # 5. System instruction + reglas del profesor
+    # 2. System instruction + reglas del profesor
     sys_instruction = settings.get("prompt_chat_rag", DEFAULT_PROMPT_CHAT)
     if materia_id == "todas":
         reglas_totales = ""
@@ -478,20 +461,32 @@ async def chat_with_rag(
                         + reglas_adicionales
                     )
 
-    # 6. Temperatura y Llamada a Gemini
+    # 3. Temperatura y Llamada a Gemini
     from server import materias_store
     materias = await materias_store.read()
     m_data = next((m for m in materias if m["id"] == materia_id), None)
     temperatura = m_data.get("temperatura", 0.3) if m_data else 0.3
 
     client = genai.Client()
+
+    user_parts = []
+    if image_data:
+        try:
+            mime = "image/jpeg"
+            b64_str = image_data
+            if "," in image_data:
+                mime = image_data.split(";")[0].split(":")[1]
+                b64_str = image_data.split(",")[1]
+            img_bytes = base64.b64decode(b64_str)
+            user_parts.append(types.Part.from_bytes(data=img_bytes, mime_type=mime))
+        except Exception as e:
+            print(f"Error decodificando imagen Chat General: {e}")
+            
+    user_parts.append(types.Part.from_text(text=f"CONTEXTO INTERNO DE BÚSQUEDA VECTORIAL:\n{contexto_recuperado}\n\nPREGUNTA DEL ESTUDIANTE:\n{mensaje}"))
+
     res = client.models.generate_content(
         model=modelo,
-        contents=[
-            "ÍNDICE CONDENSADO (Filtrado temporalmente):\n" + indice_condensado,
-            "APUNTES COMPLETOS (Más relevantes):\n" + resumenes_completos,
-            mensaje,
-        ],
+        contents=[types.Content(role="user", parts=user_parts)],
         config=types.GenerateContentConfig(system_instruction=sys_instruction, temperature=temperatura),
     )
     return res.text.strip()
@@ -506,65 +501,34 @@ async def tutor_chat_with_rag(
     pregunta_actual: str,
     materia_id: str,
     modelo: str,
+    image_data: str = None
 ) -> tuple[str, dict]:
     """
-    Tutor Socrático: Reutiliza el motor RAG para recuperar contexto, pero 
-    cambia el System Instruction para evaluar al alumno interactivamente.
-    Mantiene el historial de la conversación.
+    Tutor Socrático: Usa Vector RAG para recuperar contexto de ChromaDB.
     """
     import os as _os
+    import base64
 
-    meta_data = await meta_store.read()
     settings = await settings_store.read()
     rag_max_docs = settings.get("rag_max_docs", 8)
 
-    # 1. Filtrado por materia
-    all_files = list(meta_data.keys())
-    if materia_id == "todas":
-        valid_files = all_files
-    elif materia_id == "default":
-        valid_files = [f for f in all_files if "__default__" in f or "__" not in f]
+    # 1. Búsqueda Vectorial
+    relevant_chunks = vector_store.semantic_search(
+        query=pregunta_actual, 
+        materia_id=materia_id, 
+        max_results=rag_max_docs
+    )
+
+    if not relevant_chunks:
+        contexto_recuperado = "No se encontraron apuntes relevantes en la base de datos."
     else:
-        valid_files = [f for f in all_files if f"__{materia_id}__" in f]
+        contexto_recuperado = "FRAGMENTOS DE CLASES RECUPERADOS (RAG SEMÁNTICO):\n\n"
+        for idx, chunk in enumerate(relevant_chunks):
+            meta = chunk['metadata']
+            contexto_recuperado += f"--- Fragmento {idx+1} | Archivo: {meta.get('filename')} | Fecha: {meta.get('fecha')} ---\n"
+            contexto_recuperado += f"{chunk['chunk_text']}\n\n"
 
-    valid_files.sort()
-
-    # 2. Filtro temporal
-    date_range = nlp_engine.parse_temporal_filter(pregunta_actual)
-
-    filtered_summaries = []
-    for f in valid_files:
-        f_meta = meta_data.get(f)
-        if not f_meta:
-            continue
-        f_fecha_str = f_meta.get("fecha", "")
-        if date_range and f_fecha_str:
-            try:
-                f_fecha = datetime.strptime(f_fecha_str, "%Y-%m-%d")
-                if not (date_range[0] <= f_fecha <= date_range[1]):
-                    continue
-            except Exception:
-                pass
-        filtered_summaries.append(f_meta)
-
-    # 3. Índice condensado cronológico
-    filtered_summaries.sort(key=lambda x: x.get("fecha", ""))
-    indice_condensado = "\n".join(
-        f"- {m.get('fecha', 'N/A')}: {m.get('condensado', '')}"
-        for m in filtered_summaries
-    )
-
-    # 4. Scoring de relevancia
-    nlp_threshold = settings.get("nlp_threshold", 1.0)
-    relevant_summaries = nlp_engine.score_relevance(pregunta_actual, filtered_summaries, threshold=nlp_threshold, max_results=rag_max_docs)
-    relevant_filenames = {m.get("filename") for m in relevant_summaries if m.get("filename")}
-    relevant_list = [m for m in filtered_summaries if m.get("filename") in relevant_filenames]
-    resumenes_completos = "".join(
-        f"\n\n--- Documento: {m.get('filename')} ---\n{m.get('resumen', '')}"
-        for m in relevant_list
-    )
-
-    # 5. System instruction para el Tutor Socrático
+    # 2. System instruction para el Tutor Socrático
     sys_instruction = settings.get("prompt_tutor_socratico", DEFAULT_PROMPT_TUTOR)
 
     materia_name = materia_id if materia_id and materia_id != "default" else "general"
@@ -578,57 +542,47 @@ async def tutor_chat_with_rag(
                     + reglas_adicionales
                 )
 
-    # 6. Llamada a Gemini con historial
+    # 3. Llamada a Gemini con historial
     client = genai.Client()
 
     # Formatear el historial para pasarlo a contents
     contents = []
     
-    # Añadimos el RAG como contexto en el primer mensaje de usuario o lo simulamos
-    rag_context = f"ÍNDICE CONDENSADO:\n{indice_condensado}\nAPUNTES:\n{resumenes_completos}"
-    historial_limpio = [
-        msg for msg in historial_mensajes
-        if msg.get("role") in {"user", "model"} and msg.get("text")
-    ]
-
-    # El mensaje inicial de la UI es solo decorativo; no debe contaminar el historial
-    while historial_limpio and historial_limpio[0].get("role") != "user":
-        historial_limpio.pop(0)
-
-    contexto_inyectado = False
-
-    if not historial_limpio:
-        contents.append(
-            types.Content(
-                role="user",
-                parts=[types.Part.from_text(text=f"Contexto: {rag_context}\n\nPregunta: {pregunta_actual}")],
-            )
+    # Inyectar el contexto recuperado en el primer mensaje de sistema o de usuario
+    contents.append(
+        types.Content(
+            role="user", 
+            parts=[types.Part.from_text(f"CONTEXTO INTERNO DE BÚSQUEDA VECTORIAL (No lo menciones a menos que sea relevante):\n{contexto_recuperado}")]
         )
-    else:
-        for msg in historial_limpio:
-            role = msg.get("role", "user")
-            text = msg.get("text", "")
+    )
+    contents.append(
+        types.Content(
+            role="model", 
+            parts=[types.Part.from_text("Entendido. Usaré este contexto para guiar mi tutoría socrática.")]
+        )
+    )
 
-            if not contexto_inyectado and role == "user":
-                text = f"Contexto: {rag_context}\n\nPregunta: {text}"
-                contexto_inyectado = True
+    for msg in historial_mensajes:
+        role = "user" if msg.get("role") == "user" else "model"
+        text = msg.get("text", "")
+        if text:
+            contents.append(types.Content(role=role, parts=[types.Part.from_text(text)]))
 
-            contents.append(types.Content(role=role, parts=[types.Part.from_text(text=text)]))
-
-        if not contexto_inyectado:
-            contents.append(
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=f"Contexto: {rag_context}\n\nPregunta: {pregunta_actual}")],
-                )
-            )
-        else:
-            contents.append(
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(text=pregunta_actual)],
-                )
-            )
+    user_parts = []
+    if image_data:
+        try:
+            mime = "image/jpeg"
+            b64_str = image_data
+            if "," in image_data:
+                mime = image_data.split(";")[0].split(":")[1]
+                b64_str = image_data.split(",")[1]
+            img_bytes = base64.b64decode(b64_str)
+            user_parts.append(types.Part.from_bytes(data=img_bytes, mime_type=mime))
+        except Exception as e:
+            print(f"Error decodificando imagen Sala General: {e}")
+            
+    user_parts.append(types.Part.from_text(text=pregunta_actual))
+    contents.append(types.Content(role="user", parts=user_parts))
 
     # Temperatura
     from server import materias_store

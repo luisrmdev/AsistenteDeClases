@@ -179,6 +179,32 @@ async def worker_loop():
                 # Guardado automático (Pipeline Completo)
                 json_data, texto_limpio = llm_service.extract_json_block(texto)
                 
+                # --- TWO-PASS EXTRACTION (FALLBACK) ---
+                # Si el modelo olvidó las tarjetas o el temario, forzamos una segunda pasada rápida
+                needs_fallback = False
+                if not json_data:
+                    needs_fallback = True
+                elif not json_data.get("tarjetas_informativas") and not json_data.get("temario_atomico"):
+                    needs_fallback = True
+                    
+                if needs_fallback:
+                    print("[Worker] JSON incompleto o ausente. Ejecutando fallback (Two-Pass Extraction)...")
+                    fallback_data = await llm_service.force_extract_metadata_from_markdown(
+                        texto_limpio, 
+                        modelo=pending.get("modelo_elegido", "gemini-3.1-flash-lite")
+                    )
+                    
+                    if not json_data:
+                        json_data = fallback_data
+                    else:
+                        if "tarjetas_informativas" in fallback_data:
+                            json_data["tarjetas_informativas"] = fallback_data["tarjetas_informativas"]
+                        if "nuevas_reglas_profesor" in fallback_data:
+                            json_data["nuevas_reglas_profesor"] = fallback_data["nuevas_reglas_profesor"]
+                        if "temario_atomico" in fallback_data:
+                            json_data["temario_atomico"] = fallback_data["temario_atomico"]
+                # --------------------------------------
+                
                 # Reemplazar los nombres cortos de imagen por los nombres reales con prefijo de sesión
                 for short_name, long_name in image_name_map.items():
                     texto_limpio = texto_limpio.replace(f"![[{short_name}]]", f"![[{long_name}]]")
@@ -205,33 +231,40 @@ async def worker_loop():
                     tags_match = re.search(r"tags:\s*(.*)", texto_limpio, re.IGNORECASE)
                 tags = [t.strip().strip('"').strip("'") for t in tags_match.group(1).split(",")] if tags_match else []
 
-                await export_service.save_markdown_and_metadata(
-                    md_filename, 
-                    suggested_filename, 
-                    suggested_folder, 
-                    texto_limpio, 
-                    tags, 
-                    fecha_str, 
-                    pending.get("slot_id"),
-                    temario_atomico=json_data.get("temario_atomico")
-                )
-
-                # Pass image_paths so export can copy them to Obsidian Adjuntos/
-                await export_service.save_to_obsidian(
-                    suggested_filename, suggested_folder, texto_limpio,
-                    image_paths=image_paths,
-                )
-
-                if json_data.get("tarjetas_informativas"):
-                    mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
-                    await export_service.save_tarjetas_informativas(
-                        json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str, pending.get("slot_id")
+                # === TRANSACCIÓN ATÓMICA (ALL-OR-NOTHING) ===
+                try:
+                    await export_service.save_markdown_and_metadata(
+                        md_filename, 
+                        suggested_filename, 
+                        suggested_folder, 
+                        texto_limpio, 
+                        tags, 
+                        fecha_str, 
+                        pending.get("slot_id"),
+                        temario_atomico=json_data.get("temario_atomico")
                     )
 
-                if json_data.get("nuevas_reglas_profesor"):
-                    await export_service.save_teacher_rules(
-                        json_data["nuevas_reglas_profesor"], pending["materia_id"], fecha_str
+                    # Pass image_paths so export can copy them to Obsidian Adjuntos/
+                    await export_service.save_to_obsidian(
+                        suggested_filename, suggested_folder, texto_limpio,
+                        image_paths=image_paths,
                     )
+
+                    if json_data.get("tarjetas_informativas"):
+                        mat_id = pending["materia_id"] if (pending["materia_id"] and pending["materia_id"] != "default") else "default"
+                        await export_service.save_tarjetas_informativas(
+                            json_data["tarjetas_informativas"], md_filename, mat_id, fecha_str, pending.get("slot_id")
+                        )
+
+                    if json_data.get("nuevas_reglas_profesor"):
+                        await export_service.save_teacher_rules(
+                            json_data["nuevas_reglas_profesor"], pending["materia_id"], fecha_str
+                        )
+                except Exception as commit_err:
+                    print(f"[Worker] Error crítico durante el guardado (Commit Phase). Iniciando Rollback: {commit_err}")
+                    await export_service.rollback_export(md_filename, suggested_filename, pending.get("slot_id"))
+                    raise commit_err  # Re-lanzar para que el sistema marque la tarea como FAILED
+                # ============================================
 
                 # Marcar completado
                 def set_completed(ts):
@@ -296,6 +329,44 @@ def _media_url(*parts: str) -> str:
     return "/media/" + "/".join(clean_parts)
 
 
+from fastapi.responses import JSONResponse
+from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import Depends
+from services.auth_service import verify_password, create_access_token, decode_token
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Only protect /api/ routes, excluding /api/login and /info
+    if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/login"):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return JSONResponse(status_code=401, content={"detail": "No autenticado"})
+        token = auth_header.split(" ")[1]
+        try:
+            decode_token(token)
+        except Exception:
+            return JSONResponse(status_code=401, content={"detail": "Token inválido o expirado"})
+            
+    response = await call_next(request)
+    return response
+
+@app.post("/api/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    from database import usuarios_store
+    users = await usuarios_store.read()
+    
+    user = next((u for u in users if u["username"] == form_data.username), None)
+    if not user or not verify_password(form_data.password, user["password_hash"]):
+        raise HTTPException(
+            status_code=400,
+            detail="Usuario o contraseña incorrectos",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
+    access_token = create_access_token(data={"sub": user["username"]})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -353,12 +424,14 @@ class ChatRequest(BaseModel):
     mensaje: str
     materia_id: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
+    image_data: Optional[str] = None
 
 class TutorChatRequest(BaseModel):
     materia_id: str
     historial: list = []
     pregunta: str
     modelo_elegido: str = "gemini-3.1-flash-lite"
+    image_data: Optional[str] = None
 
 class TutorV2ChatRequest(BaseModel):
     slot_id: str
@@ -708,6 +781,9 @@ async def list_pending_audios():
     if not os.path.exists(AUDIOS_DIR):
         return {"audios": []}
 
+    cola = await cola_store.read()
+    archivos_en_cola = {t["filename"] for t in cola if t.get("estado") in ["pending", "processing", "failed"]}
+
     audios = []
 
     for entry in os.scandir(AUDIOS_DIR):
@@ -717,6 +793,8 @@ async def list_pending_audios():
             img_files = [f for f in os.listdir(entry.path)
                          if f.lower().endswith((".jpg", ".jpeg", ".png", ".webp"))]
             for f in audio_files:
+                if f in archivos_en_cola:
+                    continue
                 name_parts = os.path.splitext(f)[0].split("_")
                 if len(name_parts) >= 4:
                     date_str = name_parts[2]
@@ -740,6 +818,8 @@ async def list_pending_audios():
         # --- Legacy: flat .webm directly in audios/ ---
         elif entry.is_file() and entry.name.endswith(".webm"):
             f = entry.name
+            if f in archivos_en_cola:
+                continue
             name_parts = f.replace(".webm", "").split("_")
             if len(name_parts) >= 4:
                 date_str = name_parts[2]
@@ -797,6 +877,28 @@ async def delete_audio_or_image(path: str):
         # Legacy single webm
         await move_session_to_trash(target_path)
         return {"message": "Archivo movido a la papelera exitosamente"}
+
+
+class MergeRequest(BaseModel):
+    session1: str
+    session2: str
+
+@app.post("/api/audios/merge")
+async def merge_audios_endpoint(req: MergeRequest):
+    # Validar que no estén en la cola
+    cola = await cola_store.read()
+    for t in cola:
+        if t["estado"] in ["pending", "processing", "failed"] and (t.get("session_name") == req.session1 or t.get("session_name") == req.session2):
+            raise HTTPException(status_code=400, detail="Una de las sesiones está actualmente en la cola de procesamiento.")
+    
+    try:
+        from services import audio_service
+        merged_name = await audio_service.merge_sessions(req.session1, req.session2)
+        return {"message": "Sesiones fusionadas con éxito", "merged_session": merged_name}
+    except Exception as e:
+        print(f"Error fusionando sesiones: {e}")
+        raise HTTPException(status_code=500, detail=f"Error al fusionar: {e}")
+
 
 
 # ===========================================================================
@@ -995,7 +1097,7 @@ async def generate_prompt(req: PromptGenRequest):
 async def chat_estudio(req: ChatRequest):
     try:
         respuesta = await llm_service.chat_with_rag(
-            req.mensaje, req.materia_id, req.modelo_elegido
+            req.mensaje, req.materia_id, req.modelo_elegido, image_data=req.image_data
         )
         return {"respuesta": respuesta}
     except Exception as e:
@@ -1008,7 +1110,8 @@ async def tutor_chat(req: TutorChatRequest):
             historial_mensajes=req.historial,
             pregunta_actual=req.pregunta,
             materia_id=req.materia_id,
-            modelo=req.modelo_elegido
+            modelo=req.modelo_elegido,
+            image_data=req.image_data
         )
         return {"respuesta": respuesta}
     except Exception as e:
@@ -1128,16 +1231,13 @@ async def delete_queue_task(task_id: str):
 
 @app.get("/api/summaries")
 async def list_summaries():
-    if not os.path.exists(RESUMENES_DIR):
-        return {"summaries": []}
-    files = [f for f in os.listdir(RESUMENES_DIR) if f.endswith(".md")]
-    files.sort(key=lambda x: os.path.getmtime(os.path.join(RESUMENES_DIR, x)), reverse=True)
-
+    meta_data = await meta_store.read()
+    
     materias_list = await materias_store.read()
     mat_dict = {m.get("id"): m.get("nombre", "Desconocida") for m in materias_list}
 
     summaries = []
-    for f in files:
+    for f, metadata in meta_data.items():
         clean_name = re.sub(r"__.*?__", "", f).replace("resumen_meet_", "").replace(".md", "")
         parts = clean_name.split("_")
         if len(parts) >= 2:
@@ -1149,7 +1249,6 @@ async def list_summaries():
         else:
             display_name = f
             
-        # Parse materia_id from filename (resumen__materia_id__...)
         materia_id = "default"
         materia_name = "General"
         match = re.search(r"__(.*?)__", f)
@@ -1158,11 +1257,14 @@ async def list_summaries():
             if materia_id != "default":
                 materia_name = mat_dict.get(materia_id, "Desconocida")
 
-        try:
-            mtime = os.path.getmtime(os.path.join(RESUMENES_DIR, f))
-            created_at = datetime.fromtimestamp(mtime).strftime("%d/%m/%Y %H:%M")
-        except Exception:
-            created_at = "Fecha desconocida"
+        created_at = metadata.get("fecha", "Fecha desconocida")
+        if created_at != "Fecha desconocida" and len(created_at.split("-")) == 3:
+            # Reformat to DD/MM/YYYY for UI consistency if it's YYYY-MM-DD
+            try:
+                y, m, d = created_at.split("-")
+                created_at = f"{d}/{m}/{y} 12:00"
+            except:
+                pass
 
         summaries.append({
             "filename": f, 
@@ -1171,6 +1273,9 @@ async def list_summaries():
             "materia_id": materia_id,
             "materia_name": materia_name
         })
+        
+    # Sort by creation date descending (using filename string which contains date usually)
+    summaries.sort(key=lambda x: x["filename"], reverse=True)
     return {"summaries": summaries}
 
 
@@ -1178,11 +1283,12 @@ async def list_summaries():
 async def get_summary(filename: str):
     if not filename.endswith(".md"):
         return {"error": "Solo se permiten archivos markdown."}
-    filepath = os.path.join(RESUMENES_DIR, filename)
-    if not os.path.exists(filepath):
-        return {"error": "Archivo no encontrado."}
-    with open(filepath, "r", encoding="utf-8") as f:
-        content = f.read()
+    
+    meta_data = await meta_store.read()
+    if filename not in meta_data:
+        return {"error": "Archivo no encontrado en la base de datos."}
+        
+    content = meta_data[filename].get("resumen", "")
     return {"content": content}
 
 
@@ -1190,17 +1296,42 @@ async def get_summary(filename: str):
 async def update_summary(filename: str, req: SummaryUpdate):
     if not filename.endswith(".md"):
         raise HTTPException(status_code=400, detail="Solo archivos markdown.")
-    filepath = os.path.join(RESUMENES_DIR, filename)
-    if not os.path.exists(filepath):
+        
+    meta_data = await meta_store.read()
+    if filename not in meta_data:
         raise HTTPException(status_code=404, detail="Archivo no encontrado.")
 
-    with open(filepath, "w", encoding="utf-8") as f:
-        f.write(req.content)
+    # Guardar en local si la carpeta existe (Backup local)
+    filepath = os.path.join(RESUMENES_DIR, filename)
+    if os.path.exists(RESUMENES_DIR):
+        try:
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(req.content)
+        except Exception:
+            pass
 
-    async def _update_meta(meta_data: dict) -> dict:
-        if filename in meta_data:
-            meta_data[filename]["resumen"] = req.content
-        return meta_data
+    async def _update_meta(md_data: dict) -> dict:
+        if filename in md_data:
+            md_data[filename]["resumen"] = req.content
+            # Re-vectorizar en Pinecone
+            try:
+                from services.vector_store import upsert_document
+                materia_id = "default"
+                match = re.search(r"__(.*?)__", filename)
+                if match:
+                    materia_id = match.group(1)
+                
+                doc_id = filename.replace(".md", "")
+                upsert_document(
+                    doc_id=doc_id,
+                    markdown_text=req.content,
+                    materia_id=materia_id,
+                    fecha=md_data[filename].get("fecha", "desconocida"),
+                    filename=filename
+                )
+            except Exception as e:
+                print(f"Error al re-vectorizar {filename}: {e}")
+        return md_data
 
     await meta_store.update(_update_meta)
     return {"message": "Resumen actualizado"}
@@ -1210,14 +1341,19 @@ async def update_summary(filename: str, req: SummaryUpdate):
 async def delete_summary(filename: str):
     if not filename.endswith(".md"):
         raise HTTPException(status_code=400, detail="Solo archivos markdown.")
-    filepath = os.path.join(RESUMENES_DIR, filename)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail="Archivo no encontrado.")
-    os.remove(filepath)
+        
+    meta_data = await meta_store.read()
+    internal_id = filename
+    for k, v in meta_data.items():
+        if v.get("filename") == filename:
+            internal_id = k
+            break
 
-    async def _remove_meta(meta_data: dict) -> dict:
-        meta_data.pop(filename, None)
-        return meta_data
+    async def _remove_meta(m_data: dict) -> dict:
+        m_data.pop(internal_id, None)
+        # Por si acaso la clave era el filename
+        m_data.pop(filename, None)
+        return m_data
 
     await meta_store.update(_remove_meta)
     
@@ -1232,7 +1368,8 @@ async def delete_summary(filename: str):
     
     # Cascading delete: Remove related flashcards
     async def _remove_cards(cards: list) -> list:
-        return [c for c in cards if c.get("origen_md") != filename]
+        # Borrar si el origen coincide con la clave interna (UUID) o el filename visual
+        return [c for c in cards if c.get("origen_md") != internal_id and c.get("origen_md") != filename]
     await tarjetas_store.update(_remove_cards)
     
     return {"message": "Resumen eliminado y referencias limpiadas en cascada"}
